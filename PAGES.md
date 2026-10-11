@@ -19,7 +19,7 @@ Tracker uses a multi-page application (MPA): each page is a real HTML document, 
 
 Vite derives all build inputs and local pretty-route rewrites from the manifest, using paths relative to `vite.config.ts`, not the invoking process's working directory. HTML titles are also synchronized from the manifest during Vite's HTML transformation. Each physical entry includes its matching title, favicon, charset, viewport, and JavaScript-required fallback.
 
-When adding or renaming a page, update the manifest and create/update its physical HTML entry and `data-page` value. The client service's `cleanUrls: true` maps all built HTML entries to extensionless paths; no per-page Vercel rewrites are needed.
+When adding or renaming a page, update the manifest, create/update its physical HTML entry and `data-page` value, and ensure the page rewrites in `vercel.json` are aligned.
 
 ## Navigation and date links
 
@@ -64,7 +64,16 @@ The root `vercel.json` service configuration is:
       "framework": "vite",
       "buildCommand": "npm run build",
       "outputDirectory": "dist",
-      "cleanUrls": true
+      "cleanUrls": true,
+      "rewrites": [
+        { "source": "/login", "destination": "/login.html" },
+        { "source": "/signup", "destination": "/signup.html" },
+        { "source": "/calendar", "destination": "/calendar.html" },
+        { "source": "/week", "destination": "/week.html" },
+        { "source": "/day", "destination": "/day.html" },
+        { "source": "/analytics", "destination": "/analytics.html" },
+        { "source": "/profile", "destination": "/profile.html" }
+      ]
     },
     "server": {
       "root": "packages/server",
@@ -76,12 +85,19 @@ The root `vercel.json` service configuration is:
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": { "service": "server" } },
+    { "source": "/login", "destination": { "service": "client", "path": "/login.html" } },
+    { "source": "/signup", "destination": { "service": "client", "path": "/signup.html" } },
+    { "source": "/calendar", "destination": { "service": "client", "path": "/calendar.html" } },
+    { "source": "/week", "destination": { "service": "client", "path": "/week.html" } },
+    { "source": "/day", "destination": { "service": "client", "path": "/day.html" } },
+    { "source": "/analytics", "destination": { "service": "client", "path": "/analytics.html" } },
+    { "source": "/profile", "destination": { "service": "client", "path": "/profile.html" } },
     { "source": "/(.*)", "destination": { "service": "client" } }
   ]
 }
 ```
 
-The API rewrite must remain first. All non-API paths go to the public static client service; its `cleanUrls` resolves HTML paths, including `/` to `index.html`. The service catch-all selects a service, not a home-page or SPA fallback: unknown paths and missing assets must return HTTP 404 rather than home-page HTML with HTTP 200. The server service enters through `packages/server/src/app.ts`.
+The API rewrite must remain first. Explicit page rewrites ensure each MPA entry document (`login.html`, `signup.html`, etc.) is served on its extensionless URL. The service catch-all selects the client service for assets and `/index.html`: unknown paths and missing assets return HTTP 404 rather than home-page HTML with HTTP 200. The server service enters through `packages/server/src/app.ts`.
 
 Set the Vercel project's Root Directory to the repository root, not either package. Clear legacy top-level `buildCommand`/`outputDirectory` configuration and dashboard build/output overrides so the per-service settings apply. `packages/shared` is an empty directory that neither app imports; it is not a shared library dependency or a service. No shared-source inclusion setting is currently needed.
 

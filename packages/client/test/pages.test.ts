@@ -60,29 +60,33 @@ test('404 document uses the MyFinance title branding', () => {
   assert.equal(titles[0][1], 'Page not found · MyFinance');
 });
 
-test('Vercel routes API requests to Express first and serves MPA documents through client clean URLs', () => {
+test('Vercel routes API requests to Express first and serves MPA documents through explicit page rewrites', () => {
   const config = JSON.parse(readFileSync(new URL('../../../vercel.json', import.meta.url), 'utf8'));
   assert.equal(config.$schema, 'https://openapi.vercel.sh/vercel.json');
-  assert.deepEqual(config.services, {
-    client: {
-      root: 'packages/client',
-      framework: 'vite',
-      buildCommand: 'npm run build',
-      outputDirectory: 'dist',
-      cleanUrls: true,
-    },
-    server: {
-      root: 'packages/server',
-      framework: 'express',
-      runtime: 'node',
-      entrypoint: 'src/app.ts',
-      buildCommand: 'npm run build',
-    },
-  }, 'services have no bindings, page rewrites, or SPA fallback');
-  assert.deepEqual(config.rewrites, [
+  const expectedPageRewrites = Object.values(pages)
+    .filter(page => page.path !== '/')
+    .map(page => ({ source: page.path, destination: `/${page.html}` }));
+  const expectedTopLevelRewrites = [
     { source: '/api/(.*)', destination: { service: 'server' } },
+    ...Object.values(pages)
+      .filter(page => page.path !== '/')
+      .map(page => ({ source: page.path, destination: { service: 'client', path: `/${page.html}` } })),
     { source: '/(.*)', destination: { service: 'client' } },
-  ], 'only service routing is needed; cleanUrls resolves individual HTML documents');
+  ];
+  assert.deepEqual(config.services.server, {
+    root: 'packages/server',
+    framework: 'express',
+    runtime: 'node',
+    entrypoint: 'src/app.ts',
+    buildCommand: 'npm run build',
+  });
+  assert.equal(config.services.client.root, 'packages/client');
+  assert.equal(config.services.client.framework, 'vite');
+  assert.equal(config.services.client.buildCommand, 'npm run build');
+  assert.equal(config.services.client.outputDirectory, 'dist');
+  assert.equal(config.services.client.cleanUrls, true);
+  assert.deepEqual(config.services.client.rewrites, expectedPageRewrites);
+  assert.deepEqual(config.rewrites, expectedTopLevelRewrites);
   for (const key of [
     'functions', 'installCommand', 'buildCommand', 'devCommand', 'ignoreCommand',
     'outputDirectory', 'framework', 'bindings', 'routes',
