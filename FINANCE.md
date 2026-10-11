@@ -7,7 +7,11 @@ Finance settings, spendings, and month-specific additional income are stored in 
 Use Node.js 20+ and the existing root/server environment setup:
 
 - `DATABASE_URL`: private Neon PostgreSQL connection URL, never a client environment variable.
-- `APP_ORIGIN`: the exact client origin, e.g. `http://localhost:5173` locally; HTTPS in production.
+- `APP_ORIGIN`: the exact browser origin, e.g. `http://localhost:5173` for standalone Vite; the exact frontend HTTPS origin for Vercel production and each preview deployment.
+
+Vercel uses the root `vercel.json` services described in `PAGES.md`: a public static Vite client for non-API paths and a public Express server for `/api/*`, entered through `packages/server/src/app.ts`. The legacy root `api/index.ts` remains an unused compatibility wrapper. Set the project Root Directory to the repository root and clear legacy top-level/dashboard build and output overrides. `packages/shared` is empty and neither app imports it; it is not a shared library dependency or a service, and no shared-source inclusion setting is currently needed. Set shared `DATABASE_URL` and `APP_ORIGIN` deployment variables, leave `PORT` unset, and normally let Vercel supply `NODE_ENV`. There are no internal runtime service calls, so no bindings are needed. Never expose credentials or runtime binding values through `VITE_*` variables.
+
+Standalone root `npm run dev` uses client port 5173 and server port 4000, with Vite proxying `/api` to localhost:4000. For local service-routing checks, run `vercel dev` from the repository root and set `APP_ORIGIN` to the actual browser origin, e.g. `http://localhost:3000`. Vite disables the localhost proxy when `VERCEL=1` because platform routing handles API requests. `VERCEL_ENV=development` is treated as nonproduction unless `NODE_ENV=production` is explicit; production/preview require HTTPS and Secure cookies.
 
 From the repository root:
 
@@ -152,7 +156,7 @@ npm test --workspace=@my-finance/client
 npm run build
 ```
 
-Client `test/finance.test.ts` checks complete pagination, server-authoritative CRUD, and failed requests; `test/spendings.test.ts` verifies empty-data and controlled-data totals/analytics. Tests/builds/migrations were not executed by the agent because no terminal is available; editor diagnostics are static validation only.
+Client `test/finance.test.ts` checks complete pagination, server-authoritative CRUD, and failed requests; `test/spendings.test.ts` verifies empty-data and controlled-data totals/analytics. No CLI commands, tests, builds, or migrations were executed for this documentation update because no terminal is available; editor diagnostics are static validation only.
 
 `test/finance-http.test.ts` uses injectable stores to cover authenticated routes, origin/CORS behavior, defaults, partial/full settings, isolation, CRUD, historical category handling, validation, and pagination across more than 500 records.
 

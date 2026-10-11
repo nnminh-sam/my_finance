@@ -60,20 +60,42 @@ test('404 document uses the MyFinance title branding', () => {
   assert.equal(titles[0][1], 'Page not found · MyFinance');
 });
 
-test('Vercel keeps the API rewrite first and only explicit page rewrites, with no SPA catchall', () => {
+test('Vercel routes API requests to Express first and serves MPA documents through client clean URLs', () => {
   const config = JSON.parse(readFileSync(new URL('../../../vercel.json', import.meta.url), 'utf8'));
-  assert.equal(config.buildCommand, 'npm run build --workspace=@my-finance/client');
-  assert.equal(config.outputDirectory, 'packages/client/dist');
-  assert.deepEqual(config.rewrites[0], { source: '/api/(.*)', destination: '/api/index.ts' });
-  const expectedRewrites = Object.values(pages)
-    .filter(page => page.path !== '/')
-    .map(page => ({ source: page.path, destination: `/${page.html}` }));
-  assert.equal(config.rewrites.length, expectedRewrites.length + 1);
-  assert.deepEqual(
-    [...config.rewrites.slice(1)].sort((a, b) => a.source.localeCompare(b.source)),
-    expectedRewrites.sort((a, b) => a.source.localeCompare(b.source)),
-  );
-  assert.equal(config.routes, undefined, 'no separate routing table can add a catchall');
+  assert.equal(config.$schema, 'https://openapi.vercel.sh/vercel.json');
+  assert.deepEqual(config.services, {
+    client: {
+      root: 'packages/client',
+      framework: 'vite',
+      buildCommand: 'npm run build',
+      outputDirectory: 'dist',
+      cleanUrls: true,
+    },
+    server: {
+      root: 'packages/server',
+      framework: 'express',
+      runtime: 'node',
+      entrypoint: 'src/app.ts',
+      buildCommand: 'npm run build',
+    },
+  }, 'services have no bindings, page rewrites, or SPA fallback');
+  assert.deepEqual(config.rewrites, [
+    { source: '/api/(.*)', destination: { service: 'server' } },
+    { source: '/(.*)', destination: { service: 'client' } },
+  ], 'only service routing is needed; cleanUrls resolves individual HTML documents');
+  for (const key of [
+    'functions', 'installCommand', 'buildCommand', 'devCommand', 'ignoreCommand',
+    'outputDirectory', 'framework', 'bindings', 'routes',
+  ]) {
+    assert.equal(Object.hasOwn(config, key), false, `no top-level ${key}`);
+  }
+  for (const page of Object.values(pages)) {
+    assert.equal(
+      page.path,
+      page.html === 'index.html' ? '/' : `/${page.html.replace(/\.html$/, '')}`,
+      `${page.html} must match its clean URL`,
+    );
+  }
 });
 
 type Middleware = (request: IncomingMessage, response: ServerResponse, next: () => void) => void;

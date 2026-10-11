@@ -34,7 +34,8 @@ export function parseConfig(env: NodeJS.ProcessEnv): Config {
   } catch {
     throw new Error("DATABASE_URL must be a valid PostgreSQL connection URL");
   }
-  const production = env.NODE_ENV === "production" || env.VERCEL === "1";
+  // vercel dev uses the development environment and serves the shared origin over HTTP.
+  const production = env.NODE_ENV === "production" || (env.VERCEL === "1" && env.VERCEL_ENV !== "development");
   let appOrigin: string;
   try {
     const url = new URL(env.APP_ORIGIN ?? "http://localhost:5173");

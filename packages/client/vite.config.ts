@@ -61,7 +61,8 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    proxy: {
+    // Vercel routes /api to the server service before requests reach Vite.
+    proxy: process.env.VERCEL === '1' ? undefined : {
       '/api': {
         target: 'http://localhost:4000',
         changeOrigin: true,
