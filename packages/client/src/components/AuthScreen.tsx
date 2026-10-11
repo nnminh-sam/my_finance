@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Calendar, LockKeyhole, Moon, Sun } from 'lucide-react';
+import { LockKeyhole, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { errorMessage } from '../auth';
@@ -37,14 +37,15 @@ export function AuthScreen({ mode }: { mode: 'login' | 'signup' }) {
     <main className="auth-screen">
       <section className="auth-card glass" aria-labelledby="auth-title">
         <div className="auth-toolbar">
-          <div className="auth-brand"><Calendar size={28} aria-hidden="true" /></div>
+          <div className="auth-brand"><img src="/favicon.svg" width={56} height={56} alt="" /></div>
           <button type="button" className="auth-theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
             {theme === 'dark' ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
             {theme === 'dark' ? 'Light mode' : 'Dark mode'}
           </button>
         </div>
+        <p className="auth-app-name">MyFinance</p>
         <h1 id="auth-title">{isRegistering ? 'Create your account' : 'Welcome back'}</h1>
-        <p className="auth-subtitle">{isRegistering ? 'Start tracking your finances with your own account.' : 'Sign in to your finance tracker.'}</p>
+        <p className="auth-subtitle">{isRegistering ? 'Start tracking your finances with your own account.' : 'Sign in to MyFinance to manage your finances.'}</p>
         {searchParams.get('notice') === 'logout-unconfirmed' && (
           <p className="auth-notice" role="alert">Sign-out could not be confirmed. Your session may still be active.</p>
         )}

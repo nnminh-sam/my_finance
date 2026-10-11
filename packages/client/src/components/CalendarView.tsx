@@ -31,6 +31,7 @@ import { twMerge } from "tailwind-merge";
 import { useSettings } from "../contexts/SettingsContext";
 import { getHeatmapColor } from "../heatmap";
 import { getMonthIncome, incomeMonth } from "../income";
+import "./CalendarView.css";
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -312,44 +313,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   </span>
                 )}
                 {topSpendings.map((s) => (
-                  <div
-                    key={s.id}
-                    style={{
-                      fontSize: "0.85rem",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      color: "var(--text-main)",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        maxWidth: "70%",
-                        fontWeight: 700,
-                      }}
-                    >
-                      <span
-                        style={{ display: "flex", color: "var(--text-main)" }}
-                      >
+                  <div key={s.id} className="calendar-spending-row">
+                    <span className="calendar-spending-label" title={s.description}>
+                      <span className="calendar-spending-icon">
                         <CategoryIcon iconName={settings.categories.find(c => c.id === s.category)?.icon || "CircleDollarSign"} size={14} />
                       </span>
-                      <span
-                        style={{ overflow: "hidden", textOverflow: "ellipsis" }}
-                      >
+                      <span className="calendar-spending-description">
                         {s.description}
                       </span>
                     </span>
-                    <span
-                      style={{
-                        fontWeight: 800,
-                      }}
-                    >
+                    <span className="calendar-spending-amount">
                       {s.amount.toLocaleString("vi-VN")} ₫
                     </span>
                   </div>

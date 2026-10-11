@@ -9,14 +9,14 @@ import { isPage, pages } from '../src/pages';
 
 const clientRoot = new URL('..', import.meta.url);
 const expectedPages = {
-  home: { path: '/', html: 'index.html', title: 'Tracker', protected: false },
-  login: { path: '/login', html: 'login.html', title: 'Sign in · Tracker', protected: false },
-  signup: { path: '/signup', html: 'signup.html', title: 'Create account · Tracker', protected: false },
-  calendar: { path: '/calendar', html: 'calendar.html', title: 'Calendar · Tracker', protected: true },
-  week: { path: '/week', html: 'week.html', title: 'Week · Tracker', protected: true },
-  day: { path: '/day', html: 'day.html', title: 'Day details · Tracker', protected: true },
-  analytics: { path: '/analytics', html: 'analytics.html', title: 'Analytics · Tracker', protected: true },
-  profile: { path: '/profile', html: 'profile.html', title: 'Profile · Tracker', protected: true },
+  home: { path: '/', html: 'index.html', title: 'MyFinance', protected: false },
+  login: { path: '/login', html: 'login.html', title: 'Sign in · MyFinance', protected: false },
+  signup: { path: '/signup', html: 'signup.html', title: 'Create account · MyFinance', protected: false },
+  calendar: { path: '/calendar', html: 'calendar.html', title: 'Calendar · MyFinance', protected: true },
+  week: { path: '/week', html: 'week.html', title: 'Week · MyFinance', protected: true },
+  day: { path: '/day', html: 'day.html', title: 'Day details · MyFinance', protected: true },
+  analytics: { path: '/analytics', html: 'analytics.html', title: 'Analytics · MyFinance', protected: true },
+  profile: { path: '/profile', html: 'profile.html', title: 'Profile · MyFinance', protected: true },
 };
 
 test('manifest defines distinct public and protected document routes', () => {
@@ -48,8 +48,16 @@ test('every manifest entry has its own root HTML document with the correct boots
       const noscript = html.match(/<noscript>([\s\S]*?)<\/noscript>/);
       assert.ok(noscript, 'JavaScript-disabled visitors get an explanation');
       assert.match(noscript[1], /requires JavaScript/i);
+            assert.match(noscript[1], /\bMyFinance\b/);
     });
   }
+});
+
+test('404 document uses the MyFinance title branding', () => {
+  const html = readFileSync(new URL('public/404.html', clientRoot), 'utf8');
+  const titles = [...html.matchAll(/<title>([\s\S]*?)<\/title>/g)];
+  assert.equal(titles.length, 1, 'exactly one title');
+  assert.equal(titles[0][1], 'Page not found · MyFinance');
 });
 
 test('Vercel keeps the API rewrite first and only explicit page rewrites, with no SPA catchall', () => {

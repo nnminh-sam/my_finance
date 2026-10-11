@@ -190,3 +190,193 @@
     padding: 16px;
   }
 }
+
+.expense-modal-batch {
+  width: min(940px, calc(100% - 32px));
+}
+
+.expense-modal-batch .expense-batch-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: 24px;
+}
+
+.expense-modal-batch .expense-editor,
+.expense-modal-batch .expense-queue {
+  min-width: 0;
+}
+
+.expense-modal-batch .expense-editor-heading {
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.expense-modal-batch .expense-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.expense-modal-batch .expense-queue {
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+
+.expense-modal-batch .expense-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.expense-modal-batch .expense-queue-header h3 {
+  min-width: 0;
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.expense-modal-batch .expense-queue-header > span {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.expense-modal-batch .expense-queue-empty,
+.expense-modal-batch .expense-batch-help {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.expense-modal-batch .expense-queue-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.expense-modal-batch .expense-queue-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-main);
+}
+
+.expense-modal-batch .expense-queue-item.is-active {
+  border-color: var(--primary);
+}
+
+.expense-modal-batch .expense-queue-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.expense-modal-batch .expense-queue-edit:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -3px;
+}
+
+.expense-modal-batch .expense-queue-edit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.expense-modal-batch .expense-queue-item-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.expense-modal-batch .expense-queue-item-heading strong {
+  flex: 1 1 100px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expense-modal-batch .expense-queue-amount {
+  max-width: 100%;
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.expense-modal-batch .expense-queue-meta {
+  max-width: 100%;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.expense-modal-batch .expense-queue-remove {
+  margin: 8px 8px 8px 0;
+  padding: 6px;
+  color: var(--danger);
+}
+
+.expense-modal-batch .expense-queue-remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.expense-modal-batch .expense-queue-total {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.expense-modal-batch .expense-queue-total strong {
+  min-width: 0;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .expense-modal-batch .expense-batch-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+}

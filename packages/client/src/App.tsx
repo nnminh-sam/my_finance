@@ -19,7 +19,7 @@ import { pages } from './pages';
 import type { FinancePage, Page } from './pages';
 import { authHref, pageHref, readPageDate, safeReturnPath } from './navigation';
 import { format, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
-import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
 import './index.css';
 import './navigation.css';
 
@@ -103,10 +103,10 @@ function FinanceDocument({ page }: { page: FinancePage }) {
   return (
     <div className="finance-document">
       <header className="document-header glass">
-        <a href={pageHref('calendar', currentDate)} className="document-brand" aria-label="Tracker calendar">
-          <span className="document-brand-icon"><Calendar size={20} aria-hidden="true" /></span>
+        <a href={pageHref('calendar', currentDate)} className="document-brand" aria-label="MyFinance calendar">
+          <span className="document-brand-icon"><img src="/favicon.svg" width={40} height={40} alt="" /></span>
           <span>
-            <span className="document-title">Tracker</span>
+            <span className="document-title">MyFinance</span>
             <span className="document-subtitle">{page === 'profile' ? 'User Profile' : format(currentDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy')}</span>
           </span>
         </a>
@@ -141,7 +141,7 @@ function FinanceDocument({ page }: { page: FinancePage }) {
       </main>
 
       {incomeDialogMonth && <MonthlyIncomeModal month={incomeDialogMonth} onClose={() => setIncomeDialogMonth(null)} />}
-      {expenseDialog && <ExpenseModal expense={expenseDialog.expense} onClose={() => setExpenseDialog(null)} onSaved={input => setExpenseNotice(`Expense ${expenseDialog.expense ? 'updated' : 'added'} for ${input.date} at ${input.time}.`)} />}
+      {expenseDialog && <ExpenseModal expense={expenseDialog.expense} onClose={() => setExpenseDialog(null)} onSaved={(input, count) => setExpenseNotice(count > 1 ? `${count} expenses added.` : `Expense ${expenseDialog.expense ? 'updated' : 'added'} for ${input.date} at ${input.time}.`)} />}
     </div>
   );
 }

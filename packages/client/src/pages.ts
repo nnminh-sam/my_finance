@@ -1,12 +1,12 @@
 export const pages = {
-  home: { path: '/', html: 'index.html', title: 'Tracker', protected: false },
-  login: { path: '/login', html: 'login.html', title: 'Sign in · Tracker', protected: false },
-  signup: { path: '/signup', html: 'signup.html', title: 'Create account · Tracker', protected: false },
-  calendar: { path: '/calendar', html: 'calendar.html', title: 'Calendar · Tracker', protected: true },
-  week: { path: '/week', html: 'week.html', title: 'Week · Tracker', protected: true },
-  day: { path: '/day', html: 'day.html', title: 'Day details · Tracker', protected: true },
-  analytics: { path: '/analytics', html: 'analytics.html', title: 'Analytics · Tracker', protected: true },
-  profile: { path: '/profile', html: 'profile.html', title: 'Profile · Tracker', protected: true },
+  home: { path: '/', html: 'index.html', title: 'MyFinance', protected: false },
+  login: { path: '/login', html: 'login.html', title: 'Sign in · MyFinance', protected: false },
+  signup: { path: '/signup', html: 'signup.html', title: 'Create account · MyFinance', protected: false },
+  calendar: { path: '/calendar', html: 'calendar.html', title: 'Calendar · MyFinance', protected: true },
+  week: { path: '/week', html: 'week.html', title: 'Week · MyFinance', protected: true },
+  day: { path: '/day', html: 'day.html', title: 'Day details · MyFinance', protected: true },
+  analytics: { path: '/analytics', html: 'analytics.html', title: 'Analytics · MyFinance', protected: true },
+  profile: { path: '/profile', html: 'profile.html', title: 'Profile · MyFinance', protected: true },
 } as const;
 
 export type Page = keyof typeof pages;

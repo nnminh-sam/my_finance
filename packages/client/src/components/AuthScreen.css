@@ -30,6 +30,7 @@
   color: white;
 }
 
+.auth-app-name { margin-bottom: 8px; color: var(--primary); font-weight: 700; }
 .auth-card h1 { font-size: 1.75rem; }
 .auth-subtitle { color: var(--text-muted); margin-top: 8px; }
 .auth-form { margin-top: 28px; }
