@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createExpenseDraft, isExpenseDraftDirty, validateExpenseDraft } from '../src/expenseDraft';
+import { createExpenseDraft, isExpenseDraftDirty, validateExpenseDraft, validateRepeatDraft } from '../src/expenseDraft';
 import type { ExpenseDraft } from '../src/expenseDraft';
 import type { Spending } from '../src/types';
 
@@ -157,4 +157,103 @@ test('dirty checks compare each raw field against the opening snapshot and clear
   assert.equal(isExpenseDraftDirty({ ...edit }, edit), false);
   assert.equal(isExpenseDraftDirty({ ...edit, amount: '12.340' }, edit), true);
   assert.equal(isExpenseDraftDirty({ ...edit, description: 'Lunch ' }, edit), true);
+  assert.equal(isExpenseDraftDirty({ ...initial, isRepeat: true }, initial), true);
+  assert.equal(isExpenseDraftDirty({ ...initial, repeatFrequency: 'weekly' }, initial), true);
+  assert.equal(isExpenseDraftDirty({ ...initial, repeatInterval: 2 }, initial), true);
+  assert.equal(isExpenseDraftDirty({ ...initial, repeatEndType: 'occurrences' }, initial), true);
+  assert.equal(isExpenseDraftDirty({ ...initial, repeatCount: 10 }, initial), true);
+  assert.equal(isExpenseDraftDirty({ ...initial, repeatEndDate: '2026-12-31' }, initial), true);
+  assert.equal(isExpenseDraftDirty({ ...initial, repeatDaysOfWeek: [1, 3] }, initial), true);
 });
+
+test('validateRepeatDraft builds valid RepeatRuleInput with unlimited defaults', () => {
+  const draft = validDraft({ isRepeat: true });
+  const rule = validateRepeatDraft(draft, categories);
+  assert.deepEqual(rule, {
+    amount: 12.34,
+    description: 'Lunch',
+    category: 'food',
+    startDate: '2026-10-11',
+    time: '12:30',
+    frequency: 'daily',
+    interval: 1,
+    daysOfWeek: undefined,
+    endType: 'unlimited',
+    totalOccurrences: undefined,
+    endDate: undefined,
+  });
+});
+
+test('validateRepeatDraft validates occurrences endType and enforces 100 cap', () => {
+  const draft = validDraft({
+    isRepeat: true,
+    repeatFrequency: 'weekly',
+    repeatInterval: 2,
+    repeatDaysOfWeek: [1, 3, 5],
+    repeatEndType: 'occurrences',
+    repeatCount: 10,
+  });
+  const rule = validateRepeatDraft(draft, categories);
+  assert.equal(rule.totalOccurrences, 10);
+  assert.equal(rule.frequency, 'weekly');
+  assert.equal(rule.interval, 2);
+  assert.deepEqual(rule.daysOfWeek, [1, 3, 5]);
+
+  // Max cap 100 allowed
+  const capDraft = validDraft({ repeatEndType: 'occurrences', repeatCount: 100 });
+  assert.equal(validateRepeatDraft(capDraft, categories).totalOccurrences, 100);
+
+  // Invalid counts reject
+  for (const count of [0, -1, 101, 1000, 1.5, NaN]) {
+    assert.throws(
+      () => validateRepeatDraft(validDraft({ repeatEndType: 'occurrences', repeatCount: count as any }), categories),
+      /Repeat occurrences must be between 1 and 100/
+    );
+  }
+});
+
+test('validateRepeatDraft validates until_date endType and checks date ordering', () => {
+  const validUntil = validDraft({
+    repeatEndType: 'until_date',
+    repeatEndDate: '2026-12-31',
+  });
+  const rule = validateRepeatDraft(validUntil, categories);
+  assert.equal(rule.endType, 'until_date');
+  assert.equal(rule.endDate, '2026-12-31');
+
+  // Same day as start date is valid
+  const sameDay = validDraft({
+    date: '2026-10-11',
+    repeatEndType: 'until_date',
+    repeatEndDate: '2026-10-11',
+  });
+  assert.equal(validateRepeatDraft(sameDay, categories).endDate, '2026-10-11');
+
+  // Earlier than start date rejects
+  assert.throws(
+    () => validateRepeatDraft(validDraft({ date: '2026-10-11', repeatEndType: 'until_date', repeatEndDate: '2026-10-10' }), categories),
+    /End date cannot be earlier than start date/
+  );
+
+  // Invalid dates reject
+  for (const badDate of ['', 'not-a-date', '2026-02-29', '2026-13-01']) {
+    assert.throws(
+      () => validateRepeatDraft(validDraft({ repeatEndType: 'until_date', repeatEndDate: badDate }), categories),
+      /Choose a valid end date/
+    );
+  }
+});
+
+test('validateRepeatDraft validates interval range 1-365', () => {
+  for (const interval of [1, 7, 30, 365]) {
+    const rule = validateRepeatDraft(validDraft({ repeatInterval: interval }), categories);
+    assert.equal(rule.interval, interval);
+  }
+  for (const badInterval of [0, -1, 366, 1000, 2.5]) {
+    assert.throws(
+      () => validateRepeatDraft(validDraft({ repeatInterval: badInterval }), categories),
+      /Repeat interval must be between 1 and 365/
+    );
+  }
+});
+

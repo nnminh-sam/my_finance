@@ -14,6 +14,32 @@ export interface Spending {
   category: Category;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
+  repeatRuleId?: string | null;
+}
+
+export type RepeatFrequency = 'daily' | 'weekdays' | 'weekly' | 'monthly';
+export type RepeatEndType = 'unlimited' | 'occurrences' | 'until_date';
+
+export interface RepeatRuleInput {
+  amount: number;
+  description: string;
+  category: string;
+  startDate: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  frequency: RepeatFrequency;
+  interval?: number;
+  daysOfWeek?: number[];
+  endType: RepeatEndType;
+  totalOccurrences?: number;
+  endDate?: string;
+}
+
+export interface RepeatRule extends RepeatRuleInput {
+  id: string;
+  userId: string;
+  occurrencesCreated: number;
+  lastGeneratedDate: string | null;
+  createdAt: string;
 }
 
 export interface IncomeEntryInput {

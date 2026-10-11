@@ -10,7 +10,8 @@
     "dev": "concurrently \"npm run dev --workspace=@my-finance/server\" \"npm run dev --workspace=@my-finance/client\"",
     "dev:client": "npm run dev --workspace=@my-finance/client",
     "dev:server": "npm run dev --workspace=@my-finance/server",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

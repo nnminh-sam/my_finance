@@ -3,12 +3,13 @@ import type { ReactNode } from 'react';
 import { errorMessage, getAuthState } from '../auth';
 import { createFinanceApi } from '../finance';
 import type { FinanceSettings, SpendingInput } from '../finance';
-import type { IncomeEntry, IncomeEntryInput, Spending } from '../types';
+import type { IncomeEntry, IncomeEntryInput, RepeatRule, RepeatRuleInput, Spending } from '../types';
 
 interface FinanceContextValue {
   settings: FinanceSettings;
   spendings: Spending[];
   incomeEntries: IncomeEntry[];
+  repeatRules: RepeatRule[];
   loading: boolean;
   hasLoaded: boolean;
   error: string | null;
@@ -20,6 +21,8 @@ interface FinanceContextValue {
   createIncomeEntry: (input: IncomeEntryInput) => Promise<void>;
   updateIncomeEntry: (id: string, input: IncomeEntryInput) => Promise<void>;
   deleteIncomeEntry: (id: string) => Promise<void>;
+  createRepeatRule: (input: RepeatRuleInput) => Promise<RepeatRule>;
+  deleteRepeatRule: (id: string, deleteFuture?: boolean) => Promise<void>;
 }
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
@@ -32,6 +35,7 @@ export function FinanceProvider({ userId, children }: { userId: string; children
   const [settings, setSettings] = useState<FinanceSettings>(emptySettings);
   const [spendings, setSpendings] = useState<Spending[]>([]);
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([]);
+  const [repeatRules, setRepeatRules] = useState<RepeatRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,11 +61,14 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     reloadFlight.current = serialize(async () => {
       if (!loaded.current) setLoading(true);
       try {
-        const [nextSettings, nextSpendings, nextIncomeEntries] = await Promise.all([api.getSettings(), api.getSpendings(), api.getIncomeEntries()]);
+        const [nextSettings, nextSpendings, nextIncomeEntries, nextRepeatRules] = await Promise.all([
+          api.getSettings(), api.getSpendings(), api.getIncomeEntries(), api.getRepeatRules(),
+        ]);
         if (!currentAccount()) return;
         setSettings(nextSettings);
         setSpendings(nextSpendings);
         setIncomeEntries(nextIncomeEntries);
+        setRepeatRules(nextRepeatRules);
         loaded.current = true;
         setHasLoaded(true);
         setError(null);
@@ -121,12 +128,43 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     if (currentAccount()) setIncomeEntries(records => records.filter(record => record.id !== id));
   }), [serialize, currentAccount]);
 
+  const createRepeatRule = useCallback((input: RepeatRuleInput) => serialize(async () => {
+    const result = await api.createRepeatRule(input);
+    if (currentAccount()) {
+      setRepeatRules(rules => [result.repeatRule, ...rules.filter(r => r.id !== result.repeatRule.id)]);
+      if (result.spendings.length > 0) {
+        setSpendings(records => {
+          const ids = new Set(result.spendings.map(s => s.id));
+          return [...records.filter(r => !ids.has(r.id)), ...result.spendings];
+        });
+      }
+    }
+    return result.repeatRule;
+  }), [serialize, currentAccount]);
+
+  const deleteRepeatRule = useCallback((id: string, deleteFuture = true) => serialize(async () => {
+    await api.deleteRepeatRule(id, deleteFuture);
+    if (currentAccount()) {
+      setRepeatRules(rules => rules.filter(r => r.id !== id));
+      if (deleteFuture) {
+        const today = new Date().toISOString().slice(0, 10);
+        setSpendings(records => records.filter(r => !(r.repeatRuleId === id && r.date >= today)));
+      }
+    }
+  }), [serialize, currentAccount]);
+
   return (
-    <FinanceContext.Provider value={{ settings, spendings, incomeEntries, loading, hasLoaded, error, reload, updateSettings, createSpending, updateSpending, deleteSpending, createIncomeEntry, updateIncomeEntry, deleteIncomeEntry }}>
+    <FinanceContext.Provider value={{
+      settings, spendings, incomeEntries, repeatRules, loading, hasLoaded, error,
+      reload, updateSettings, createSpending, updateSpending, deleteSpending,
+      createIncomeEntry, updateIncomeEntry, deleteIncomeEntry,
+      createRepeatRule, deleteRepeatRule
+    }}>
       {children}
     </FinanceContext.Provider>
   );
 }
+
 
 export function useFinance() {
   const context = useContext(FinanceContext);

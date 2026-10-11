@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { getSpendingsForDate, getTotalForDate } from '../spendings';
-import { ArrowLeft, Clock, Plus } from 'lucide-react';
+import { ArrowLeft, Clock, Plus, Repeat } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useFinance } from '../contexts/FinanceContext.tsx';
 import type { Spending } from '../types';
@@ -102,6 +102,15 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
                     <span style={{ fontWeight: 600, fontSize: '1rem', overflowWrap: 'anywhere' }}>{spending.description}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '0.75rem', flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 500 }}>{categoryName}</span><span aria-hidden="true">•</span><Clock size={12} aria-hidden="true" /><span>{spending.time}</span>
+                      {spending.repeatRuleId && (
+                        <>
+                          <span aria-hidden="true">•</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: 'var(--primary)', fontWeight: 600 }} title="Recurring spending">
+                            <Repeat size={12} aria-hidden="true" />
+                            <span>Repeating</span>
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

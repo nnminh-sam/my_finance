@@ -21,7 +21,7 @@ npm run build --workspace=@my-finance/server
 npm run dev --workspace=@my-finance/server
 ```
 
-The migration command discovers checked-in `packages/server/migrations/<number>_<name>.sql` files and applies them in numeric order: `001_auth.sql`, `002_finance.sql`, then `003_month_income.sql`. Each file runs in its own transaction. All three schema files use `CREATE TABLE/INDEX IF NOT EXISTS`, so rerunning the command safely preserves existing records. There are no destructive drops and no migration ledger; these initial files are rerunnable, not a mechanism for altering an existing table definition. Future schema changes need their own ordered, rerunnable migration. The script's simple statement splitter supports these DDL files, not procedural SQL or semicolons inside literals/comments.
+The migration command discovers checked-in `packages/server/migrations/<number>_<name>.sql` files and applies them in numeric order: `001_auth.sql`, `002_finance.sql`, `003_month_income.sql`, then `004_repeat_spendings.sql`. Each file runs in its own transaction. All schema files use `CREATE TABLE/INDEX IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS`, so rerunning the command safely preserves existing records. There are no destructive drops and no migration ledger; these initial files are rerunnable, not a mechanism for altering an existing table definition. Future schema changes need their own ordered, rerunnable migration. The script's simple statement splitter supports these DDL files, not procedural SQL or semicolons inside literals/comments.
 
 `002_finance.sql` adds:
 
@@ -29,6 +29,11 @@ The migration command discovers checked-in `packages/server/migrations/<number>_
 - `finance_spendings`: UUID-keyed spendings with an `auth_users` foreign key, exact decimal amounts, calendar dates, minute times, and a `(user_id, id)` pagination index.
 
 `003_month_income.sql` adds `finance_income_entries`: owner-scoped UUID records, a first-of-month calendar date, an exact decimal amount, and a description. It has user/ID and user/month indexes. **Run the migration command before using additional income**; the initial client load now fetches income entries too, so an unapplied migration produces a load error rather than silently ignoring bonuses. No income entries are seeded; existing recurring income and expenses are preserved.
+
+`004_repeat_spendings.sql` adds:
+
+- `finance_repeat_rules`: recurring spending rule configuration with frequency (`daily`, `weekdays`, `weekly`, `monthly`), interval, days of week, end type (`unlimited`, `occurrences`, `until_date`), count cap, end date, and auto-apply progress metadata (`occurrences_generated`, `last_generated_date`).
+- `finance_spendings.repeat_rule_id`: foreign key referencing `finance_repeat_rules(id)` with `ON DELETE SET NULL`, linking generated transactions to their source rule without cascading destructive deletes to user spending history.
 
 Settings rows are created lazily on settings reads/writes or spending writes. Monthly income starts at **0**; avatar starts as `''`. Base and maximum daily spending are no longer active settings. Their legacy database columns are preserved but ignored, so their removal requires no destructive migration and does not discard existing income or expenses. The six categories use the existing client IDs, colors, and icons:
 
@@ -73,18 +78,22 @@ Authorization: Bearer <opaque access token>
 
 Write requests additionally require `Origin` equal to `APP_ORIGIN` and JSON bodies where applicable. Browser clients use the existing auth refresh endpoint to obtain a fresh bearer token when needed.
 
-| Method | Route                                     | Body                                                  | Success                           |
-| ------ | ----------------------------------------- | ----------------------------------------------------- | --------------------------------- |
-| GET    | `/settings`                               | —                                                     | `200 {settings}`                  |
-| PUT    | `/settings`                               | Any subset of finance settings fields, or all of them | `200 {settings}`                  |
-| GET    | `/spendings?limit=500&cursor=<uuid>`      | —                                                     | `200 {spendings, nextCursor}`     |
-| POST   | `/spendings`                              | Full spending input                                   | `201 {spending}`                  |
-| PUT    | `/spendings/:id`                          | Full spending input                                   | `200 {spending}`                  |
-| DELETE | `/spendings/:id`                          | —                                                     | `204`, empty body                 |
-| GET    | `/income-entries?limit=500&cursor=<uuid>` | —                                                     | `200 {incomeEntries, nextCursor}` |
-| POST   | `/income-entries`                         | `{month, amount, description}`                        | `201 {incomeEntry}`               |
-| PUT    | `/income-entries/:id`                     | Full `{month, amount, description}`                   | `200 {incomeEntry}`               |
-| DELETE | `/income-entries/:id`                     | —                                                     | `204`, empty body                 |
+| Method | Route                                     | Body                                                  | Success                                        |
+| ------ | ----------------------------------------- | ----------------------------------------------------- | ---------------------------------------------- |
+| GET    | `/settings`                               | —                                                     | `200 {settings}`                               |
+| PUT    | `/settings`                               | Any subset of finance settings fields, or all of them | `200 {settings}`                               |
+| GET    | `/spendings?limit=500&cursor=<uuid>`      | —                                                     | `200 {spendings, nextCursor}`                  |
+| POST   | `/spendings`                              | Full spending input                                   | `201 {spending}`                               |
+| PUT    | `/spendings/:id`                          | Full spending input                                   | `200 {spending}`                               |
+| DELETE | `/spendings/:id`                          | —                                                     | `204`, empty body                              |
+| GET    | `/income-entries?limit=500&cursor=<uuid>` | —                                                     | `200 {incomeEntries, nextCursor}`              |
+| POST   | `/income-entries`                         | `{month, amount, description}`                        | `201 {incomeEntry}`                            |
+| PUT    | `/income-entries/:id`                     | Full `{month, amount, description}`                   | `200 {incomeEntry}`                            |
+| DELETE | `/income-entries/:id`                     | —                                                     | `204`, empty body                              |
+| GET    | `/repeat-rules`                           | —                                                     | `200 {repeatRules}`                            |
+| POST   | `/repeat-rules`                           | Full repeat rule input                                | `201 {repeatRule, spendings}`                  |
+| DELETE | `/repeat-rules/:id?deleteFuture=true`     | —                                                     | `204`, empty body                              |
+| POST   | `/repeat-rules/sync`                      | `{asOfDate?}`                                         | `200 {spendingsCreated}`                       |
 
 Settings shape:
 
@@ -126,6 +135,24 @@ Validation:
 - Unknown body fields are rejected, including caller-supplied ownership IDs, profile fields, or expense IDs. Missing required spending fields and `null` settings values are rejected.
 - JSON request bodies are limited to 128 KB for finance routes (auth retains its existing 16 KB limit).
 - Invalid bodies, IDs, query limits/cursors, or categories return `400`; invalid/missing bearer sessions return `401`; disallowed/missing write origins return `403`; missing or another user's spending ID returns `404`; oversized JSON returns `413`; database failures return a generic `503` without private database details.
+
+### Repeat spending rules and incremental auto-apply tracking
+
+Users can configure repeat spendings (breakfast, lunch, coffee, gas, rent, etc.) via the Add Expense modal or by selecting one of the Quick Repeat presets.
+
+- **Frequencies**: `daily`, `weekdays` (Monday through Friday), `weekly` (with arbitrary multi-day selections such as Mon/Wed/Fri), and `monthly` (with calendar end-of-month and leap-year clamping).
+- **Duration / End Types**:
+  - `unlimited`: No end date or fixed count specified. Generates an initial window capped at 100 occurrences.
+  - `occurrences`: Repeat for an exact count (1 to 100 maximum cap).
+  - `until_date`: Repeat until a specific calendar cutoff date (generates occurrences up to that date, capped at 100 per cycle).
+- **100-Repeat Safety Cap**:
+  Every generation cycle strictly caps spending creation at 100 entries per batch to prevent denial of service and runaway table bloat.
+- **Incremental Repeat Auto-Apply Tracking**:
+  Since infinite transactions cannot be written ahead of time, the server tracks each rule's `occurrences_generated` and `last_generated_date`. When a rule's horizon is within 14 days of the evaluated date (`last_generated_date <= today + 14 days`), the backend's `syncRepeatSpendings` engine automatically calculates and generates the next incremental batch of occurrences (capped at 100 per batch).
+- **Automatic Horizon Sync**:
+  Calls to `GET /spendings` and `GET /repeat-rules` automatically evaluate and sync due rules before returning data. This ensures that when an unlimited rule is active, recurring transactions appear on the user's calendar seamlessly without requiring manual re-application.
+- **Rule Lifecycle**:
+  Active rules are listed on the user's `/profile` page under **Repeat spendings**, displaying frequency, progress, and latest generated date. Stopping a rule (`DELETE /repeat-rules/:id?deleteFuture=true`) deletes upcoming future spendings while preserving historical past transactions for financial record accuracy.
 
 ### Income entry validation and ownership
 

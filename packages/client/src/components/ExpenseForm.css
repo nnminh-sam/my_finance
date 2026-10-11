@@ -380,3 +380,122 @@
     gap: 20px;
   }
 }
+
+.expense-presets-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.expense-presets-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.expense-presets-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.expense-preset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.expense-preset-chip:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.08));
+  transform: translateY(-1px);
+}
+
+.expense-repeat-section {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.expense-repeat-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-main);
+  padding: 4px 0;
+}
+
+.expense-repeat-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.expense-repeat-options {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.expense-weekday-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.expense-weekday-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.expense-weekday-btn:hover {
+  border-color: var(--primary);
+}
+
+.expense-weekday-btn.is-selected {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+.expense-repeat-hint {
+  font-size: 0.75rem;
+  color: var(--primary);
+  background: rgba(16, 185, 129, 0.08);
+  border-left: 3px solid var(--primary);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin: 0;
+  line-height: 1.45;
+}

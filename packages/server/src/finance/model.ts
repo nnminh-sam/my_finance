@@ -5,12 +5,37 @@ export interface FinanceSettings {
   avatar: string;
   categories: Category[];
 }
-export interface SpendingInput { amount: number; description: string; category: string; date: string; time: string }
+export interface SpendingInput { amount: number; description: string; category: string; date: string; time: string; repeatRuleId?: string | null }
 export interface Spending extends SpendingInput { id: string }
 export interface SpendingPage { spendings: Spending[]; nextCursor: string | null }
 export interface IncomeEntryInput { month: string; amount: number; description: string }
 export interface IncomeEntry extends IncomeEntryInput { id: string }
 export interface IncomeEntryPage { incomeEntries: IncomeEntry[]; nextCursor: string | null }
+
+export type RepeatFrequency = "daily" | "weekdays" | "weekly" | "monthly";
+export type RepeatEndType = "unlimited" | "occurrences" | "until_date";
+
+export interface RepeatRuleInput {
+  amount: number;
+  description: string;
+  category: string;
+  startDate: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  frequency: RepeatFrequency;
+  interval?: number; // 1-365, default 1
+  daysOfWeek?: number[]; // [0..6] (0=Sun, 1=Mon, ..., 6=Sat)
+  endType: RepeatEndType;
+  totalOccurrences?: number; // 1-100 if endType === 'occurrences'
+  endDate?: string; // YYYY-MM-DD if endType === 'until_date'
+}
+
+export interface RepeatRule extends RepeatRuleInput {
+  id: string;
+  userId: string;
+  occurrencesCreated: number;
+  lastGeneratedDate: string | null;
+  createdAt: string;
+}
 
 export const CATEGORY_ICONS = new Set([
   "Utensils", "Car", "Film", "ShoppingBag", "Receipt", "CircleDollarSign",

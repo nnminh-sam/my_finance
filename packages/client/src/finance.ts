@@ -1,5 +1,5 @@
 import { authenticatedFetch } from './auth';
-import type { IncomeEntry, IncomeEntryInput, Spending, UserSettings } from './types';
+import type { IncomeEntry, IncomeEntryInput, RepeatRule, RepeatRuleInput, Spending, UserSettings } from './types';
 
 export type FinanceSettings = Pick<UserSettings, 'income' | 'avatar' | 'categories'>;
 export type SpendingInput = Omit<Spending, 'id'>;
@@ -78,6 +78,18 @@ export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
     },
     async deleteSpending(id: string): Promise<void> {
       await request<void>(`/spendings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+    async getRepeatRules(): Promise<RepeatRule[]> {
+      return (await request<{ repeatRules: RepeatRule[] }>('/repeat-rules')).repeatRules;
+    },
+    async createRepeatRule(input: RepeatRuleInput): Promise<{ repeatRule: RepeatRule; spendings: Spending[] }> {
+      return await request<{ repeatRule: RepeatRule; spendings: Spending[] }>('/repeat-rules', json('POST', input));
+    },
+    async deleteRepeatRule(id: string, deleteFuture = true): Promise<void> {
+      await request<void>(`/repeat-rules/${encodeURIComponent(id)}?deleteFuture=${deleteFuture}`, { method: 'DELETE' });
+    },
+    async syncRepeatRules(asOfDate?: string): Promise<{ spendingsCreated: number }> {
+      return await request<{ spendingsCreated: number }>('/repeat-rules/sync', json('POST', { asOfDate }));
     },
   };
 }

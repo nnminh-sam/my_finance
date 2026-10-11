@@ -161,3 +161,95 @@
   .user-profile .profile-account-details dd { text-align: left; }
   .user-profile .profile-edit-section { gap: 8px; padding: 8px 0; }
 }
+
+.user-profile .profile-repeat-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.user-profile .profile-repeat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.user-profile .profile-repeat-item:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.user-profile .profile-repeat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.user-profile .profile-repeat-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.user-profile .profile-repeat-title-row strong {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.user-profile .profile-repeat-amount {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--primary);
+}
+
+.user-profile .profile-repeat-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.user-profile .profile-repeat-chip {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.user-profile .profile-repeat-duration {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.user-profile .profile-repeat-tracking-row {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.user-profile .profile-repeat-actions {
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .user-profile .profile-repeat-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .user-profile .profile-repeat-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

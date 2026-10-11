@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { before } from 'node:test';
 import type { FinanceSettings, SpendingInput } from '../src/finance';
-import type { Spending } from '../src/types';
+import type { RepeatRule, RepeatRuleInput, Spending } from '../src/types';
 
 let createFinanceApi: typeof import('../src/finance').createFinanceApi;
 
@@ -36,6 +36,36 @@ const input: SpendingInput = {
   category: 'food',
   date: '2020-01-02',
   time: '12:30',
+};
+
+const repeatInput: RepeatRuleInput = {
+  amount: 25,
+  description: 'Breakfast',
+  category: 'food',
+  startDate: '2026-10-11',
+  time: '08:00',
+  frequency: 'daily',
+  interval: 1,
+  endType: 'unlimited',
+};
+
+const sampleRule: RepeatRule = {
+  id: '00000000-0000-4000-8000-000000000099',
+  userId: 'user-1',
+  amount: 25,
+  description: 'Breakfast',
+  category: 'food',
+  startDate: '2026-10-11',
+  time: '08:00',
+  frequency: 'daily',
+  interval: 1,
+  endType: 'unlimited',
+  totalOccurrences: null,
+  endDate: null,
+  occurrencesGenerated: 100,
+  lastGeneratedDate: '2027-01-18',
+  createdAt: '2026-10-11T00:00:00.000Z',
+  updatedAt: '2026-10-11T00:00:00.000Z',
 };
 
 function spending(index: number): Spending {
@@ -210,6 +240,52 @@ test('delete uses the encoded server ID and accepts 204 without parsing JSON', a
   }]);
 });
 
+test('getRepeatRules requests GET /repeat-rules and returns rules array', async () => {
+  const { api, calls } = scriptedApi([response({ repeatRules: [sampleRule] })]);
+  assert.deepEqual(await api.getRepeatRules(), [sampleRule]);
+  assert.deepEqual(calls, [{ path: '/api/v1/finance/repeat-rules', init: undefined }]);
+});
+
+test('createRepeatRule posts payload and returns rule with generated spendings', async () => {
+  const { api, calls } = scriptedApi([response({ repeatRule: sampleRule, spendings: [spending(1)] }, 201)]);
+  const res = await api.createRepeatRule(repeatInput);
+  assert.deepEqual(res, { repeatRule: sampleRule, spendings: [spending(1)] });
+  assert.deepEqual(calls, [{
+    path: '/api/v1/finance/repeat-rules',
+    init: {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(repeatInput),
+    },
+  }]);
+});
+
+test('deleteRepeatRule sends encoded ID and query flag and accepts 204', async () => {
+  const deleted = response(null, 204);
+  deleted.json = async () => { assert.fail('A 204 response must not be parsed as JSON'); };
+  const { api, calls } = scriptedApi([deleted]);
+  const id = 'rule/id with spaces?';
+  assert.equal(await api.deleteRepeatRule(id), undefined);
+  assert.deepEqual(calls, [{
+    path: `/api/v1/finance/repeat-rules/${encodeURIComponent(id)}?deleteFuture=true`,
+    init: { method: 'DELETE' },
+  }]);
+});
+
+test('syncRepeatRules posts asOfDate payload and returns created count', async () => {
+  const { api, calls } = scriptedApi([response({ spendingsCreated: 15 })]);
+  const res = await api.syncRepeatRules('2026-10-11');
+  assert.deepEqual(res, { spendingsCreated: 15 });
+  assert.deepEqual(calls, [{
+    path: '/api/v1/finance/repeat-rules/sync',
+    init: {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asOfDate: '2026-10-11' }),
+    },
+  }]);
+});
+
 type FinanceApi = ReturnType<typeof createFinanceApi>;
 const operations: [string, (api: FinanceApi) => Promise<unknown>][] = [
   ['getSettings', api => api.getSettings()],
@@ -218,6 +294,10 @@ const operations: [string, (api: FinanceApi) => Promise<unknown>][] = [
   ['createSpending', api => api.createSpending(input)],
   ['updateSpending', api => api.updateSpending(spending(1).id, input)],
   ['deleteSpending', api => api.deleteSpending(spending(1).id)],
+  ['getRepeatRules', api => api.getRepeatRules()],
+  ['createRepeatRule', api => api.createRepeatRule(repeatInput)],
+  ['deleteRepeatRule', api => api.deleteRepeatRule('rule-1')],
+  ['syncRepeatRules', api => api.syncRepeatRules()],
 ];
 
 for (const [name, operation] of operations) {

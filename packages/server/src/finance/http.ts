@@ -2,11 +2,16 @@ import { Router } from "express";
 import { asyncHandler, HttpError, requireAuth } from "../auth/http";
 import type { AuthStore } from "../auth/store";
 import type { FinanceStore } from "./store";
-import { incomeEntryInput, pagination, settingsPatch, spendingInput, uuid } from "./validation";
+import { incomeEntryInput, pagination, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
 
 function incomeEntryId(value: unknown): string {
   try { return uuid(value); }
   catch { throw new HttpError(404, "Income entry not found"); }
+}
+
+function repeatRuleId(value: unknown): string {
+  try { return uuid(value); }
+  catch { throw new HttpError(404, "Repeat rule not found"); }
 }
 
 export function financeRouter(authStore: AuthStore, store: FinanceStore): Router {
@@ -55,5 +60,26 @@ export function financeRouter(authStore: AuthStore, store: FinanceStore): Router
     if (!await store.deleteIncomeEntry(res.locals.user.id, incomeEntryId(req.params.id))) throw new HttpError(404, "Income entry not found");
     res.status(204).end();
   }));
+  router.get("/repeat-rules", asyncHandler(async (_req, res) => {
+    res.json({ repeatRules: await store.listRepeatRules(res.locals.user.id) });
+  }));
+  router.post("/repeat-rules", asyncHandler(async (req, res) => {
+    const result = await store.createRepeatRule(res.locals.user.id, repeatRuleInput(req.body));
+    if (!result) throw new HttpError(400, "Category must exist in current settings");
+    res.status(201).json(result);
+  }));
+  router.delete("/repeat-rules/:id", asyncHandler(async (req, res) => {
+    const deleteFuture = req.query.deleteFuture !== "false";
+    if (!await store.deleteRepeatRule(res.locals.user.id, repeatRuleId(req.params.id), deleteFuture)) {
+      throw new HttpError(404, "Repeat rule not found");
+    }
+    res.status(204).end();
+  }));
+  router.post("/repeat-rules/sync", asyncHandler(async (req, res) => {
+    const asOfDate = typeof req.body?.asOfDate === "string" ? req.body.asOfDate : undefined;
+    const spendingsCreated = await store.syncRepeatSpendings(res.locals.user.id, asOfDate);
+    res.json({ spendingsCreated });
+  }));
   return router;
 }
+

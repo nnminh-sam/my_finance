@@ -49,20 +49,86 @@ export function settingsPatch(value: unknown): Partial<FinanceSettings> {
   if (Object.hasOwn(body, "categories")) patch.categories = categories(body.categories);
   return patch;
 }
-export function spendingInput(value: unknown): SpendingInput {
-  const body = object(value, ["amount", "description", "category", "date", "time"]);
-  const amount = money(body.amount, "amount", true);
-  const description = text(body.description, "description", 1000, true);
-  const category = text(body.category, "category", 100);
-  const date = text(body.date, "date", 10);
-  const time = text(body.time, "time", 5);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return invalid("date");
+function validDate(value: unknown, field: string): string {
+  const date = text(value, field, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return invalid(field);
   const [year, month, day] = date.split("-").map(Number);
   const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]) return invalid("date");
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]) return invalid(field);
+  return date;
+}
+export function spendingInput(value: unknown): SpendingInput {
+  const body = object(value, ["amount", "description", "category", "date", "time", "repeatRuleId"]);
+  const amount = money(body.amount, "amount", true);
+  const description = text(body.description, "description", 1000, true);
+  const category = text(body.category, "category", 100);
+  const date = validDate(body.date, "date");
+  const time = text(body.time, "time", 5);
   if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return invalid("time");
-  return { amount, description, category, date, time };
+  const result: SpendingInput = { amount, description, category, date, time };
+  if (body.repeatRuleId !== undefined && body.repeatRuleId !== null) {
+    result.repeatRuleId = uuid(body.repeatRuleId);
+  }
+  return result;
+}
+export function repeatRuleInput(value: unknown): import("./model").RepeatRuleInput {
+  const body = object(value, [
+    "amount", "description", "category", "startDate", "time",
+    "frequency", "interval", "daysOfWeek", "endType", "totalOccurrences", "endDate"
+  ]);
+  const amount = money(body.amount, "amount", true);
+  const description = text(body.description, "description", 1000, true);
+  const category = text(body.category, "category", 100);
+  const startDate = validDate(body.startDate, "startDate");
+  const time = text(body.time, "time", 5);
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return invalid("time");
+
+  const frequency = body.frequency;
+  if (frequency !== "daily" && frequency !== "weekdays" && frequency !== "weekly" && frequency !== "monthly") {
+    return invalid("frequency");
+  }
+
+  let interval = 1;
+  if (body.interval !== undefined && body.interval !== null) {
+    if (typeof body.interval !== "number" || !Number.isInteger(body.interval) || body.interval < 1 || body.interval > 365) {
+      return invalid("interval (1–365)");
+    }
+    interval = body.interval;
+  }
+
+  let daysOfWeek: number[] | undefined;
+  if (body.daysOfWeek !== undefined && body.daysOfWeek !== null) {
+    if (!Array.isArray(body.daysOfWeek) || body.daysOfWeek.length > 7 ||
+        body.daysOfWeek.some(d => typeof d !== "number" || !Number.isInteger(d) || d < 0 || d > 6)) {
+      return invalid("daysOfWeek");
+    }
+    daysOfWeek = [...new Set(body.daysOfWeek)].sort((a, b) => a - b);
+  }
+
+  const endType = body.endType;
+  if (endType !== "unlimited" && endType !== "occurrences" && endType !== "until_date") {
+    return invalid("endType");
+  }
+
+  let totalOccurrences: number | undefined;
+  if (endType === "occurrences") {
+    if (typeof body.totalOccurrences !== "number" || !Number.isInteger(body.totalOccurrences) || body.totalOccurrences < 1 || body.totalOccurrences > 100) {
+      return invalid("totalOccurrences (1–100)");
+    }
+    totalOccurrences = body.totalOccurrences;
+  }
+
+  let endDate: string | undefined;
+  if (endType === "until_date") {
+    endDate = validDate(body.endDate, "endDate");
+    if (endDate < startDate) return invalid("endDate cannot be before startDate");
+  }
+
+  return {
+    amount, description, category, startDate, time,
+    frequency, interval, daysOfWeek, endType, totalOccurrences, endDate,
+  };
 }
 export function incomeEntryInput(value: unknown): IncomeEntryInput {
   const body = object(value, ["month", "amount", "description"]);

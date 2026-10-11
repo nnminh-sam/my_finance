@@ -1,10 +1,10 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Repeat, Trash2, X } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useFinance } from '../contexts/FinanceContext.tsx';
-import { createExpenseDraft, isExpenseDraftDirty, validateExpenseDraft } from '../expenseDraft';
+import { createExpenseDraft, isExpenseDraftDirty, validateExpenseDraft, validateRepeatDraft } from '../expenseDraft';
 import type { ExpenseDraft } from '../expenseDraft';
 import { nextExpenseDraft, prepareExpenseBatch, saveExpenseBatch, stageExpenseDraft } from '../expenseBatch';
 import type { PreparedExpense, QueuedExpense } from '../expenseBatch';
@@ -21,7 +21,7 @@ export interface ExpenseModalProps {
 // Mount only while open: each mount captures fresh local defaults and the opening trigger.
 export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
   const { settings } = useSettings();
-  const { createSpending, updateSpending } = useFinance();
+  const { createSpending, updateSpending, createRepeatRule } = useFinance();
   const [initial] = useState(() => ({
     draft: createExpenseDraft(settings.categories, expense),
     trigger: document.activeElement,
@@ -49,6 +49,29 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
     return total + (Number.isFinite(amount) && amount > 0 ? amount : 0);
   }, 0);
 
+  const presets = [
+    { label: 'Breakfast', desc: 'Breakfast', category: 'Food', time: '08:00', icon: '🍳', freq: 'daily' as const },
+    { label: 'Lunch', desc: 'Lunch', category: 'Food', time: '12:30', icon: '🍱', freq: 'weekdays' as const },
+    { label: 'Coffee', desc: 'Coffee', category: 'Food', time: '09:00', icon: '☕', freq: 'daily' as const },
+    { label: 'Gas', desc: 'Gas', category: 'Transport', time: '08:30', icon: '⛽', freq: 'weekly' as const },
+    { label: 'Rent / Bills', desc: 'Bills', category: 'Bills', time: '09:00', icon: '📄', freq: 'monthly' as const },
+  ];
+
+  const applyPreset = (preset: typeof presets[number]) => {
+    if (saveLock.current) return;
+    const targetCategory = settings.categories.find(c => c.name.toLowerCase() === preset.category.toLowerCase() || c.id.toLowerCase() === preset.category.toLowerCase())?.id ?? settings.categories[0]?.id ?? '';
+    setDraft(curr => ({
+      ...curr,
+      description: preset.desc,
+      category: targetCategory,
+      time: preset.time,
+      isRepeat: true,
+      repeatFrequency: preset.freq,
+      repeatEndType: 'unlimited',
+    }));
+    amountRef.current?.focus({ preventScroll: true });
+  };
+
   useUnsavedChanges(dirty || busy);
 
   useLayoutEffect(() => {
@@ -59,7 +82,6 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
     return () => {
       mounted.current = false;
       if (dialog.open) dialog.close();
-      // close() normally restores focus; only provide a fallback for a surviving trigger.
       if (initial.trigger instanceof HTMLElement && initial.trigger.isConnected && document.activeElement !== initial.trigger) {
         initial.trigger.focus({ preventScroll: true });
       }
@@ -114,7 +136,6 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
     }
     setError(null);
     try {
-      // Preserve completed editor changes before switching; invalid drafts stay in the form.
       const staged = activeKey !== null || draft.amount !== '' || draft.description !== '' ? stageCurrent() : queue;
       if (activeKey === null && draft.amount === '' && draft.description === '') {
         newEditorDraft.current = { ...draft };
@@ -141,6 +162,39 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
     event.preventDefault();
     if (saveLock.current) return;
     setError(null);
+
+    if (!editing && draft.isRepeat) {
+      let repeatInput;
+      try {
+        repeatInput = validateRepeatDraft(draft, settings.categories);
+      } catch (cause) {
+        setError(cause instanceof Error && cause.message ? cause.message : 'Check the repeat spending details and try again.');
+        return;
+      }
+      saveLock.current = true;
+      setBusy(true);
+      try {
+        const savedRule = await createRepeatRule(repeatInput);
+        if (!mounted.current) return;
+        onSaved?.({
+          amount: repeatInput.amount,
+          description: repeatInput.description,
+          category: repeatInput.category,
+          date: repeatInput.startDate,
+          time: repeatInput.time,
+        }, savedRule.occurrencesCreated);
+        onClose();
+        return;
+      } catch (cause) {
+        saveLock.current = false;
+        if (mounted.current) {
+          setBusy(false);
+          setError(cause instanceof Error && cause.message ? cause.message : 'Unable to save repeat spending.');
+        }
+        return;
+      }
+    }
+
     let input: Omit<Spending, 'id'>;
     let batch: PreparedExpense[] = [];
     try {
@@ -182,7 +236,6 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
       return;
     }
     if (!mounted.current) return;
-    // Callback failures must not be reported as failed writes or allow duplicate saves.
     try {
       onSaved?.(input, editing ? 1 : confirmedCount.current);
     } finally {
@@ -212,6 +265,25 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
           <legend className="expense-sr-only">Expense details</legend>
           <div className={editing ? undefined : 'expense-batch-layout'}>
           <div className="expense-editor">
+          {!editing && (
+            <div className="expense-presets-bar">
+              <span className="expense-presets-label">Quick repeat:</span>
+              <div className="expense-presets-list">
+                {presets.map(p => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    className="expense-preset-chip"
+                    disabled={busy || settings.categories.length === 0}
+                    onClick={() => applyPreset(p)}
+                  >
+                    <span aria-hidden="true">{p.icon}</span>
+                    <span>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {!editing && <p className="expense-editor-heading">{activeKey === null ? 'New expense' : `Editing queued expense ${queue.findIndex(entry => entry.key === activeKey) + 1}`}</p>}
           <div className="expense-form-grid">
             <div className="expense-field">
@@ -241,12 +313,146 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
               <input id={`${formId}-time`} type="time" required step={60} value={draft.time} onChange={event => changeField('time', event.target.value)} />
             </div>
           </div>
-          {!editing && <div className="expense-editor-actions">
+
+          {!editing && (
+            <div className="expense-repeat-section">
+              <label className="expense-repeat-toggle" htmlFor={`${formId}-is-repeat`}>
+                <input
+                  id={`${formId}-is-repeat`}
+                  type="checkbox"
+                  checked={Boolean(draft.isRepeat)}
+                  onChange={e => setDraft(curr => ({
+                    ...curr,
+                    isRepeat: e.target.checked,
+                    repeatFrequency: curr.repeatFrequency ?? 'daily',
+                    repeatInterval: curr.repeatInterval ?? 1,
+                    repeatDaysOfWeek: curr.repeatDaysOfWeek ?? [],
+                    repeatEndType: curr.repeatEndType ?? 'unlimited',
+                    repeatCount: curr.repeatCount ?? 10,
+                  }))}
+                />
+                <Repeat size={16} aria-hidden="true" />
+                <span>Repeat this spending</span>
+              </label>
+
+              {draft.isRepeat && (
+                <div className="expense-repeat-options glass">
+                  <div className="expense-form-grid">
+                    <div className="expense-field">
+                      <label htmlFor={`${formId}-repeat-freq`}>Frequency</label>
+                      <select
+                        id={`${formId}-repeat-freq`}
+                        value={draft.repeatFrequency ?? 'daily'}
+                        onChange={e => setDraft(curr => ({ ...curr, repeatFrequency: e.target.value as any }))}
+                      >
+                        <option value="daily">Every day</option>
+                        <option value="weekdays">Weekdays (Mon–Fri)</option>
+                        <option value="weekly">Weekly (specific days)</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+
+                    {draft.repeatFrequency === 'daily' && (
+                      <div className="expense-field">
+                        <label htmlFor={`${formId}-repeat-interval`}>Every N days</label>
+                        <input
+                          id={`${formId}-repeat-interval`}
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={draft.repeatInterval ?? 1}
+                          onChange={e => setDraft(curr => ({ ...curr, repeatInterval: Math.max(1, Math.min(365, Number(e.target.value))) }))}
+                        />
+                      </div>
+                    )}
+
+                    {draft.repeatFrequency === 'weekly' && (
+                      <div className="expense-field expense-field-wide">
+                        <label>Repeat on specific days</label>
+                        <div className="expense-weekday-picker">
+                          {[
+                            { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' }, { day: 3, label: 'Wed' },
+                            { day: 4, label: 'Thu' }, { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' }, { day: 0, label: 'Sun' },
+                          ].map(item => {
+                            const selected = (draft.repeatDaysOfWeek ?? []).includes(item.day);
+                            return (
+                              <button
+                                key={item.day}
+                                type="button"
+                                className={`expense-weekday-btn${selected ? ' is-selected' : ''}`}
+                                onClick={() => {
+                                  const current = draft.repeatDaysOfWeek ?? [];
+                                  const next = selected ? current.filter(d => d !== item.day) : [...current, item.day];
+                                  setDraft(curr => ({ ...curr, repeatDaysOfWeek: next }));
+                                }}
+                              >
+                                {item.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="expense-field">
+                      <label htmlFor={`${formId}-repeat-end-type`}>Duration</label>
+                      <select
+                        id={`${formId}-repeat-end-type`}
+                        value={draft.repeatEndType ?? 'unlimited'}
+                        onChange={e => setDraft(curr => ({ ...curr, repeatEndType: e.target.value as any }))}
+                      >
+                        <option value="unlimited">Keep repeating (unlimited)</option>
+                        <option value="occurrences">Certain amount of times (cap 100)</option>
+                        <option value="until_date">Until specific date</option>
+                      </select>
+                    </div>
+
+                    {draft.repeatEndType === 'occurrences' && (
+                      <div className="expense-field">
+                        <label htmlFor={`${formId}-repeat-count`}>Number of repeats (1–100)</label>
+                        <input
+                          id={`${formId}-repeat-count`}
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={draft.repeatCount ?? 10}
+                          onChange={e => setDraft(curr => ({ ...curr, repeatCount: Math.min(100, Math.max(1, Number(e.target.value))) }))}
+                        />
+                        <small>System cap is 100 repeats.</small>
+                      </div>
+                    )}
+
+                    {draft.repeatEndType === 'until_date' && (
+                      <div className="expense-field">
+                        <label htmlFor={`${formId}-repeat-end-date`}>End Date</label>
+                        <input
+                          id={`${formId}-repeat-end-date`}
+                          type="date"
+                          min={draft.date}
+                          max="9999-12-31"
+                          value={draft.repeatEndDate ?? ''}
+                          onChange={e => setDraft(curr => ({ ...curr, repeatEndDate: e.target.value }))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <p className="expense-repeat-hint">
+                    {draft.repeatEndType === 'unlimited'
+                      ? '⚡ Generates 100 entries initially. As time nears the repeat horizon, the system automatically applies the next batch of repeats without you needing to re-apply.'
+                      : 'Generates recurring entries up to the cap of 100.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!editing && !draft.isRepeat && <div className="expense-editor-actions">
             <button type="button" className="expense-button" disabled={busy || settings.categories.length === 0} onClick={addMore}><Plus size={16} aria-hidden="true" />Add more</button>
             <p className="expense-batch-help">Queue this expense and start another. Nothing is saved until you press Add.</p>
           </div>}
           </div>
-          {!editing && <aside className="expense-queue" aria-labelledby={`${formId}-queue-title`}>
+
+          {!editing && !draft.isRepeat && <aside className="expense-queue" aria-labelledby={`${formId}-queue-title`}>
             <div className="expense-queue-header">
               <h3 id={`${formId}-queue-title`}>Queued expenses</h3>
               <span aria-label={`${queue.length} queued expenses`}>{queue.length}</span>
@@ -269,9 +475,11 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
             <div className="expense-queue-total"><span>Queued total</span><strong>{queuedTotal.toLocaleString('vi-VN')} ₫</strong></div>
           </aside>}
           </div>
-          {!editing && <p className="expense-batch-help">Add saves all queued expenses and the current filled-in form. Click a queued expense to edit it; Add more returns you to a new entry.</p>}
+          {!editing && !draft.isRepeat && <p className="expense-batch-help">Add saves all queued expenses and the current filled-in form. Click a queued expense to edit it; Add more returns you to a new entry.</p>}
           <div className="expense-actions">
-            <button type="submit" className="expense-button expense-button-primary" disabled={busy || settings.categories.length === 0}>{busy ? 'Saving…' : editing ? 'Save expense' : 'Add'}</button>
+            <button type="submit" className="expense-button expense-button-primary" disabled={busy || settings.categories.length === 0}>
+              {busy ? 'Saving…' : editing ? 'Save expense' : draft.isRepeat ? 'Set repeat spending' : 'Add'}
+            </button>
             <button type="button" className="expense-button" disabled={busy} onClick={requestClose}>Cancel</button>
           </div>
         </fieldset>
@@ -280,3 +488,4 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
     document.body,
   );
 }
+

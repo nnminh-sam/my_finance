@@ -5,7 +5,8 @@ import { test, type TestContext } from "node:test";
 import { createApplication } from "../src/application";
 import { hashToken, newToken } from "../src/auth/crypto";
 import type { AuthStore, User } from "../src/auth/store";
-import { defaultFinanceSettings, type FinanceSettings, type IncomeEntry, type IncomeEntryInput, type IncomeEntryPage, type Spending, type SpendingInput } from "../src/finance/model";
+import { defaultFinanceSettings, type FinanceSettings, type IncomeEntry, type IncomeEntryInput, type IncomeEntryPage, type RepeatRule, type RepeatRuleInput, type Spending, type SpendingInput } from "../src/finance/model";
+import { formatDateUtc, generateOccurrences, isRuleDueForSync } from "../src/finance/recurrence";
 import type { FinanceStore } from "../src/finance/store";
 import { incomeEntryInput } from "../src/finance/validation";
 
@@ -13,9 +14,14 @@ class MemoryFinanceStore implements FinanceStore {
   settings = new Map<string, FinanceSettings>();
   spendings = new Map<string, Map<string, Spending>>();
   incomeEntries = new Map<string, Map<string, IncomeEntry>>();
+  repeatRules = new Map<string, Map<string, RepeatRule>>();
   incomeRows(userId: string) {
     if (!this.incomeEntries.has(userId)) this.incomeEntries.set(userId, new Map());
     return this.incomeEntries.get(userId)!;
+  }
+  repeatRuleRows(userId: string) {
+    if (!this.repeatRules.has(userId)) this.repeatRules.set(userId, new Map());
+    return this.repeatRules.get(userId)!;
   }
   fail = false;
   check() { if (this.fail) throw new Error("postgres://private:secret@example.test/db"); }
@@ -35,6 +41,7 @@ class MemoryFinanceStore implements FinanceStore {
   }
   async listSpendings(userId: string, limit: number, cursor?: string) {
     this.check();
+    await this.syncRepeatSpendings(userId);
     const rows = [...this.rows(userId).values()].filter(row => !cursor || row.id > cursor)
       .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     const spendings = rows.slice(0, limit);
@@ -42,7 +49,8 @@ class MemoryFinanceStore implements FinanceStore {
   }
   async createSpending(userId: string, input: SpendingInput) {
     if (!(await this.getSettings(userId)).categories.some(category => category.id === input.category)) return undefined;
-    const spending = { id: randomUUID(), ...input };
+    const spending: Spending = { id: randomUUID(), ...input };
+    if (!input.repeatRuleId) delete spending.repeatRuleId;
     this.rows(userId).set(spending.id, spending);
     return structuredClone(spending);
   }
@@ -50,7 +58,8 @@ class MemoryFinanceStore implements FinanceStore {
     this.check();
     if (!this.rows(userId).has(id)) return "not-found" as const;
     if (!(await this.getSettings(userId)).categories.some(category => category.id === input.category)) return "invalid-category" as const;
-    const spending = { id, ...input };
+    const spending: Spending = { id, ...input };
+    if (!input.repeatRuleId) delete spending.repeatRuleId;
     this.rows(userId).set(id, spending);
     return structuredClone(spending);
   }
@@ -76,7 +85,93 @@ class MemoryFinanceStore implements FinanceStore {
     return structuredClone(incomeEntry);
   }
   async deleteIncomeEntry(userId: string, id: string) { this.check(); return this.incomeRows(userId).delete(id); }
+  async listRepeatRules(userId: string) {
+    this.check();
+    await this.syncRepeatSpendings(userId);
+    return [...this.repeatRuleRows(userId).values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  async createRepeatRule(userId: string, input: RepeatRuleInput) {
+    this.check();
+    if (!(await this.getSettings(userId)).categories.some(c => c.id === input.category)) return undefined;
+    const ruleId = randomUUID();
+    const batch = generateOccurrences({
+      startDate: input.startDate,
+      frequency: input.frequency,
+      interval: input.interval ?? 1,
+      daysOfWeek: input.daysOfWeek,
+      endType: input.endType,
+      totalOccurrences: input.totalOccurrences,
+      endDate: input.endDate,
+      occurrencesCreated: 0,
+      lastGeneratedDate: null,
+    }, 100);
+
+    const rule: RepeatRule = {
+      id: ruleId,
+      userId,
+      ...input,
+      occurrencesCreated: batch.newOccurrencesCreated,
+      lastGeneratedDate: batch.newLastGeneratedDate,
+      createdAt: new Date().toISOString(),
+    };
+    this.repeatRuleRows(userId).set(ruleId, rule);
+
+    const spendings: Spending[] = [];
+    for (const d of batch.dates) {
+      const spending: Spending = {
+        id: randomUUID(),
+        amount: input.amount,
+        description: input.description,
+        category: input.category,
+        date: d,
+        time: input.time,
+        repeatRuleId: ruleId,
+      };
+      this.rows(userId).set(spending.id, spending);
+      spendings.push(spending);
+    }
+    return { repeatRule: structuredClone(rule), spendings: structuredClone(spendings) };
+  }
+  async deleteRepeatRule(userId: string, id: string, deleteFuture = true) {
+    this.check();
+    if (!this.repeatRuleRows(userId).has(id)) return false;
+    if (deleteFuture) {
+      const today = formatDateUtc(new Date());
+      for (const [spendingId, spending] of [...this.rows(userId).entries()]) {
+        if (spending.repeatRuleId === id && spending.date >= today) {
+          this.rows(userId).delete(spendingId);
+        }
+      }
+    }
+    return this.repeatRuleRows(userId).delete(id);
+  }
+  async syncRepeatSpendings(userId: string, asOfDate = formatDateUtc(new Date())) {
+    this.check();
+    let totalCreated = 0;
+    for (const rule of this.repeatRuleRows(userId).values()) {
+      if (!isRuleDueForSync(rule, asOfDate)) continue;
+      const batch = generateOccurrences(rule, 100);
+      if (batch.dates.length === 0) continue;
+      rule.occurrencesCreated = batch.newOccurrencesCreated;
+      rule.lastGeneratedDate = batch.newLastGeneratedDate;
+      for (const d of batch.dates) {
+        const spending: Spending = {
+          id: randomUUID(),
+          amount: rule.amount,
+          description: rule.description,
+          category: rule.category,
+          date: d,
+          time: rule.time,
+          repeatRuleId: rule.id,
+        };
+        this.rows(userId).set(spending.id, spending);
+      }
+      totalCreated += batch.dates.length;
+    }
+    return totalCreated;
+  }
 }
+
 
 const origin = "http://localhost:5173";
 const input: SpendingInput = { amount: 12.34, description: "Lunch", category: "Food", date: "2024-02-29", time: "12:05" };
@@ -414,4 +509,107 @@ test("income entry writes use the existing origin guard and CORS", async t => {
     assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
     assert.ok(preflight.headers.get("access-control-allow-methods")!.includes(method));
   }
+});
+
+const repeatInput: RepeatRuleInput = {
+  amount: 25.5,
+  description: "Breakfast",
+  category: "Food",
+  startDate: "2026-10-11",
+  time: "08:00",
+  frequency: "daily",
+  interval: 1,
+  endType: "unlimited",
+};
+
+test("repeat rule routes require opaque bearer auth and origin guard", async t => {
+  const { request, url, tokens } = await fixture(t);
+  for (const [path, method, body] of [
+    ["/repeat-rules", "GET", undefined],
+    ["/repeat-rules", "POST", repeatInput],
+    [`/repeat-rules/${randomUUID()}`, "DELETE", undefined],
+    ["/repeat-rules/sync", "POST", {}],
+  ] as const) {
+    assert.equal((await request(path, method, body, 0, { Authorization: "" })).status, 401);
+    assert.equal((await request(path, method, body, 0, { Authorization: "Bearer bad" })).status, 401);
+  }
+  for (const method of ["POST", "DELETE"]) {
+    const path = method === "POST" ? "/repeat-rules" : `/repeat-rules/${randomUUID()}`;
+    assert.equal((await request(path, method, method === "DELETE" ? undefined : repeatInput, 0, { Origin: "https://evil.example" })).status, 403);
+    const missingOrigin = await fetch(`${url}${path}`, { method, headers: { Authorization: `Bearer ${tokens[0]}`, "Content-Type": "application/json" }, body: method === "DELETE" ? undefined : JSON.stringify(repeatInput) });
+    assert.equal(missingOrigin.status, 403);
+  }
+});
+
+test("repeat rule CRUD, cap 100 repeats, and incremental auto-apply tracking", async t => {
+  const { request } = await fixture(t);
+  // Create unlimited daily repeat rule (cap 100)
+  const res = await request("/repeat-rules", "POST", repeatInput);
+  assert.equal(res.status, 201);
+  const created = await res.json() as { repeatRule: RepeatRule; spendings: Spending[] };
+  assert.equal(created.repeatRule.description, "Breakfast");
+  assert.equal(created.repeatRule.occurrencesCreated, 100);
+  assert.equal(created.spendings.length, 100);
+  assert.equal(created.spendings[0].date, "2026-10-11");
+  assert.equal(created.spendings[0].repeatRuleId, created.repeatRule.id);
+
+  // Listing repeat rules returns the rule
+  const listRes = await request("/repeat-rules");
+  assert.equal(listRes.status, 200);
+  const rules = (await listRes.json() as { repeatRules: RepeatRule[] }).repeatRules;
+  assert.equal(rules.length, 1);
+  assert.equal(rules[0].id, created.repeatRule.id);
+
+  // Listing spendings returns the 100 generated spendings
+  const spendingsRes = await request("/spendings");
+  const spendingsList = (await spendingsRes.json() as { spendings: Spending[] }).spendings;
+  assert.equal(spendingsList.length, 100);
+
+  // Time advances near the repeat horizon: auto-apply generates next 100 repeats
+  const horizonNear = created.repeatRule.lastGeneratedDate!; // exactly on the horizon
+  const syncRes = await request("/repeat-rules/sync", "POST", { asOfDate: horizonNear });
+  assert.equal(syncRes.status, 200);
+  const syncData = await syncRes.json() as { spendingsCreated: number };
+  assert.equal(syncData.spendingsCreated, 100);
+
+  // Now 200 spendings exist
+  const updatedRules = (await (await request("/repeat-rules")).json() as { repeatRules: RepeatRule[] }).repeatRules;
+  assert.equal(updatedRules[0].occurrencesCreated, 200);
+
+  // Bounded rule (e.g. 10 occurrences)
+  const boundedRes = await request("/repeat-rules", "POST", {
+    amount: 15.0,
+    description: "Gas",
+    category: "Transport",
+    startDate: "2026-10-15",
+    time: "09:00",
+    frequency: "weekly",
+    endType: "occurrences",
+    totalOccurrences: 10,
+  });
+  assert.equal(boundedRes.status, 201);
+  const bounded = await boundedRes.json() as { repeatRule: RepeatRule; spendings: Spending[] };
+  assert.equal(bounded.spendings.length, 10);
+  assert.equal(bounded.repeatRule.occurrencesCreated, 10);
+
+  // Delete rule: removes rule
+  const delRes = await request(`/repeat-rules/${bounded.repeatRule.id}`, "DELETE");
+  assert.equal(delRes.status, 204);
+  assert.equal((await request(`/repeat-rules/${bounded.repeatRule.id}`, "DELETE")).status, 404);
+});
+
+test("repeat rule strict validation rejects invalid inputs and capped at 100", async t => {
+  const { request } = await fixture(t);
+  // Cap at 100 repeats: occurrences > 100 must be rejected
+  assert.equal((await request("/repeat-rules", "POST", { ...repeatInput, endType: "occurrences", totalOccurrences: 101 })).status, 400);
+  assert.equal((await request("/repeat-rules", "POST", { ...repeatInput, endType: "occurrences", totalOccurrences: 0 })).status, 400);
+  // Invalid frequency
+  assert.equal((await request("/repeat-rules", "POST", { ...repeatInput, frequency: "yearly" })).status, 400);
+  // Invalid interval
+  assert.equal((await request("/repeat-rules", "POST", { ...repeatInput, interval: 0 })).status, 400);
+  assert.equal((await request("/repeat-rules", "POST", { ...repeatInput, interval: 366 })).status, 400);
+  // Invalid end date before start date
+  assert.equal((await request("/repeat-rules", "POST", { ...repeatInput, endType: "until_date", endDate: "2026-10-10" })).status, 400);
+  // Category not in settings
+  assert.equal((await request("/repeat-rules", "POST", { ...repeatInput, category: "NonExistent" })).status, 400);
 });

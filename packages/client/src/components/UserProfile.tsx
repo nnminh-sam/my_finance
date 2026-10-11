@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-
-import { User, Mail, Calendar, Wallet, Tag, Plus, Sun, Moon, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone } from 'lucide-react';
+import { User, Mail, Calendar, Wallet, Tag, Plus, Sun, Moon, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useFinance } from '../contexts/FinanceContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { errorMessage } from '../auth';
 import { useUnsavedChanges } from '../useUnsavedChanges';
@@ -53,6 +53,8 @@ export function UserProfile() {
   const { settings, updateSettings } = useSettings();
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { repeatRules, deleteRepeatRule } = useFinance();
+  const [stoppingRepeatId, setStoppingRepeatId] = useState<string | null>(null);
   const income = useSectionEditor<string>();
   const avatar = useSectionEditor<string>();
   const categories = useSectionEditor<CategoryData[]>();
@@ -245,6 +247,83 @@ export function UserProfile() {
             </div>
           )}
         </ProfileSection>
+
+        <section className="profile-card profile-card-wide glass" aria-labelledby="profile-repeats-heading">
+          <h2 id="profile-repeats-heading" className="profile-section-heading">
+            <span className="profile-section-title"><Repeat size={20} aria-hidden="true" />Repeat spendings</span>
+            <span className="profile-badge">{repeatRules.length}</span>
+          </h2>
+          <p className="profile-hint">Active repeating spendings automatically track and incrementally apply up to 100 repeats per cycle.</p>
+          {repeatRules.length === 0 ? (
+            <p className="profile-hint" style={{ padding: '12px 0' }}>No repeat spendings set yet. Toggle “Repeat this spending” when adding breakfast, lunch, gas, etc.</p>
+          ) : (
+            <div className="profile-repeat-rules-list">
+              {repeatRules.map(rule => {
+                const category = settings.categories.find(c => c.id === rule.category);
+                const formatFreq = () => {
+                  if (rule.frequency === 'daily') return rule.interval && rule.interval > 1 ? `Every ${rule.interval} days` : 'Daily';
+                  if (rule.frequency === 'weekdays') return 'Weekdays (Mon–Fri)';
+                  if (rule.frequency === 'weekly') {
+                    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    const selected = (rule.daysOfWeek ?? []).map(d => days[d]).join(', ');
+                    return selected ? `Weekly (${selected})` : 'Weekly';
+                  }
+                  if (rule.frequency === 'monthly') return 'Monthly';
+                  return rule.frequency;
+                };
+                const formatDuration = () => {
+                  if (rule.endType === 'unlimited') return 'Unlimited (auto-applying)';
+                  if (rule.endType === 'occurrences') return `${rule.occurrencesCreated} / ${rule.totalOccurrences ?? 100} times`;
+                  if (rule.endType === 'until_date') return `Until ${rule.endDate}`;
+                  return '';
+                };
+                return (
+                  <div key={rule.id} className="profile-repeat-item glass">
+                    <div className="profile-repeat-info">
+                      <div className="profile-repeat-title-row">
+                        <strong>{rule.description}</strong>
+                        <span className="profile-repeat-amount">{rule.amount.toLocaleString('vi-VN')} ₫</span>
+                      </div>
+                      <div className="profile-repeat-meta-row">
+                        <span className="profile-repeat-chip" style={{ borderColor: category?.color ?? 'var(--border-color)' }}>
+                          {category?.name ?? rule.category}
+                        </span>
+                        <span>{formatFreq()}</span>
+                        <span aria-hidden="true">•</span>
+                        <span>{rule.time}</span>
+                        <span aria-hidden="true">•</span>
+                        <span className="profile-repeat-duration">{formatDuration()}</span>
+                      </div>
+                      <div className="profile-repeat-tracking-row">
+                        <small>Applied: {rule.occurrencesCreated} entries · Latest applied: {rule.lastGeneratedDate ?? 'None'}</small>
+                      </div>
+                    </div>
+                    <div className="profile-repeat-actions">
+                      <button
+                        type="button"
+                        className="profile-button profile-button-danger"
+                        disabled={stoppingRepeatId === rule.id || pending}
+                        onClick={async () => {
+                          if (window.confirm(`Stop repeat spending for “${rule.description}”? Future entries from today onwards will be removed.`)) {
+                            setStoppingRepeatId(rule.id);
+                            try {
+                              await deleteRepeatRule(rule.id, true);
+                            } finally {
+                              setStoppingRepeatId(null);
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
+                        <span>{stoppingRepeatId === rule.id ? 'Stopping…' : 'Stop'}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         <section className="profile-card profile-card-wide glass" aria-labelledby="profile-account-heading">
           <h2 id="profile-account-heading" className="profile-section-heading"><span className="profile-section-title"><User size={20} aria-hidden="true" />Account details</span></h2>

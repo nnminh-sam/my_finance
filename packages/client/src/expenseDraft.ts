@@ -1,5 +1,5 @@
 import type { SpendingInput } from './finance';
-import type { CategoryData, Spending } from './types';
+import type { CategoryData, RepeatEndType, RepeatFrequency, RepeatRuleInput, Spending } from './types';
 
 export interface ExpenseDraft {
   id?: string;
@@ -8,6 +8,13 @@ export interface ExpenseDraft {
   category: string;
   date: string;
   time: string;
+  isRepeat?: boolean;
+  repeatFrequency?: RepeatFrequency;
+  repeatInterval?: number;
+  repeatDaysOfWeek?: number[];
+  repeatEndType?: RepeatEndType;
+  repeatCount?: number;
+  repeatEndDate?: string;
 }
 
 type Categories = readonly Pick<CategoryData, 'id'>[];
@@ -67,8 +74,56 @@ export function validateExpenseDraft(draft: ExpenseDraft, categories: Categories
   };
 }
 
+export function validateRepeatDraft(draft: ExpenseDraft, categories: Categories): RepeatRuleInput {
+  const base = validateExpenseDraft(draft, categories);
+  const frequency = draft.repeatFrequency ?? 'daily';
+  const interval = draft.repeatInterval ?? 1;
+  if (!Number.isInteger(interval) || interval < 1 || interval > 365) {
+    throw new Error('Repeat interval must be between 1 and 365.');
+  }
+  const endType = draft.repeatEndType ?? 'unlimited';
+  let totalOccurrences: number | undefined;
+  if (endType === 'occurrences') {
+    const count = Number(draft.repeatCount);
+    if (!Number.isInteger(count) || count < 1 || count > 100) {
+      throw new Error('Repeat occurrences must be between 1 and 100.');
+    }
+    totalOccurrences = count;
+  }
+  let endDate: string | undefined;
+  if (endType === 'until_date') {
+    if (!draft.repeatEndDate || !isValidDate(draft.repeatEndDate)) {
+      throw new Error('Choose a valid end date.');
+    }
+    if (draft.repeatEndDate < draft.date) {
+      throw new Error('End date cannot be earlier than start date.');
+    }
+    endDate = draft.repeatEndDate;
+  }
+  return {
+    amount: base.amount,
+    description: base.description,
+    category: base.category,
+    startDate: base.date,
+    time: base.time,
+    frequency,
+    interval,
+    daysOfWeek: draft.repeatDaysOfWeek,
+    endType,
+    totalOccurrences,
+    endDate,
+  };
+}
+
 export function isExpenseDraftDirty(draft: ExpenseDraft, initial: ExpenseDraft): boolean {
   return draft.id !== initial.id || draft.amount !== initial.amount ||
     draft.description !== initial.description || draft.category !== initial.category ||
-    draft.date !== initial.date || draft.time !== initial.time;
+    draft.date !== initial.date || draft.time !== initial.time ||
+    Boolean(draft.isRepeat) !== Boolean(initial.isRepeat) ||
+    draft.repeatFrequency !== initial.repeatFrequency ||
+    draft.repeatInterval !== initial.repeatInterval ||
+    draft.repeatEndType !== initial.repeatEndType ||
+    draft.repeatCount !== initial.repeatCount ||
+    draft.repeatEndDate !== initial.repeatEndDate ||
+    JSON.stringify(draft.repeatDaysOfWeek) !== JSON.stringify(initial.repeatDaysOfWeek);
 }
