@@ -81,7 +81,7 @@ The root `vercel.json` service configuration is:
 }
 ```
 
-The API rewrite must remain first. All non-API paths go to the public static client service; its `cleanUrls` resolves HTML paths, including `/` to `index.html`. The service catch-all selects a service, not a home-page or SPA fallback: unknown paths and missing assets must return HTTP 404 rather than home-page HTML with HTTP 200. The legacy root `api/index.ts` remains as an unused compatibility wrapper; the server service enters through `packages/server/src/app.ts`.
+The API rewrite must remain first. All non-API paths go to the public static client service; its `cleanUrls` resolves HTML paths, including `/` to `index.html`. The service catch-all selects a service, not a home-page or SPA fallback: unknown paths and missing assets must return HTTP 404 rather than home-page HTML with HTTP 200. The server service enters through `packages/server/src/app.ts`.
 
 Set the Vercel project's Root Directory to the repository root, not either package. Clear legacy top-level `buildCommand`/`outputDirectory` configuration and dashboard build/output overrides so the per-service settings apply. `packages/shared` is an empty directory that neither app imports; it is not a shared library dependency or a service. No shared-source inclusion setting is currently needed.
 

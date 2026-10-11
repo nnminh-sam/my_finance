@@ -26,7 +26,7 @@ export function createApplication(config: Config, store: AuthStore, financeStore
   // A full category list with bounded Unicode strings can exceed auth's limit.
   if (financeStore) app.use("/api/v1/finance", express.json({ limit: "128kb" }));
   app.use(express.json({ limit: "16kb" }));
-  app.get("/api/v1/health", (_req, res) => {
+  app.get(["/", "/api", "/api/v1/health"], (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
   app.use("/api/v1/auth", authRouter(store, config));
