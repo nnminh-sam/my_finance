@@ -1,0 +1,38 @@
+{
+  "buildCommand": "npm run build --workspace=@my-finance/client",
+  "outputDirectory": "packages/client/dist",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.ts"
+    },
+    {
+      "source": "/login",
+      "destination": "/login.html"
+    },
+    {
+      "source": "/signup",
+      "destination": "/signup.html"
+    },
+    {
+      "source": "/calendar",
+      "destination": "/calendar.html"
+    },
+    {
+      "source": "/week",
+      "destination": "/week.html"
+    },
+    {
+      "source": "/day",
+      "destination": "/day.html"
+    },
+    {
+      "source": "/analytics",
+      "destination": "/analytics.html"
+    },
+    {
+      "source": "/profile",
+      "destination": "/profile.html"
+    }
+  ]
+}

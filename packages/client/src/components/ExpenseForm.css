@@ -1,0 +1,192 @@
+.day-details button:disabled,
+.expense-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.day-details button:focus-visible,
+.expense-button:focus-visible,
+.expense-form input:focus-visible,
+.expense-form textarea:focus-visible,
+.expense-form select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.expense-form {
+  padding: 24px;
+  border-radius: var(--radius-lg);
+}
+
+.expense-form h3 {
+  margin-bottom: 16px;
+}
+
+.expense-form fieldset {
+  border: 0;
+  min-width: 0;
+}
+
+.expense-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.expense-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.expense-field-wide {
+  grid-column: 1 / -1;
+}
+
+.expense-field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.expense-field small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.expense-form input,
+.expense-form textarea,
+.expense-form select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font: inherit;
+}
+
+.expense-form textarea {
+  resize: vertical;
+}
+
+.expense-form .expense-actions {
+  margin-top: 20px;
+}
+
+.expense-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.expense-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.expense-button-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.expense-button-danger,
+.expense-error {
+  color: var(--danger);
+}
+
+.expense-error {
+  padding: 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.expense-notice {
+  color: var(--success);
+}
+
+.expense-transaction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px;
+  border-radius: var(--radius-md);
+}
+
+.expense-transaction-details {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.expense-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.expense-modal {
+  width: min(600px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  max-height: 90vh;
+  max-height: 90dvh;
+  margin: auto;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-main);
+  color: var(--text-main);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+}
+
+.expense-modal::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.expense-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.expense-modal-header h2 {
+  font-size: 1.25rem;
+}
+
+.expense-modal .expense-error {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 560px) {
+  .expense-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .expense-form {
+    padding: 16px;
+  }
+}

@@ -1,0 +1,83 @@
+.monthly-income-modal {
+  width: min(800px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  max-height: 90vh;
+  max-height: 90dvh;
+  margin: auto;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-main);
+  color: var(--text-main);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+}
+
+.monthly-income-modal::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.monthly-income-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.monthly-income-modal-header h2 {
+  min-width: 0;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.monthly-income-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+
+.monthly-income-modal-close:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.monthly-income-modal-close:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.monthly-income-modal-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.monthly-income-modal .user-profile.monthly-income-modal-content {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  padding: 24px;
+}
+
+.monthly-income-modal .profile-income-month {
+  max-width: none;
+}
+
+@media (max-width: 760px) {
+  .monthly-income-modal-header {
+    padding: 16px;
+  }
+
+  .monthly-income-modal .user-profile.monthly-income-modal-content {
+    padding: 16px;
+  }
+}

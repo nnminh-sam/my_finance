@@ -1,0 +1,55 @@
+.auth-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(ellipse at top, rgba(59, 130, 246, 0.12), transparent 65%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
+}
+
+.auth-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.auth-theme-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-main); color: var(--text-main); font-size: 0.875rem; }
+.auth-theme-toggle:hover { background: var(--bg-card-hover); }
+
+.auth-brand {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 24px;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: white;
+}
+
+.auth-card h1 { font-size: 1.75rem; }
+.auth-subtitle { color: var(--text-muted); margin-top: 8px; }
+.auth-form { margin-top: 28px; }
+.auth-form fieldset { border: none; display: flex; flex-direction: column; gap: 18px; }
+.auth-form label { display: flex; flex-direction: column; gap: 8px; font-size: 0.875rem; font-weight: 500; }
+.auth-form input {
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-main);
+  color: var(--text-main);
+  font: inherit;
+}
+.auth-form input:focus-visible, .auth-card button:focus-visible, .auth-switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.auth-submit { padding: 12px; border-radius: var(--radius-sm); background: var(--primary); color: white; font-weight: 600; }
+.auth-card button:disabled { cursor: wait; opacity: 0.65; }
+.auth-switch { display: block; margin: 24px auto 0; color: var(--primary); font-size: 0.875rem; text-align: center; text-decoration: none; }
+.auth-switch[aria-disabled="true"] { cursor: wait; opacity: 0.65; }
+.auth-notice { margin-top: 18px; padding-left: 12px; border-left: 3px solid var(--warning); color: var(--text-main); font-size: 0.875rem; line-height: 1.5; }
+.auth-hint { color: var(--text-muted); font-size: 0.75rem; line-height: 1.5; }
+.auth-error { color: var(--danger); font-size: 0.875rem; line-height: 1.5; }
+.auth-footer { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 24px; text-align: center; }

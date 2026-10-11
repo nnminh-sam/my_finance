@@ -1,0 +1,21 @@
+{
+  "name": "my_finance",
+  "workspaces": [
+    "packages/*"
+  ],
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=@my-finance/server\" \"npm run dev --workspace=@my-finance/client\"",
+    "dev:client": "npm run dev --workspace=@my-finance/client",
+    "dev:server": "npm run dev --workspace=@my-finance/server",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.0"
+  },
+  "author": "minhnn",
+  "type": "commonjs"
+}

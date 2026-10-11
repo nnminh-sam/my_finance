@@ -1,0 +1,28 @@
+.finance-document { display: flex; flex-direction: column; width: 100%; height: 100dvh; overflow: hidden; }
+.document-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--border-color); border-radius: 0 0 var(--radius-lg) var(--radius-lg); z-index: 10; }
+.document-brand { display: flex; align-items: center; gap: 12px; color: var(--text-main); text-decoration: none; }
+.document-brand-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: white; background: var(--primary); }
+.document-title { display: block; font-size: 1.25rem; font-weight: 700; }
+.document-subtitle { display: block; color: var(--text-muted); font-size: 0.875rem; }
+.document-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: var(--radius-lg); background: var(--bg-card); }
+.document-nav-link { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text-muted); border-radius: var(--radius-sm); text-decoration: none; font-size: 0.875rem; }
+.document-nav-link:hover, .document-nav-link[aria-current="page"] { color: var(--text-main); background: var(--bg-card-hover); }
+.document-nav-link[aria-current="page"] { font-weight: 600; }
+.document-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.document-action { display: inline-flex; align-items: center; justify-content: center; padding: 8px; border-radius: 50%; color: var(--text-main); background: var(--bg-card); text-decoration: none; }
+.document-action:hover { background: var(--bg-card-hover); }
+.document-add, .document-add:hover { background: var(--primary); color: white; }
+.document-header a:focus-visible, .document-header button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.document-content { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+.document-error { padding: 12px 24px; color: var(--danger); background: var(--bg-card); }
+.document-error button { text-decoration: underline; }
+@media (max-width: 760px) {
+  .document-header { padding: 12px 16px; gap: 12px; }
+  .document-nav { order: 3; width: 100%; justify-content: space-around; }
+  .document-nav-link { padding: 8px; }
+  .document-actions { margin-left: auto; }
+}
+@media (max-width: 420px) {
+  .document-nav-link { gap: 4px; font-size: 0.75rem; }
+  .document-subtitle { font-size: 0.75rem; }
+}
