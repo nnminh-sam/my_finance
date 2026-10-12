@@ -1,11 +1,18 @@
 import React from 'react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isToday, startOfMonth, endOfMonth } from 'date-fns';
-import { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Edit2 } from "lucide-react";
-import { getSpendingsForDate, getTotalForDate } from '../spendings';
+import { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Edit2, ChevronRight } from "lucide-react";
+import { getSpendingsForDate, getTotalForDate, formatCompactSpending } from '../spendings';
 import { useFinance } from '../contexts/FinanceContext.tsx';
 import { useSettings } from '../contexts/SettingsContext';
 import { getHeatmapColor } from '../heatmap';
 import { getMonthIncome, incomeMonth } from '../income';
+import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+import './WeekView.css';
+
+function cn(...inputs: (string | undefined | null | false)[]) {
+  return twMerge(clsx(inputs));
+}
 
 const ICONS = { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone };
 
@@ -53,82 +60,76 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
   const totalWeekSpending = days.reduce((sum, day) => sum + getTotalForDate(day, spendings), 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', gap: '16px' }} className="animate-fade-in">
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+    <div className="week-container animate-fade-in">
+      <div className="week-overview-grid">
         {/* Card 1: Overview */}
-        <div
-          className="glass"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "16px 24px",
-            borderRadius: "var(--radius-lg)",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column" }}>
+        <div className="week-overview-card glass">
+          <div className="week-overview-stat week-overview-income">
             <div className="overview-income-heading">
-              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 500 }}>Monthly Income</span>
-              <button type="button" className="overview-income-edit" onClick={onEditIncome} aria-label={`Edit additional income for ${format(currentDate, 'MMMM yyyy')}`} aria-haspopup="dialog">
-                <Edit2 size={14} aria-hidden="true" />Edit
+              <span className="week-stat-label">Income</span>
+              <button
+                type="button"
+                className="overview-income-edit"
+                onClick={onEditIncome}
+                aria-label={`Edit additional income for ${format(currentDate, 'MMMM yyyy')}`}
+                aria-haspopup="dialog"
+              >
+                <Edit2 size={13} aria-hidden="true" />
               </button>
             </div>
-            <span style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--success)" }}>
+            <span className="week-stat-value week-stat-income-value">
               {totalIncome.toLocaleString('vi-VN')} ₫
             </span>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Recurring base {baseIncome.toLocaleString('vi-VN')} ₫ · Additional {additionalIncome.toLocaleString('vi-VN')} ₫
-            </span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 500 }}>
-              Week Spending
-            </span>
-            <span style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--danger)" }}>
+
+          <div className="week-overview-stat week-overview-spending">
+            <span className="week-stat-label">Spending</span>
+            <span className="week-stat-value week-stat-spending-value">
               {totalWeekSpending.toLocaleString('vi-VN')} ₫
             </span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-            <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 500 }}>
-              Left Over (Month)
+
+          <div className="week-overview-stat week-overview-leftover">
+            <span className="week-stat-label">Left Over</span>
+            <span
+              className="week-stat-value"
+              style={{
+                color: totalIncome > 0
+                  ? (leftOver >= 0 ? "var(--primary)" : "var(--danger)")
+                  : "var(--text-muted)"
+              }}
+            >
+              {totalIncome > 0 ? `${leftOver.toLocaleString('vi-VN')} ₫` : "Not set"}
             </span>
-            <span style={{ fontSize: "1.5rem", fontWeight: 700, color: totalIncome > 0 ? (leftOver >= 0 ? "var(--primary)" : "var(--danger)") : "var(--text-muted)" }}>
-              {totalIncome > 0 ? `${leftOver.toLocaleString('vi-VN')} ₫` : "Income not set"}
-            </span>
+          </div>
+
+          <div className="week-stat-subtext">
+            Recurring base {baseIncome.toLocaleString('vi-VN')} ₫ · Additional {additionalIncome.toLocaleString('vi-VN')} ₫
           </div>
         </div>
 
         {/* Card 2: Top Categories */}
-        <div
-          className="glass animate-fade-in"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            padding: "12px 24px",
-            borderRadius: "var(--radius-lg)",
-          }}
-        >
-          <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 600, marginBottom: "8px" }}>
+        <div className="week-top-categories-card glass animate-fade-in">
+          <div className="week-top-categories-title">
             Top 5 Categories This Month
           </div>
-          <div style={{ display: "flex", gap: "16px", flexWrap: "nowrap", overflowX: "auto" }} className="hide-scrollbar">
+          <div className="week-top-categories-list hide-scrollbar">
             {topCategories.map(([categoryId, amount]) => {
               const catData = settings.categories?.find(c => c.id === categoryId) || { name: categoryId, icon: 'CircleDollarSign' };
               return (
-                <div key={categoryId} style={{ display: "flex", flexDirection: "column", minWidth: "120px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>
+                <div key={categoryId} className="week-top-category-item">
+                  <div className="week-top-category-header">
                     <CategoryIcon iconName={catData.icon} size={14} />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{catData.name}</span>
+                    <span className="week-top-category-name">{catData.name}</span>
                   </div>
-                  <div style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--text-main)", marginTop: "4px" }}>
+                  <div className="week-top-category-amount">
                     {amount.toLocaleString("vi-VN")} ₫
                   </div>
                 </div>
               );
             })}
             {topCategories.length === 0 && (
-              <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", padding: "8px 0" }}>
+              <div className="week-no-categories">
                 No spending data for this month.
               </div>
             )}
@@ -136,93 +137,61 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '12px', height: '100%', overflow: 'hidden' }}>
+      <div className="week-days-grid">
         {days.map((day, idx) => {
           const total = getTotalForDate(day, spendings);
           const daySpendings = getSpendingsForDate(day, spendings);
           const heatmapBg = getHeatmapColor(total, monthlyPeak, settings.theme);
+          const isCurrentDay = isToday(day);
 
           return (
             <div
               key={idx}
-              className="glass"
+              className={cn("week-day-card glass", isCurrentDay && "week-day-today")}
               style={{
-                borderRadius: 'var(--radius-lg)',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                cursor: 'pointer',
                 backgroundColor: heatmapBg || undefined,
-                height: '100%',
-                overflowY: 'auto',
-                transition: 'transform 0.2s',
-                animationDelay: `${idx * 20}ms`
+                animationDelay: `${idx * 20}ms`,
               }}
               onClick={() => onDateClick(day)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.01)';
-                e.currentTarget.style.filter = 'brightness(1.2)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.filter = 'none';
-              }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', gap: '4px' }}>
-                <span style={{ fontSize: '1.25rem', fontWeight: 700, color: isToday(day) ? 'var(--primary)' : 'var(--text-main)' }}>
+              <div className="week-day-header">
+                <span className="week-day-name">
                   {format(day, 'EEE')}
                 </span>
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                <span className="week-day-date">
                   {format(day, 'MMM d')}
                 </span>
-                <span style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--danger)', marginTop: '4px', textAlign: 'center' }}>
+                <span className="week-day-total-desktop">
                   {total.toLocaleString('vi-VN')} ₫
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Mobile compact total & chevron */}
+              <div className="week-day-total-mobile">
+                <span className={cn("week-day-total-val", total === 0 && "week-day-total-zero")}>
+                  {total > 0 ? formatCompactSpending(total) : '0'}
+                </span>
+                <ChevronRight size={16} className="week-day-chevron" aria-hidden="true" />
+              </div>
+
+              {/* Desktop detailed spending list */}
+              <div className="week-spending-list">
                 {daySpendings.length === 0 ? (
-                  <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>
+                  <div className="week-no-spending">
                     No spending on this day.
                   </div>
                 ) : (
                   daySpendings.slice(0, 20).map(s => {
                     const catData = settings.categories?.find(c => c.id === s.category) || { icon: 'CircleDollarSign' };
                     return (
-                      <div
-                        key={s.id}
-                        style={{
-                          fontSize: "0.85rem",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          color: "var(--text-main)",
-                          paddingBottom: "4px",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            maxWidth: "70%",
-                            fontWeight: 700,
-                          }}
-                        >
-                          <span style={{ display: 'flex', color: 'var(--text-main)' }}>
+                      <div key={s.id} className="week-spending-item">
+                        <span className="week-spending-item-label">
+                          <span className="week-spending-icon">
                             <CategoryIcon iconName={catData.icon} size={14} />
                           </span>
                           <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{s.description}</span>
                         </span>
-                        <span
-                          style={{
-                            fontWeight: 800,
-                          }}
-                        >
+                        <span className="week-spending-item-amount">
                           {s.amount.toLocaleString('vi-VN')} ₫
                         </span>
                       </div>
@@ -230,7 +199,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
                   })
                 )}
                 {daySpendings.length > 20 && (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, textAlign: 'center', marginTop: '4px' }}>
+                  <div className="week-more-items">
                     + {daySpendings.length - 20} more items
                   </div>
                 )}
