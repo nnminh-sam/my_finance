@@ -7,7 +7,7 @@ import {
   startOfMonth,
   endOfMonth,
   isSameMonth,
-
+  isToday,
 } from "date-fns";
 import {
   Utensils,
@@ -223,12 +223,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             monthlyPeak,
             settings.theme,
           );
+          const isCurrentDay = isToday(day);
 
           return (
             <div
               key={idx}
               onClick={() => onDateClick(day)}
-              className={cn("glass animate-fade-in")}
+              className={cn(
+                "glass animate-fade-in calendar-day-cell",
+                isCurrentDay && "calendar-day-today",
+              )}
+              aria-current={isCurrentDay ? "date" : undefined}
+              title={isCurrentDay ? "Today" : undefined}
               style={{
                 borderRadius: "var(--radius-md)",
                 padding: "8px",
@@ -267,6 +273,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 }}
               >
                 <span
+                  className={cn("calendar-day-number", isCurrentDay && "calendar-day-number-today")}
                   style={{
                     width: "28px",
                     height: "28px",
@@ -275,7 +282,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     justifyContent: "center",
                     borderRadius: "50%",
                     backgroundColor: "transparent",
-                    color: "var(--text-main)",
+                    color: isCurrentDay ? "var(--calendar-today-border)" : "var(--text-main)",
                     fontSize: "1.25rem",
                     fontWeight: 900,
                   }}
@@ -303,7 +310,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "6px",
+                  gap: "4px",
                   flex: 1,
                 }}
               >
@@ -316,7 +323,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   <div key={s.id} className="calendar-spending-row">
                     <span className="calendar-spending-label" title={s.description}>
                       <span className="calendar-spending-icon">
-                        <CategoryIcon iconName={settings.categories.find(c => c.id === s.category)?.icon || "CircleDollarSign"} size={14} />
+                        <CategoryIcon iconName={settings.categories.find(c => c.id === s.category)?.icon || "CircleDollarSign"} size={12} />
                       </span>
                       <span className="calendar-spending-description">
                         {s.description}

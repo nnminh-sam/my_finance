@@ -2,23 +2,25 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
+  gap: 6px;
+  font-size: 0.75rem;
+  line-height: 1.25;
   color: var(--text-main);
 }
 
 .calendar-spending-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
   overflow: hidden;
-  font-weight: 700;
+  font-weight: normal;
 }
 
 .calendar-spending-icon {
   display: flex;
   flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .calendar-spending-description {
@@ -32,5 +34,28 @@
   white-space: nowrap;
   text-align: right;
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
+  font-weight: normal;
 }
+
+/* Calendar day cell & today highlight */
+.calendar-day-cell {
+  position: relative;
+}
+
+.calendar-day-cell.calendar-day-today {
+  border: 2px solid var(--calendar-today-border) !important;
+  box-shadow: var(--calendar-today-glow) !important;
+  z-index: 2;
+}
+
+.calendar-day-cell.calendar-day-today:hover {
+  border-color: var(--calendar-today-border-hover) !important;
+  box-shadow: var(--calendar-today-glow-hover) !important;
+  z-index: 3;
+}
+
+.calendar-day-cell.calendar-day-today .calendar-day-number {
+  color: var(--calendar-today-border) !important;
+  font-weight: 900;
+}
+

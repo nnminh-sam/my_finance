@@ -21,6 +21,11 @@
   --cat-Bills: #eab308;
   --cat-Other: #64748b;
 
+  --calendar-today-border: #38bdf8;
+  --calendar-today-border-hover: #7dd3fc;
+  --calendar-today-glow: 0 0 0 1px rgba(56, 189, 248, 0.45), 0 0 16px rgba(56, 189, 248, 0.25);
+  --calendar-today-glow-hover: 0 0 0 1px rgba(125, 211, 252, 0.6), 0 0 20px rgba(56, 189, 248, 0.35);
+
   --radius-lg: 16px;
   --radius-md: 12px;
   --radius-sm: 8px;
@@ -113,6 +118,11 @@ button {
   --text-main: #0f172a;
   --text-muted: #64748b;
   --border-color: #e2e8f0;
+
+  --calendar-today-border: #1d4ed8;
+  --calendar-today-border-hover: #1e40af;
+  --calendar-today-glow: 0 0 0 1px rgba(29, 78, 216, 0.35), 0 4px 14px rgba(29, 78, 216, 0.2);
+  --calendar-today-glow-hover: 0 0 0 1px rgba(30, 64, 175, 0.5), 0 6px 18px rgba(29, 78, 216, 0.28);
 }
 
 .light-mode .glass {
