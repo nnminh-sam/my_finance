@@ -17,12 +17,119 @@
 .document-error { padding: 12px 24px; color: var(--danger); background: var(--bg-card); }
 .document-error button { text-decoration: underline; }
 @media (max-width: 760px) {
-  .document-header { padding: 12px 16px; gap: 12px; }
-  .document-nav { order: 3; width: 100%; justify-content: space-around; }
-  .document-nav-link { padding: 8px; }
-  .document-actions { margin-left: auto; }
+  .document-header {
+    padding: 8px 12px;
+    gap: 8px;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+  }
+
+  .document-brand {
+    gap: 8px;
+  }
+
+  .document-brand-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .document-brand-icon img {
+    width: 20px;
+    height: 20px;
+  }
+
+  .document-title {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+
+  .document-subtitle {
+    font-size: 0.72rem;
+    line-height: 1.15;
+  }
+
+  .document-actions {
+    margin-left: auto;
+    gap: 3px;
+  }
+
+  .document-action {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+  }
+
+  .document-action svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .document-nav {
+    order: 3;
+    width: 100%;
+    padding: 3px;
+    gap: 2px;
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+  }
+
+  .document-nav-link {
+    flex: 1;
+    justify-content: center;
+    padding: 6px 4px;
+    font-size: 0.78rem;
+    gap: 5px;
+    border-radius: 6px;
+  }
+
+  .document-nav-link svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
 }
+
 @media (max-width: 420px) {
-  .document-nav-link { gap: 4px; font-size: 0.75rem; }
-  .document-subtitle { font-size: 0.75rem; }
+  .document-header {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .document-brand {
+    gap: 6px;
+  }
+
+  .document-title {
+    font-size: 0.95rem;
+  }
+
+  .document-subtitle {
+    font-size: 0.68rem;
+  }
+
+  .document-actions {
+    gap: 2px;
+  }
+
+  .document-action {
+    width: 30px;
+    height: 30px;
+  }
+
+  .document-action svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .document-nav-link {
+    padding: 5px 2px;
+    font-size: 0.72rem;
+    gap: 3px;
+  }
+
+  .document-nav-link svg {
+    width: 13px;
+    height: 13px;
+  }
 }

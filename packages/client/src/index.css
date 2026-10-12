@@ -187,6 +187,11 @@ button {
 .grid { display: grid; }
 .grid-cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.show-mobile { display: none; }
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+  .show-mobile { display: inline !important; }
+}
 
 /* ================================================================== */
 /* Analytics                                                           */

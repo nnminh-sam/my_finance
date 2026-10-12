@@ -93,74 +93,64 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const leftOver = totalIncome - totalSpending;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        padding: "16px",
-        gap: "16px",
-      }}
-    >
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+    <div className="calendar-container">
+      <div className="calendar-overview-grid">
         {/* Card 1: Overview */}
-        <div
-          className="glass animate-fade-in"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "16px 24px",
-            borderRadius: "var(--radius-lg)",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column" }}>
+        <div className="glass animate-fade-in calendar-overview-card">
+          <div className="calendar-overview-stat calendar-overview-income">
             <div className="overview-income-heading">
-              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 500 }}>Monthly Income</span>
-              <button type="button" className="overview-income-edit" onClick={onEditIncome} aria-label={`Edit additional income for ${format(currentDate, 'MMMM yyyy')}`} aria-haspopup="dialog">
-                <Edit2 size={14} aria-hidden="true" />Edit
+              <span className="calendar-stat-label">
+                <span className="hide-mobile">Monthly </span>Income
+              </span>
+              <button
+                type="button"
+                className="overview-income-edit"
+                onClick={onEditIncome}
+                aria-label={`Edit additional income for ${format(currentDate, 'MMMM yyyy')}`}
+                aria-haspopup="dialog"
+              >
+                <Edit2 size={12} aria-hidden="true" /><span className="hide-mobile">Edit</span>
               </button>
             </div>
-            <span style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--success)" }}>
+            <span className="calendar-stat-value calendar-stat-income-value">
               {totalIncome.toLocaleString("vi-VN")} ₫
             </span>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Recurring base {baseIncome.toLocaleString("vi-VN")} ₫ · Additional {additionalIncome.toLocaleString("vi-VN")} ₫
-            </span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 500 }}>
-              Total Spending
+
+          <div className="calendar-overview-stat calendar-overview-spending">
+            <span className="calendar-stat-label">
+              <span className="hide-mobile">Total </span>Spending
             </span>
-            <span style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--danger)" }}>
+            <span className="calendar-stat-value calendar-stat-spending-value">
               {totalSpending.toLocaleString("vi-VN")} ₫
             </span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-            <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 500 }}>
+
+          <div className="calendar-overview-stat calendar-overview-leftover">
+            <span className="calendar-stat-label">
               Left Over
             </span>
-            <span style={{ fontSize: "1.5rem", fontWeight: 700, color: totalIncome > 0 ? (leftOver >= 0 ? "var(--primary)" : "var(--danger)") : "var(--text-muted)" }}>
-              {totalIncome > 0 ? `${leftOver.toLocaleString("vi-VN")} ₫` : "Income not set"}
+            <span
+              className="calendar-stat-value"
+              style={{
+                color: totalIncome > 0 ? (leftOver >= 0 ? "var(--primary)" : "var(--danger)") : "var(--text-muted)",
+              }}
+            >
+              {totalIncome > 0 ? `${leftOver.toLocaleString("vi-VN")} ₫` : <><span className="hide-mobile">Income </span>Not set</>}
             </span>
+          </div>
+
+          <div className="calendar-stat-subtext">
+            <span className="hide-mobile">Recurring base </span><span className="show-mobile">Base </span>{baseIncome.toLocaleString("vi-VN")} ₫ · <span className="hide-mobile">Additional </span><span className="show-mobile">Extra </span>{additionalIncome.toLocaleString("vi-VN")} ₫
           </div>
         </div>
 
         {/* Card 2: Top Categories */}
-        <div
-          className="glass animate-fade-in"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            padding: "12px 24px",
-            borderRadius: "var(--radius-lg)",
-          }}
-        >
-          <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 600, marginBottom: "8px" }}>
+        <div className="glass animate-fade-in calendar-top-categories-card">
+          <div className="calendar-top-categories-title">
             Top 5 Categories This Month
           </div>
-          <div style={{ display: "flex", gap: "16px", flexWrap: "nowrap", overflowX: "auto" }} className="hide-scrollbar">
+          <div className="calendar-top-categories-list hide-scrollbar">
             {topCategories.map(([categoryId, amount]) => {
               const catData = settings.categories?.find(c => c.id === categoryId) || { name: categoryId, icon: 'CircleDollarSign' };
               return (
@@ -184,37 +174,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-          gap: "8px",
-          textAlign: "center",
-        }}
-      >
+      <div className="calendar-weekdays-grid">
         {weekDays.map((day) => (
-          <div
-            key={day}
-            style={{
-              fontWeight: 600,
-              fontSize: "0.875rem",
-              color: "var(--text-muted)",
-            }}
-          >
+          <div key={day} className="calendar-weekday-label">
             {day}
           </div>
         ))}
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-          gap: "8px",
-          flex: 1,
-          overflowY: "auto",
-        }}
-        className="hide-scrollbar"
-      >
+
+      <div className="calendar-days-grid hide-scrollbar">
         {days.map((day, idx) => {
           const total = getTotalForDate(day, spendings);
           const topSpendings = getTopSpendingsForDate(day, 5, spendings);
@@ -236,17 +204,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               aria-current={isCurrentDay ? "date" : undefined}
               title={isCurrentDay ? "Today" : undefined}
               style={{
-                borderRadius: "var(--radius-md)",
-                padding: "8px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-                cursor: "pointer",
-                minHeight: "110px",
                 backgroundColor: heatmapBg || undefined,
-                transition: "all 0.2s",
                 animationDelay: `${idx * 15}ms`,
-                color: "var(--text-main)", // Force text color for better contrast against heatmap
                 filter: !isSameMonth(day, monthStart)
                   ? "grayscale(100%) opacity(0.3)"
                   : undefined,
@@ -264,58 +223,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   : "none";
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "4px",
-                }}
-              >
+              <div className="calendar-day-header">
                 <span
                   className={cn("calendar-day-number", isCurrentDay && "calendar-day-number-today")}
-                  style={{
-                    width: "28px",
-                    height: "28px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: "50%",
-                    backgroundColor: "transparent",
-                    color: isCurrentDay ? "var(--calendar-today-border)" : "var(--text-main)",
-                    fontSize: "1.25rem",
-                    fontWeight: 900,
-                  }}
                 >
                   {format(day, "d")}
                 </span>
                 {total > 0 && (
-                  <span
-                    style={{
-                      fontSize: "1.125rem",
-                      fontWeight: 900,
-                      color: "var(--text-main)",
-                      backgroundColor: "transparent",
-                      padding: "0",
-                      borderRadius: "0",
-                      boxShadow: "none",
-                    }}
-                  >
+                  <span className="calendar-day-total-desktop">
                     {total.toLocaleString("vi-VN")} ₫
                   </span>
                 )}
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "4px",
-                  flex: 1,
-                }}
-              >
+              {total > 0 && (
+                <div className="calendar-day-total-mobile">
+                  {total.toLocaleString("vi-VN")} ₫
+                </div>
+              )}
+
+              <div className="calendar-spending-list">
                 {topSpendings.length === 0 && (
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                  <span className="calendar-no-expenses">
                     No expenses
                   </span>
                 )}
