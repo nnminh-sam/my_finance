@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { format } from 'date-fns';
+import React, { useMemo, useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import {
   Activity,
   AlertTriangle,
@@ -10,20 +10,24 @@ import {
   ChartColumn,
   ChartLine,
   ChartPie,
+  ChevronRight,
   CircleDollarSign,
   Clock,
+  ExternalLink,
   Flame,
   Info,
   Layers,
   Lightbulb,
   PiggyBank,
   Receipt,
+  Search,
   Sparkles,
   TrendingUp,
   Wallet,
 } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useFinance } from '../contexts/FinanceContext.tsx';
+import { pageHref } from '../navigation';
 import { computeMonthlyAnalytics, fmtCompact, fmtPct, fmtVND } from '../analytics';
 import type { InsightTone } from '../analytics';
 import {
@@ -47,9 +51,10 @@ const Card: React.FC<{
   span?: string;
   delay?: number;
   right?: React.ReactNode;
+  id?: string;
   children: React.ReactNode;
-}> = ({ title, subtitle, icon, span = 'span-12', delay = 0, right, children }) => (
-  <section className={`an-card glass ${span}`} style={{ animationDelay: `${delay}ms` }}>
+}> = ({ title, subtitle, icon, span = 'span-12', delay = 0, right, id, children }) => (
+  <section id={id} className={`an-card glass ${span}`} style={{ animationDelay: `${delay}ms` }}>
     <header className="an-card-header">
       <div className="an-card-title">
         <span className="an-card-icon">{icon}</span>
@@ -95,12 +100,56 @@ const toneIcon: Record<InsightTone, React.ReactNode> = {
 export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
   const { settings } = useSettings();
   const { spendings, incomeEntries } = useFinance();
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [searchQueries, setSearchQueries] = useState<Record<string, string>>({});
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const a = useMemo(
     () => computeMonthlyAnalytics(new Date(year, month, 1), settings, spendings, incomeEntries),
     [year, month, settings, spendings, incomeEntries],
   );
+
+  const categorySpendings = useMemo(() => {
+    const map = new Map<string, typeof a.spendings>();
+    for (const s of a.spendings) {
+      const list = map.get(s.category);
+      if (list) {
+        list.push(s);
+      } else {
+        map.set(s.category, [s]);
+      }
+    }
+    for (const list of map.values()) {
+      list.sort((x, y) => {
+        const dateCmp = y.date.localeCompare(x.date);
+        if (dateCmp !== 0) return dateCmp;
+        return (y.time || '').localeCompare(x.time || '');
+      });
+    }
+    return map;
+  }, [a.spendings]);
+
+  const toggleCategory = (catId: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(catId)) {
+        next.delete(catId);
+      } else {
+        next.add(catId);
+      }
+      return next;
+    });
+  };
+
+  const allExpanded = a.categories.length > 0 && a.categories.every((c) => expandedCategories.has(c.id));
+  const toggleAllCategories = () => {
+    if (allExpanded) {
+      setExpandedCategories(new Set());
+    } else {
+      setExpandedCategories(new Set(a.categories.map((c) => c.id)));
+    }
+  };
 
   const catMeta = (id: string, i: number) => {
     const c = settings.categories?.find((x) => x.id === id);
@@ -276,7 +325,19 @@ export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) 
             <DonutChart segments={segments} total={a.total} />
             <div className="donut-legend">
               {segments.map((s) => (
-                <div key={s.id} className="donut-legend-row">
+                <div
+                  key={s.id}
+                  className="donut-legend-row"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => {
+                    setExpandedCategories((prev) => new Set(prev).add(s.id));
+                    const el = document.getElementById(`cat-group-${s.id}`);
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                  }}
+                  title="Click to view details in Category performance"
+                >
                   <span className="legend-swatch" style={{ background: s.color, borderColor: s.color }} />
                   <span className="truncate" style={{ flex: 1 }}>
                     {s.label}
@@ -328,11 +389,23 @@ export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) 
 
         {/* Category comparison */}
         <Card
+          id="category-performance-card"
           span="span-7"
           delay={400}
           icon={<Layers size={18} />}
           title="Category performance"
-          subtitle={`This month vs the same ${a.elapsedDays} days last month`}
+          subtitle={`This month vs the same ${a.elapsedDays} days last month · Click any category to inspect transactions`}
+          right={
+            a.categories.length > 0 && (
+              <button
+                type="button"
+                className="cat-expand-toggle-btn"
+                onClick={toggleAllCategories}
+              >
+                {allExpanded ? 'Collapse all' : 'Expand all'}
+              </button>
+            )
+          }
         >
           <div className="cat-table">
             <div className="cat-row cat-row-head">
@@ -344,24 +417,124 @@ export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) 
             </div>
             {a.categories.map((c, i) => {
               const meta = catMeta(c.id, i);
+              const isExpanded = expandedCategories.has(c.id);
+              const rawList = categorySpendings.get(c.id) ?? [];
+              const q = (searchQueries[c.id] ?? '').trim().toLowerCase();
+              const filteredList = q
+                ? rawList.filter(
+                    (s) =>
+                      (s.description || '').toLowerCase().includes(q) ||
+                      s.date.includes(q) ||
+                      s.amount.toString().includes(q),
+                  )
+                : rawList;
+
               return (
-                <div key={c.id} className="cat-row" style={{ animationDelay: `${420 + i * 40}ms` }}>
-                  <span className="cat-name">
-                    <span className="legend-swatch" style={{ background: meta.color, borderColor: meta.color }} />
-                    <span className="truncate">{meta.name}</span>
-                  </span>
-                  <span className="cat-bars">
-                    <span className="cat-amount">{fmtCompact(c.total)}</span>
-                    <span className="cat-bar-track">
-                      <span className="cat-bar-prev" style={{ width: `${(c.prevTotal / maxCatTotal) * 100}%` }} />
-                      <span className="cat-bar-fill" style={{ width: `${(c.total / maxCatTotal) * 100}%`, background: meta.color }} />
+                <div key={c.id} id={`cat-group-${c.id}`} className="cat-group">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    className="cat-row cat-row-interactive"
+                    style={{ animationDelay: `${420 + i * 40}ms` }}
+                    onClick={() => toggleCategory(c.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleCategory(c.id);
+                      }
+                    }}
+                  >
+                    <span className="cat-name">
+                      <span className={`cat-expand-chevron ${isExpanded ? 'is-expanded' : ''}`}>
+                        <ChevronRight size={14} />
+                      </span>
+                      <span className="legend-swatch" style={{ background: meta.color, borderColor: meta.color }} />
+                      <span className="truncate">{meta.name}</span>
                     </span>
-                  </span>
-                  <span className="text-muted text-sm hide-sm">{c.count}</span>
-                  <span className="text-muted text-sm hide-sm">{fmtCompact(c.avgTicket)}</span>
-                  <span style={{ textAlign: 'right' }}>
-                    <Delta value={c.change} />
-                  </span>
+                    <span className="cat-bars">
+                      <span className="cat-amount">{fmtCompact(c.total)}</span>
+                      <span className="cat-bar-track">
+                        <span className="cat-bar-prev" style={{ width: `${(c.prevTotal / maxCatTotal) * 100}%` }} />
+                        <span className="cat-bar-fill" style={{ width: `${(c.total / maxCatTotal) * 100}%`, background: meta.color }} />
+                      </span>
+                    </span>
+                    <span className="text-muted text-sm hide-sm">{c.count}</span>
+                    <span className="text-muted text-sm hide-sm">{fmtCompact(c.avgTicket)}</span>
+                    <span style={{ textAlign: 'right' }}>
+                      <Delta value={c.change} />
+                    </span>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="cat-details-drawer">
+                      <div className="cat-details-header">
+                        <span className="cat-details-header-title">
+                          <span>{meta.name}</span>
+                          <span>·</span>
+                          <span className="cat-details-header-stat">{rawList.length} transactions</span>
+                          <span>·</span>
+                          <span className="cat-details-header-stat">{fmtVND(c.total)}</span>
+                        </span>
+                        {rawList.length > 5 && (
+                          <span className="text-xs text-muted">Scroll to see all</span>
+                        )}
+                      </div>
+
+                      {rawList.length > 3 && (
+                        <div className="cat-tx-search-wrap">
+                          <Search size={13} className="text-muted" />
+                          <input
+                            type="text"
+                            className="cat-tx-search"
+                            placeholder={`Filter ${meta.name} expenses...`}
+                            value={searchQueries[c.id] ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSearchQueries((prev) => ({ ...prev, [c.id]: val }));
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      )}
+
+                      {filteredList.length === 0 ? (
+                        <p className="text-xs text-muted" style={{ padding: '8px 4px', margin: 0 }}>
+                          No transactions match your search.
+                        </p>
+                      ) : (
+                        <div className="cat-tx-list hide-scrollbar">
+                          {filteredList.map((s) => {
+                            const d = parseISO(s.date);
+                            const dayUrl = pageHref('day', d);
+                            const dateStr = format(d, 'dd/MM/yyyy');
+                            return (
+                              <a
+                                key={s.id}
+                                href={dayUrl}
+                                className="cat-tx-item"
+                                title={`View ${dateStr} day details`}
+                              >
+                                <div className="cat-tx-left">
+                                  <span className="cat-tx-date">
+                                    {dateStr}
+                                    {s.time ? ` · ${s.time}` : ''}
+                                  </span>
+                                  <span className="cat-tx-desc" title={s.description || 'No description'}>
+                                    {s.description || '(No description)'}
+                                  </span>
+                                </div>
+                                <div className="cat-tx-right">
+                                  <span className="cat-tx-amount">{fmtVND(s.amount)}</span>
+                                  <ExternalLink size={12} className="cat-tx-link-icon" />
+                                </div>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
