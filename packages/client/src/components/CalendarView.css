@@ -335,14 +335,16 @@
 
   .calendar-days-grid {
     gap: 4px;
+    grid-auto-rows: 1fr;
+    align-content: stretch;
   }
 
   /* Day Cell on Mobile */
   .calendar-day-cell {
-    min-height: 56px;
-    height: 58px;
+    min-height: 48px;
+    height: 100%;
     padding: 4px 2px;
-    gap: 1px;
+    gap: 2px;
     border-radius: var(--radius-sm);
   }
 
@@ -376,12 +378,11 @@
     flex: 1;
     width: 100%;
     text-align: center;
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     font-weight: 700;
     line-height: 1.1;
     color: var(--text-main);
-    word-break: break-word;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
     padding: 0 1px;
   }
 }
@@ -401,9 +402,9 @@
   }
 
   .calendar-day-cell {
-    min-height: 52px;
-    height: 54px;
-    padding: 3px 1px;
+    min-height: 44px;
+    height: 100%;
+    padding: 4px 2px;
   }
 
   .calendar-day-number {
@@ -413,7 +414,7 @@
   }
 
   .calendar-day-total-mobile {
-    font-size: 0.6rem;
+    font-size: 0.65rem;
   }
 }
 

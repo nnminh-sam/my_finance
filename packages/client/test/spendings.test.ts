@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getSpendingsForDate, getTopSpendingsForDate, getTotalForDate } from '../src/spendings';
+import { getSpendingsForDate, getTopSpendingsForDate, getTotalForDate, formatCompactSpending } from '../src/spendings';
 import { computeMonthlyAnalytics, getSpendingsForMonth } from '../src/analytics';
 import type { IncomeEntry, Spending } from '../src/types';
 
@@ -383,4 +383,13 @@ test('current-month projected savings and overspend insights reference effective
   assert.equal(extrasOnly.savingsRate, 900 / 4000);
   assert.ok(extrasOnly.insights.some(insight => insight.title === 'Projected spending within monthly income'));
   assert.equal(base.income, 2000);
+});
+
+test('formatCompactSpending formats amounts into compact k representation for mobile display', () => {
+  assert.equal(formatCompactSpending(0), '0');
+  assert.equal(formatCompactSpending(500), '500 ₫');
+  assert.equal(formatCompactSpending(50000), '50k');
+  assert.equal(formatCompactSpending(125000), '125k');
+  assert.equal(formatCompactSpending(1000000), '1.000k');
+  assert.equal(formatCompactSpending(9370000), '9.370k');
 });

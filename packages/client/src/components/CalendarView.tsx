@@ -24,7 +24,7 @@ import {
   Phone,
   Edit2,
 } from "lucide-react";
-import { getTotalForDate, getTopSpendingsForDate, getSpendingsForDate } from "../spendings";
+import { getTotalForDate, getTopSpendingsForDate, getSpendingsForDate, formatCompactSpending } from "../spendings";
 import { useFinance } from "../contexts/FinanceContext.tsx";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -238,7 +238,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
               {total > 0 && (
                 <div className="calendar-day-total-mobile">
-                  {total.toLocaleString("vi-VN")} ₫
+                  {formatCompactSpending(total)}
                 </div>
               )}
 
