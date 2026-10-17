@@ -6,7 +6,7 @@ import { formatDateUtc, generateOccurrences, isRuleDueForSync, type RecurrenceSt
 export interface FinanceStore {
   getSettings(userId: string): Promise<FinanceSettings>;
   updateSettings(userId: string, patch: Partial<FinanceSettings>): Promise<FinanceSettings>;
-  listSpendings(userId: string, limit: number, cursor?: string): Promise<SpendingPage>;
+  listSpendings(userId: string, limit: number, cursor?: string, startDate?: string, endDate?: string): Promise<SpendingPage>;
   createSpending(userId: string, input: SpendingInput): Promise<Spending | undefined>;
   updateSpending(userId: string, id: string, input: SpendingInput): Promise<Spending | "not-found" | "invalid-category">;
   deleteSpending(userId: string, id: string): Promise<boolean>;
@@ -102,10 +102,17 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
       ], { isolationLevel: "ReadCommitted" });
       return settings(results[2][0]);
     },
-    async listSpendings(userId, limit, cursor) {
+    async listSpendings(userId, limit, cursor, startDate, endDate) {
       await store.syncRepeatSpendings(userId).catch(() => 0);
-      const rows = await query(`SELECT ${spendingColumns} FROM finance_spendings
-        WHERE user_id = $1 AND ($2::uuid IS NULL OR id > $2::uuid) ORDER BY id ASC LIMIT $3`, [userId, cursor ?? null, limit + 1]);
+      const rows = !startDate && !endDate
+        ? await query(`SELECT ${spendingColumns} FROM finance_spendings
+            WHERE user_id = $1 AND ($2::uuid IS NULL OR id > $2::uuid) ORDER BY id ASC LIMIT $3`, [userId, cursor ?? null, limit + 1])
+        : await query(`SELECT ${spendingColumns} FROM finance_spendings
+            WHERE user_id = $1
+              AND ($2::uuid IS NULL OR id > $2::uuid)
+              AND ($4::date IS NULL OR date >= $4::date)
+              AND ($5::date IS NULL OR date <= $5::date)
+            ORDER BY id ASC LIMIT $3`, [userId, cursor ?? null, limit + 1, startDate ?? null, endDate ?? null]);
       const spendings = rows.slice(0, limit).map(spending);
       return { spendings, nextCursor: rows.length > limit ? spendings[spendings.length - 1].id : null };
     },

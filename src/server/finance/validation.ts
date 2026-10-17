@@ -143,11 +143,20 @@ export function uuid(value: unknown): string {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return invalid("UUID");
   return value.toLowerCase();
 }
-export function pagination(query: Record<string, unknown>): { limit: number; cursor?: string } {
+export function pagination(query: Record<string, unknown>): {
+  limit: number;
+  cursor?: string;
+  startDate?: string;
+  endDate?: string;
+} {
   let limit = 500;
   if (query.limit !== undefined) {
     if (typeof query.limit !== "string" || !/^[1-9]\d{0,2}$/.test(query.limit) || Number(query.limit) > 500) return invalid("limit (1–500)");
     limit = Number(query.limit);
   }
-  return { limit, cursor: query.cursor === undefined ? undefined : uuid(query.cursor) };
+  const cursor = query.cursor === undefined ? undefined : uuid(query.cursor);
+  const startDate = query.startDate === undefined ? undefined : validDate(query.startDate, "startDate");
+  const endDate = query.endDate === undefined ? undefined : validDate(query.endDate, "endDate");
+  if (startDate && endDate && endDate < startDate) return invalid("date range");
+  return { limit, cursor, startDate, endDate };
 }

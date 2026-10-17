@@ -16,6 +16,7 @@ interface FinanceContextValue {
   hasLoaded: boolean;
   error: string | null;
   reload: () => Promise<void>;
+  fetchWeeksSpendings: (startDate: string, endDate: string) => Promise<Spending[]>;
   updateSettings: (updates: Partial<FinanceSettings>) => Promise<void>;
   createSpending: (input: SpendingInput) => Promise<void>;
   updateSpending: (id: string, input: SpendingInput) => Promise<void>;
@@ -45,6 +46,7 @@ export function FinanceProvider({ userId, children }: { userId: string; children
   const loaded = useRef(false);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const reloadFlight = useRef<Promise<void> | null>(null);
+  const inFlightRanges = useRef<Map<string, Promise<Spending[]>>>(new Map());
 
   const currentAccount = useCallback(() => mounted.current && getAuthState().user?.id === userId, [userId]);
 
@@ -58,17 +60,41 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     return result;
   }, [currentAccount]);
 
+  const fetchWeeksSpendings = useCallback((startDate: string, endDate: string): Promise<Spending[]> => {
+    const rangeKey = `${startDate}:${endDate}`;
+    const existing = inFlightRanges.current.get(rangeKey);
+    if (existing) return existing;
+
+    const promise = api.getSpendings({ startDate, endDate })
+      .then((rangeSpendings) => {
+        if (currentAccount() && rangeSpendings.length > 0) {
+          setSpendings((prev) => {
+            const byId = new Map<string, Spending>();
+            for (const item of prev) byId.set(item.id, item);
+            for (const item of rangeSpendings) byId.set(item.id, item);
+            return [...byId.values()];
+          });
+        }
+        return rangeSpendings;
+      })
+      .finally(() => {
+        inFlightRanges.current.delete(rangeKey);
+      });
+
+    inFlightRanges.current.set(rangeKey, promise);
+    return promise;
+  }, [currentAccount]);
+
   const reload = useCallback((): Promise<void> => {
     if (reloadFlight.current) return reloadFlight.current;
     reloadFlight.current = serialize(async () => {
       if (!loaded.current) setLoading(true);
       try {
-        const [nextSettings, nextSpendings, nextIncomeEntries, nextRepeatRules] = await Promise.all([
-          api.getSettings(), api.getSpendings(), api.getIncomeEntries(), api.getRepeatRules(),
+        const [nextSettings, nextIncomeEntries, nextRepeatRules] = await Promise.all([
+          api.getSettings(), api.getIncomeEntries(), api.getRepeatRules(),
         ]);
         if (!currentAccount()) return;
         setSettings(nextSettings);
-        setSpendings(nextSpendings);
         setIncomeEntries(nextIncomeEntries);
         setRepeatRules(nextRepeatRules);
         loaded.current = true;
@@ -158,7 +184,7 @@ export function FinanceProvider({ userId, children }: { userId: string; children
   return (
     <FinanceContext.Provider value={{
       settings, spendings, incomeEntries, repeatRules, loading, hasLoaded, error,
-      reload, updateSettings, createSpending, updateSpending, deleteSpending,
+      reload, fetchWeeksSpendings, updateSettings, createSpending, updateSpending, deleteSpending,
       createIncomeEntry, updateIncomeEntry, deleteIncomeEntry,
       createRepeatRule, deleteRepeatRule
     }}>

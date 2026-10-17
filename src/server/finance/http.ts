@@ -64,8 +64,12 @@ export async function handleFinanceRequest(
 
   if (subpath === "/spendings") {
     if (method === "GET" || method === "HEAD") {
-      const { limit, cursor } = pagination(query);
-      return jsonResponse(await store.listSpendings(user.id, limit, cursor));
+      const { limit, cursor, startDate, endDate } = pagination(query);
+      return jsonResponse(
+        startDate || endDate
+          ? await store.listSpendings(user.id, limit, cursor, startDate, endDate)
+          : await store.listSpendings(user.id, limit, cursor),
+      );
     }
     if (method === "POST") {
       const spending = await store.createSpending(user.id, spendingInput(body));

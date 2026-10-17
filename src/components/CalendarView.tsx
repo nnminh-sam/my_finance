@@ -1,16 +1,18 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   format,
-  startOfWeek,
-  endOfWeek,
   eachDayOfInterval,
   startOfMonth,
   endOfMonth,
+  startOfWeek,
+  endOfWeek,
   isToday,
   subMonths,
   addMonths,
+  addWeeks,
+  subWeeks,
   parseISO,
 } from "date-fns";
 import {
@@ -29,6 +31,19 @@ import {
   Edit2,
 } from "lucide-react";
 import { getTotalForDate, getTopSpendingsForDate, getSpendingsForDate, formatCompactSpending } from "../lib/spendings";
+import {
+  FETCH_WEEKS_STEP,
+  PRELOAD_MONTHS,
+  VISIBLE_WEEKS,
+  buildCalendarWeeks,
+  createInitialMonthRange,
+  detectScrollDirection,
+  expandMonthRange,
+  getMonthFirstWeekKey,
+  getNextWeeksToFetch,
+  getWeekKeysInRange,
+} from "../lib/calendarWindow";
+import type { FetchedWeekBounds, MonthRange, WeekRenderStage } from "../lib/calendarWindow";
 import { useFinance } from "../contexts/FinanceContext";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -68,32 +83,241 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onEditIncome,
 }) => {
   const { settings } = useSettings();
-  const { spendings, incomeEntries } = useFinance();
+  const { spendings, incomeEntries, fetchWeeksSpendings } = useFinance();
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const isProgrammaticScrollRef = useRef(false);
+  const ignoreMonthSyncUntilRef = useRef<number>(0);
   const hasInitialScrolledRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const lastExternalMonthRef = useRef<string>(format(currentDate, 'yyyy-MM'));
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const prependAnchorRef = useRef<{
+    weekKey: string;
+    relativeTop: number;
+  } | null>(null);
 
   const [activeMonthStr, setActiveMonthStr] = useState<string>(() => format(currentDate, 'yyyy-MM'));
 
-  // Stable anchor around initial mount date so range does not recompute on small date changes
-  const anchorDate = useRef(currentDate).current;
+  // Preload 2 months before and 2 months after the initial month, expanding dynamically on scroll
+  const [monthRange, setMonthRange] = useState<MonthRange>(() =>
+    createInitialMonthRange(currentDate, PRELOAD_MONTHS),
+  );
 
-  // Generate a multi-month continuous window of weeks (12 months before to 12 months after)
-  const { weeks, allDays } = useMemo(() => {
-    const startRangeMonth = startOfMonth(subMonths(anchorDate, 12));
-    const endRangeMonth = endOfMonth(addMonths(anchorDate, 12));
-    const rangeStartDate = startOfWeek(startRangeMonth, { weekStartsOn: 1 });
-    const rangeEndDate = endOfWeek(endRangeMonth, { weekStartsOn: 1 });
+  // Track progressive rendering stage per individual day ('dates' -> 'totals' -> 'details')
+  const [dayStages, setDayStages] = useState<Record<string, WeekRenderStage>>({});
+  const fetchedWeeksRef = useRef<Set<string>>(new Set());
+  const visibleWeekKeysRef = useRef<string[]>([]);
+  const queuedDaysRef = useRef<Set<string>>(new Set());
+  const revealQueueRef = useRef<string[]>([]);
+  const revealIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const detailTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
-    const daysList = eachDayOfInterval({ start: rangeStartDate, end: rangeEndDate });
-    const weekList: Date[][] = [];
-    for (let i = 0; i < daysList.length; i += 7) {
-      weekList.push(daysList.slice(i, i + 7));
+  // Track which week boundaries have been fetched
+  const fetchedBoundsRef = useRef<FetchedWeekBounds>((() => {
+    const firstVisible = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
+    return {
+      startWeek: firstVisible,
+      endWeek: addWeeks(firstVisible, VISIBLE_WEEKS - 1),
+    };
+  })());
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      if (revealIntervalRef.current) {
+        clearInterval(revealIntervalRef.current);
+        revealIntervalRef.current = null;
+      }
+      for (const timer of detailTimersRef.current) {
+        clearTimeout(timer);
+      }
+      detailTimersRef.current.clear();
+    };
+  }, []);
+
+  /**
+   * Sequentially fills in visible fetched days one by one:
+   * - Ordered from Left to Right (Mon -> Sun) and Top to Bottom (Week 1 -> Week 5)
+   * - Each day transitions: 'dates' (already rendered) -> 'totals' -> 'details'
+   */
+  const startDayRevealLoop = useCallback(() => {
+    if (revealIntervalRef.current) return;
+
+    revealIntervalRef.current = setInterval(() => {
+      const nextDayKey = revealQueueRef.current.shift();
+      if (!nextDayKey) {
+        if (revealIntervalRef.current) {
+          clearInterval(revealIntervalRef.current);
+          revealIntervalRef.current = null;
+        }
+        return;
+      }
+
+      // Stage 2: Silently reveal total spending + heatmap for this day
+      setDayStages((prev) => {
+        if (prev[nextDayKey] === 'totals' || prev[nextDayKey] === 'details') return prev;
+        return { ...prev, [nextDayKey]: 'totals' };
+      });
+
+      // Stage 3: Silently reveal detailed spendings for this day shortly after its total
+      const detailTimer = setTimeout(() => {
+        detailTimersRef.current.delete(detailTimer);
+        setDayStages((prev) => {
+          if (prev[nextDayKey] === 'details') return prev;
+          return { ...prev, [nextDayKey]: 'details' };
+        });
+      }, 85);
+      detailTimersRef.current.add(detailTimer);
+    }, 24);
+  }, []);
+
+  const enqueueVisibleFetchedDays = useCallback(() => {
+    const visibleWeeks = visibleWeekKeysRef.current;
+    if (visibleWeeks.length === 0) return;
+
+    const visibleDaySet = new Set<string>();
+    const orderedVisibleDays: string[] = [];
+
+    // Build ordered list: Top-to-Bottom (week by week), Left-to-Right (Mon -> Sun)
+    for (const weekKey of visibleWeeks) {
+      if (!fetchedWeeksRef.current.has(weekKey)) continue;
+      const weekMonday = parseISO(weekKey);
+      const weekSunday = endOfWeek(weekMonday, { weekStartsOn: 1 });
+      const daysInWeek = eachDayOfInterval({ start: weekMonday, end: weekSunday });
+      for (const d of daysInWeek) {
+        const dayKey = format(d, 'yyyy-MM-dd');
+        visibleDaySet.add(dayKey);
+        orderedVisibleDays.push(dayKey);
+      }
     }
-    return { weeks: weekList, allDays: daysList };
-  }, [anchorDate]);
+
+    // Keep only still-visible days in the pending queue so current viewport always fills in first
+    revealQueueRef.current = revealQueueRef.current.filter((dKey) => {
+      if (visibleDaySet.has(dKey)) return true;
+      queuedDaysRef.current.delete(dKey);
+      return false;
+    });
+
+    for (const dayKey of orderedVisibleDays) {
+      if (!queuedDaysRef.current.has(dayKey)) {
+        queuedDaysRef.current.add(dayKey);
+        revealQueueRef.current.push(dayKey);
+      }
+    }
+
+    if (revealQueueRef.current.length > 0) {
+      startDayRevealLoop();
+    }
+  }, [startDayRevealLoop]);
+
+  const fetchWeekBatch = useCallback((startWeekMonday: Date, endWeekMonday: Date) => {
+    const start = startOfWeek(startWeekMonday, { weekStartsOn: 1 });
+    const end = startOfWeek(endWeekMonday, { weekStartsOn: 1 });
+    if (start.getTime() > end.getTime()) return;
+
+    const weekKeys = getWeekKeysInRange(start, end);
+    const startDateStr = format(start, 'yyyy-MM-dd');
+    const endDateStr = format(endOfWeek(end, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+    void fetchWeeksSpendings(startDateStr, endDateStr)
+      .catch(() => [])
+      .finally(() => {
+        for (const key of weekKeys) {
+          fetchedWeeksRef.current.add(key);
+        }
+        enqueueVisibleFetchedDays();
+      });
+  }, [enqueueVisibleFetchedDays, fetchWeeksSpendings]);
+
+  const capturePrependAnchor = useCallback((anchorRow?: HTMLElement | null) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const row = anchorRow || container.querySelector<HTMLElement>('.calendar-week-row');
+    if (row && row.dataset.week) {
+      prependAnchorRef.current = {
+        weekKey: row.dataset.week,
+        relativeTop: row.offsetTop - container.scrollTop,
+      };
+    }
+  }, []);
+
+  const ensureMonthsLoadedFor = useCallback((targetDate: Date, preloadMonths = PRELOAD_MONTHS) => {
+    setMonthRange((prev) => {
+      const next = expandMonthRange(prev, targetDate, preloadMonths);
+      if (next === prev) return prev;
+      if (next.startMonth.getTime() < prev.startMonth.getTime() && !prependAnchorRef.current) {
+        capturePrependAnchor();
+      }
+      return next;
+    });
+  }, [capturePrependAnchor]);
+
+  // Generate continuous client-side weeks for the currently loaded month range
+  const { weeks, allDays } = useMemo(
+    () => buildCalendarWeeks(monthRange.startMonth, monthRange.endMonth),
+    [monthRange.startMonth, monthRange.endMonth],
+  );
+
+  // Preserve exact scroll position when earlier weeks are prepended at the top
+  useLayoutEffect(() => {
+    const anchor = prependAnchorRef.current;
+    if (!anchor) return;
+    prependAnchorRef.current = null;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const anchorEl = container.querySelector<HTMLElement>(`[data-week="${anchor.weekKey}"]`);
+    if (anchorEl) {
+      const targetScrollTop = anchorEl.offsetTop - anchor.relativeTop;
+      if (Math.abs(container.scrollTop - targetScrollTop) > 1) {
+        ignoreMonthSyncUntilRef.current = Date.now() + 120;
+        container.scrollTop = targetScrollTop;
+        lastScrollTopRef.current = targetScrollTop;
+      }
+    }
+  }, [monthRange.startMonth]);
+
+  // Initial load: dates render immediately on client side; fetch visible 5 weeks first,
+  // then preload 2 months before/after in week batches.
+  useEffect(() => {
+    const visibleStart = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
+    const visibleEnd = addWeeks(visibleStart, VISIBLE_WEEKS - 1);
+    visibleWeekKeysRef.current = getWeekKeysInRange(visibleStart, visibleEnd);
+
+    const preloadStart = startOfWeek(startOfMonth(subMonths(currentDate, PRELOAD_MONTHS)), { weekStartsOn: 1 });
+    const preloadEnd = startOfWeek(endOfMonth(addMonths(currentDate, PRELOAD_MONTHS)), { weekStartsOn: 1 });
+
+    fetchedBoundsRef.current = {
+      startWeek: preloadStart,
+      endWeek: preloadEnd,
+    };
+
+    // Priority 1: Fetch the 5 visible weeks of the current month
+    fetchWeekBatch(visibleStart, visibleEnd);
+
+    // Priority 2: Preload weeks for the 2 months before and 2 months after in week-sized chunks
+    const timer = setTimeout(() => {
+      let upCursor = subWeeks(visibleStart, 1);
+      while (upCursor.getTime() >= preloadStart.getTime()) {
+        const batchStart = subWeeks(upCursor, FETCH_WEEKS_STEP - 1);
+        const clampedStart = batchStart.getTime() < preloadStart.getTime() ? preloadStart : batchStart;
+        fetchWeekBatch(clampedStart, upCursor);
+        upCursor = subWeeks(clampedStart, 1);
+      }
+
+      let downCursor = addWeeks(visibleEnd, 1);
+      while (downCursor.getTime() <= preloadEnd.getTime()) {
+        const batchEnd = addWeeks(downCursor, FETCH_WEEKS_STEP - 1);
+        const clampedEnd = batchEnd.getTime() > preloadEnd.getTime() ? preloadEnd : batchEnd;
+        fetchWeekBatch(downCursor, clampedEnd);
+        downCursor = addWeeks(clampedEnd, 1);
+      }
+    }, 60);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Compute peaks per month so heatmap scale is calibrated per month
   const monthlyPeaks = useMemo(() => {
@@ -141,24 +365,36 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const leftOver = totalIncome - totalSpending;
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+  const findMonthStartElement = useCallback((container: HTMLElement, targetMonth: Date) => {
+    const firstWeekKey = getMonthFirstWeekKey(targetMonth);
+    const targetMonthStr = format(targetMonth, 'yyyy-MM');
+    return (
+      container.querySelector<HTMLElement>(`[data-week="${firstWeekKey}"]`) ||
+      container.querySelector<HTMLElement>(`[data-month="${targetMonthStr}"]`)
+    );
+  }, []);
+
   // Programmatic scroll helper to jump to a specific month
   const scrollToMonth = useCallback((targetMonth: Date) => {
     const targetMonthStr = format(targetMonth, 'yyyy-MM');
+    ensureMonthsLoadedFor(targetMonth, PRELOAD_MONTHS + 1);
+
+    const visibleStart = startOfWeek(startOfMonth(targetMonth), { weekStartsOn: 1 });
+    const visibleEnd = addWeeks(visibleStart, VISIBLE_WEEKS - 1);
+    visibleWeekKeysRef.current = getWeekKeysInRange(visibleStart, visibleEnd);
+    fetchWeekBatch(visibleStart, visibleEnd);
+
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const targetWeek = container.querySelector<HTMLElement>(`[data-month="${targetMonthStr}"]`);
+    const targetWeek = findMonthStartElement(container, targetMonth);
     if (targetWeek) {
-      isProgrammaticScrollRef.current = true;
+      ignoreMonthSyncUntilRef.current = Date.now() + 450;
       targetWeek.scrollIntoView({ behavior: 'smooth', block: 'start' });
       setActiveMonthStr(targetMonthStr);
       onActiveMonthChange?.(targetMonth);
-
-      setTimeout(() => {
-        isProgrammaticScrollRef.current = false;
-      }, 500);
     }
-  }, [onActiveMonthChange]);
+  }, [ensureMonthsLoadedFor, fetchWeekBatch, findMonthStartElement, onActiveMonthChange]);
 
   const scrollToNextMonth = useCallback(() => {
     const current = parseISO(`${activeMonthStr}-01`);
@@ -170,82 +406,158 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     scrollToMonth(subMonths(current, 1));
   }, [activeMonthStr, scrollToMonth]);
 
-  // Initial scroll into view on mount
-  useEffect(() => {
-    if (hasInitialScrolledRef.current) return;
+  // Initial scroll into view on mount: align the first week of the current month at the top so 5 weeks of the month are visible
+  useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const currentWeekStart = format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    const targetWeek = container.querySelector<HTMLElement>(`[data-week="${currentWeekStart}"]`)
-      || container.querySelector<HTMLElement>(`[data-month="${format(currentDate, 'yyyy-MM')}"]`);
-
-    if (targetWeek) {
-      isProgrammaticScrollRef.current = true;
-      container.scrollTop = targetWeek.offsetTop;
-      hasInitialScrolledRef.current = true;
-
-      const timer = setTimeout(() => {
-        isProgrammaticScrollRef.current = false;
-      }, 100);
-      return () => clearTimeout(timer);
+    if (!hasInitialScrolledRef.current) {
+      const targetWeek = findMonthStartElement(container, currentDate);
+      if (targetWeek) {
+        ignoreMonthSyncUntilRef.current = Date.now() + 250;
+        container.scrollTop = targetWeek.offsetTop;
+        lastScrollTopRef.current = targetWeek.offsetTop;
+        hasInitialScrolledRef.current = true;
+      }
     }
-  }, [currentDate]);
+  }, [currentDate, findMonthStartElement]);
 
-  // Smoothly scroll when external currentDate prop changes to a new month
+  // Smoothly scroll ONLY when the external currentDate prop itself changes to a new month
   useEffect(() => {
     if (!hasInitialScrolledRef.current) return;
     const targetMonthStr = format(currentDate, 'yyyy-MM');
+    if (targetMonthStr === lastExternalMonthRef.current) return;
+    lastExternalMonthRef.current = targetMonthStr;
+
     if (targetMonthStr === activeMonthStr) return;
+
+    ensureMonthsLoadedFor(currentDate, PRELOAD_MONTHS + 1);
+    const visibleStart = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
+    const visibleEnd = addWeeks(visibleStart, VISIBLE_WEEKS - 1);
+    visibleWeekKeysRef.current = getWeekKeysInRange(visibleStart, visibleEnd);
+    fetchWeekBatch(visibleStart, visibleEnd);
 
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const targetWeek = container.querySelector<HTMLElement>(`[data-month="${targetMonthStr}"]`);
+    const targetWeek = findMonthStartElement(container, currentDate);
     if (targetWeek) {
-      isProgrammaticScrollRef.current = true;
+      ignoreMonthSyncUntilRef.current = Date.now() + 450;
       targetWeek.scrollIntoView({ behavior: 'smooth', block: 'start' });
       setActiveMonthStr(targetMonthStr);
-
-      const timer = setTimeout(() => {
-        isProgrammaticScrollRef.current = false;
-      }, 500);
-      return () => clearTimeout(timer);
     }
-  }, [currentDate, activeMonthStr]);
+  }, [currentDate, activeMonthStr, ensureMonthsLoadedFor, fetchWeekBatch, findMonthStartElement]);
 
-  // Scroll listener tracking the dominant visible week row to update active month
+  // Scroll listener:
+  // 1. Always expands client-side calendar dates well before reaching top or bottom boundary (never stuck at Jan 3rd!)
+  // 2. Detects scroll direction ('up' / 'down') and compares current visible week against fetched weeks
+  // 3. Queues visible fetched days to fill in from left to right, top to bottom
   const handleScroll = useCallback(() => {
-    if (isProgrammaticScrollRef.current) return;
     const container = scrollContainerRef.current;
     if (!container) return;
 
     const containerTop = container.scrollTop;
-    const offsetCheck = containerTop + 60;
-    const weekRows = container.querySelectorAll<HTMLElement>('.calendar-week-row');
+    const direction = detectScrollDirection(containerTop, lastScrollTopRef.current);
+    lastScrollTopRef.current = containerTop;
 
-    let currentWeekRow: HTMLElement | null = null;
+    const clientHeight = container.clientHeight || 500;
+    const viewportCenter = containerTop + clientHeight / 2;
+    const viewportBottom = containerTop + clientHeight - 8;
+    const weekRows = container.querySelectorAll<HTMLElement>('.calendar-week-row');
+    if (weekRows.length === 0) return;
+
+    let topVisibleIdx = 0;
+    let foundTop = false;
+    let centerWeekRow: HTMLElement | null = null;
+    let bottomVisibleIdx = weekRows.length - 1;
+
     for (let i = 0; i < weekRows.length; i++) {
       const row = weekRows[i];
-      if (row.offsetTop + row.offsetHeight >= offsetCheck) {
-        currentWeekRow = row;
+      const rowBottom = row.offsetTop + row.offsetHeight;
+      if (!foundTop && rowBottom > containerTop + 4) {
+        topVisibleIdx = i;
+        foundTop = true;
+      }
+      if (!centerWeekRow && rowBottom >= viewportCenter) {
+        centerWeekRow = row;
+      }
+      if (row.offsetTop <= viewportBottom) {
+        bottomVisibleIdx = i;
+      } else if (foundTop) {
         break;
       }
     }
 
-    if (currentWeekRow && currentWeekRow.dataset.month) {
-      const newMonth = currentWeekRow.dataset.month;
+    const topVisibleRow = weekRows[topVisibleIdx];
+    const bottomVisibleRow = weekRows[bottomVisibleIdx];
+
+    // 1. Expand client-side calendar dates when scrolling toward top or bottom boundary
+    if (direction === 'up' && (topVisibleIdx <= 4 || containerTop < clientHeight)) {
+      capturePrependAnchor(topVisibleRow);
+      setMonthRange((prev) => ({
+        startMonth: startOfMonth(subMonths(prev.startMonth, 3)),
+        endMonth: prev.endMonth,
+      }));
+    }
+    if (
+      direction !== 'up' &&
+      (weekRows.length - 1 - bottomVisibleIdx <= 4 ||
+        container.scrollHeight - (containerTop + clientHeight) < clientHeight)
+    ) {
+      setMonthRange((prev) => ({
+        startMonth: prev.startMonth,
+        endMonth: startOfMonth(addMonths(prev.endMonth, 3)),
+      }));
+    }
+
+    // 2. Track currently visible weeks and trigger left-to-right, top-to-bottom day reveal
+    if (topVisibleRow?.dataset.week && bottomVisibleRow?.dataset.week) {
+      const visibleStartWeek = parseISO(topVisibleRow.dataset.week);
+      const visibleEndWeek = parseISO(bottomVisibleRow.dataset.week);
+      visibleWeekKeysRef.current = getWeekKeysInRange(visibleStartWeek, visibleEndWeek);
+      enqueueVisibleFetchedDays();
+
+      // Ensure visible weeks themselves are fetched if user jumped/scrolled fast past fetched bounds
+      const missingVisibleWeeks = visibleWeekKeysRef.current.some(
+        (k) => !fetchedWeeksRef.current.has(k),
+      );
+      if (missingVisibleWeeks) {
+        fetchWeekBatch(visibleStartWeek, visibleEndWeek);
+      }
+
+      // 3. Compare current visible week with fetched week bounds in the detected scroll direction
+      const effectiveDirection = direction === 'idle' ? 'down' : direction;
+      const batch = getNextWeeksToFetch({
+        direction: effectiveDirection,
+        visibleStartWeek,
+        visibleEndWeek,
+        fetchedBounds: fetchedBoundsRef.current,
+      });
+
+      if (batch) {
+        fetchedBoundsRef.current = batch.nextBounds;
+        fetchWeekBatch(
+          parseISO(batch.weekKeys[0]),
+          parseISO(batch.weekKeys[batch.weekKeys.length - 1]),
+        );
+      }
+    }
+
+    // 4. Update active month header & overview when not in the middle of a programmatic jump
+    if (Date.now() >= ignoreMonthSyncUntilRef.current && centerWeekRow?.dataset.month) {
+      const newMonth = centerWeekRow.dataset.month;
       if (newMonth !== activeMonthStr) {
         setActiveMonthStr(newMonth);
         try {
           const newDate = parseISO(`${newMonth}-01`);
+          ensureMonthsLoadedFor(newDate);
           onActiveMonthChange?.(newDate);
         } catch {
           // ignore
         }
       }
     }
-  }, [activeMonthStr, onActiveMonthChange]);
+  }, [activeMonthStr, capturePrependAnchor, enqueueVisibleFetchedDays, ensureMonthsLoadedFor, fetchWeekBatch, onActiveMonthChange]);
 
   // Touch handlers for horizontal swipe (left to next month, right to prev month)
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -296,10 +608,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       container.scrollBy({ top: -weekHeight, behavior: 'smooth' });
     } else if (e.key === 'PageDown') {
       e.preventDefault();
-      container.scrollBy({ top: weekHeight * 4, behavior: 'smooth' });
+      container.scrollBy({ top: weekHeight * 5, behavior: 'smooth' });
     } else if (e.key === 'PageUp') {
       e.preventDefault();
-      container.scrollBy({ top: -weekHeight * 4, behavior: 'smooth' });
+      container.scrollBy({ top: -weekHeight * 5, behavior: 'smooth' });
     }
   };
 
@@ -419,22 +731,29 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               data-month={dominantMonthStr}
             >
               {weekDaysList.map((day) => {
-                const total = getTotalForDate(day, spendings);
-                const topSpendings = getTopSpendingsForDate(day, 5, spendings);
+                const dayKey = format(day, 'yyyy-MM-dd');
                 const dayMonthStr = format(day, 'yyyy-MM');
-                const heatmapBg = getHeatmapColor(
-                  total,
-                  monthlyPeaks[dayMonthStr] || 0,
-                  settings.theme,
-                );
                 const isCurrentDay = isToday(day);
                 const isFirstOfMonth = day.getDate() === 1;
                 const isDifferentMonth = dayMonthStr !== activeMonthStr;
 
+                // Stage per individual day: 'dates' (immediate) -> 'totals' (left-to-right, top-to-bottom) -> 'details'
+                const dayStage: WeekRenderStage = dayStages[dayKey] || 'dates';
+                const showTotals = dayStage === 'totals' || dayStage === 'details';
+                const showDetails = dayStage === 'details';
+
+                const total = showTotals ? getTotalForDate(day, spendings) : 0;
+                const heatmapBg = showTotals
+                  ? getHeatmapColor(total, monthlyPeaks[dayMonthStr] || 0, settings.theme)
+                  : undefined;
+
+                const topSpendings = showDetails ? getTopSpendingsForDate(day, 5, spendings) : [];
+
                 return (
                   <div
-                    key={format(day, 'yyyy-MM-dd')}
+                    key={dayKey}
                     onClick={() => onDateClick(day)}
+                    data-day-stage={dayStage}
                     className={cn(
                       "glass calendar-day-cell",
                       isCurrentDay && "calendar-day-today",
@@ -455,6 +774,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       e.currentTarget.style.filter = "none";
                     }}
                   >
+                    {/* Stage 1: Date value always renders immediately on the client side */}
                     <div className="calendar-day-header">
                       <span
                         className={cn(
@@ -472,41 +792,48 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           format(day, "d")
                         )}
                       </span>
-                      {total > 0 && (
+                      {showTotals && total > 0 && (
                         <span className="calendar-day-total-desktop">
                           {total.toLocaleString("vi-VN")} ₫
                         </span>
                       )}
                     </div>
 
-                    {total > 0 && (
+                    {showTotals && total > 0 && (
                       <div className="calendar-day-total-mobile">
                         {formatCompactSpending(total)}
                       </div>
                     )}
 
-                    <div className="calendar-spending-list">
-                      {topSpendings.length === 0 && (
-                        <span className="calendar-no-expenses">
-                          No expenses
-                        </span>
-                      )}
-                      {topSpendings.map((s) => (
-                        <div key={s.id} className="calendar-spending-row">
-                          <span className="calendar-spending-label" title={s.description}>
-                            <span className="calendar-spending-icon">
-                              <CategoryIcon iconName={settings.categories.find(c => c.id === s.category)?.icon || "CircleDollarSign"} size={12} />
-                            </span>
-                            <span className="calendar-spending-description">
-                              {s.description}
-                            </span>
+                    {/* Stage 3: Detailed spendings fill in after the day's total */}
+                    {showDetails && (
+                      <div className="calendar-spending-list">
+                        {topSpendings.length === 0 && (
+                          <span className="calendar-no-expenses">
+                            No expenses
                           </span>
-                          <span className="calendar-spending-amount">
-                            {s.amount.toLocaleString("vi-VN")} ₫
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                        )}
+                        {topSpendings.map((s, rowIdx) => (
+                          <div
+                            key={s.id}
+                            className="calendar-spending-row"
+                            style={{ '--row-idx': rowIdx } as React.CSSProperties}
+                          >
+                            <span className="calendar-spending-label" title={s.description}>
+                              <span className="calendar-spending-icon">
+                                <CategoryIcon iconName={settings.categories.find(c => c.id === s.category)?.icon || "CircleDollarSign"} size={12} />
+                              </span>
+                              <span className="calendar-spending-description">
+                                {s.description}
+                              </span>
+                            </span>
+                            <span className="calendar-spending-amount">
+                              {s.amount.toLocaleString("vi-VN")} ₫
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}

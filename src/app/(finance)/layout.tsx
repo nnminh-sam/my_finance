@@ -81,7 +81,7 @@ function FinanceGate({
   const { theme, setTheme } = useTheme();
   const [actionError, setActionError] = useState<string | null>(null);
 
-  if (!hasLoaded) {
+  if (!hasLoaded && !(loading && page === 'calendar')) {
     return (
       <main className="auth-screen">
         <section className="auth-card glass" aria-busy={loading}>
@@ -120,7 +120,7 @@ function FinanceDocument({
   children: ReactNode;
 }) {
   const { theme, setTheme } = useTheme();
-  const { error, reload } = useFinance();
+  const { error, reload, fetchWeeksSpendings } = useFinance();
   const router = useRouter();
 
   const [expenseDialog, setExpenseDialog] = useState<{ expense?: Spending } | null>(null);
@@ -136,17 +136,33 @@ function FinanceDocument({
     setIncomeDialogMonth(month);
   }, []);
 
-  const currentDate = useMemo(() => readPageDate(fullSearch), [fullSearch]);
-  const [activeDate, setActiveDate] = useState<Date>(currentDate);
+  const urlDate = useMemo(() => readPageDate(fullSearch), [fullSearch]);
+  const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
+  const currentDate = page === 'calendar' ? calendarDate : urlDate;
+  const [activeDate, setActiveDate] = useState<Date>(() => (page === 'calendar' ? new Date() : urlDate));
 
   useEffect(() => {
-    setActiveDate(currentDate);
-  }, [currentDate]);
+    if (page === 'calendar') {
+      const now = new Date();
+      setCalendarDate(now);
+      setActiveDate(now);
+      if (typeof window !== 'undefined' && window.location.search) {
+        window.history.replaceState(null, '', pages.calendar.path);
+      }
+    } else {
+      setActiveDate(urlDate);
+      if (page === 'week' || page === 'day' || page === 'analytics') {
+        const rangeStart = format(subMonths(urlDate, 1), 'yyyy-MM-01');
+        const rangeEnd = format(addMonths(urlDate, 2), 'yyyy-MM-01');
+        void fetchWeeksSpendings(rangeStart, rangeEnd).catch(() => []);
+      }
+    }
+  }, [page, urlDate, fetchWeeksSpendings]);
 
   const onActiveDateChange = useCallback((date: Date) => {
     setActiveDate(date);
-    const newHref = pageHref(page, date);
-    if (typeof window !== 'undefined') {
+    if (page !== 'calendar' && typeof window !== 'undefined') {
+      const newHref = pageHref(page, date);
       window.history.replaceState(null, '', newHref);
     }
   }, [page]);
@@ -160,8 +176,8 @@ function FinanceDocument({
   }, [router]);
 
   const openBackToCalendar = useCallback(() => {
-    router.push(pageHref('calendar', activeDate));
-  }, [router, activeDate]);
+    router.push(pages.calendar.path);
+  }, [router]);
 
   const shellValue = useMemo(() => ({
     currentDate,
@@ -180,11 +196,24 @@ function FinanceDocument({
     { page: 'profile', label: 'Profile', Icon: User },
   ] as const;
 
+  const resetCalendarToCurrentMonth = useCallback(() => {
+    if (page === 'calendar') {
+      const now = new Date();
+      setCalendarDate(now);
+      setActiveDate(now);
+    }
+  }, [page]);
+
   return (
     <FinanceShellContext.Provider value={shellValue}>
       <div className="finance-document">
         <header className="document-header glass">
-          <Link href={pageHref('calendar', activeDate)} className="document-brand" aria-label="MyFinance calendar">
+          <Link
+            href={pages.calendar.path}
+            onClick={resetCalendarToCurrentMonth}
+            className="document-brand"
+            aria-label="MyFinance calendar"
+          >
             <span className="document-brand-icon"><img src="/favicon.svg" width={40} height={40} alt="" /></span>
             <span>
               <span className="document-title">MyFinance</span>
@@ -195,7 +224,8 @@ function FinanceDocument({
             {navigation.map(item => (
               <Link
                 key={item.page}
-                href={pageHref(item.page, activeDate)}
+                href={item.page === 'calendar' ? pages.calendar.path : pageHref(item.page, activeDate)}
+                onClick={item.page === 'calendar' ? resetCalendarToCurrentMonth : undefined}
                 className="document-nav-link"
                 aria-current={page === item.page ? 'page' : undefined}
               >
@@ -205,10 +235,39 @@ function FinanceDocument({
           </nav>
           <div className="document-actions">
             {dateNavigation && (
-              <>
-                <Link href={pageHref(page, previousDate)} className="document-action" title="Previous period" aria-label="Previous period"><ChevronLeft size={20} /></Link>
-                <Link href={pageHref(page, nextDate)} className="document-action" title="Next period" aria-label="Next period"><ChevronRight size={20} /></Link>
-              </>
+              page === 'calendar' ? (
+                <>
+                  <button
+                    type="button"
+                    className="document-action"
+                    title="Previous period"
+                    aria-label="Previous period"
+                    onClick={() => {
+                      setCalendarDate(previousDate);
+                      setActiveDate(previousDate);
+                    }}
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    className="document-action"
+                    title="Next period"
+                    aria-label="Next period"
+                    onClick={() => {
+                      setCalendarDate(nextDate);
+                      setActiveDate(nextDate);
+                    }}
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link href={pageHref(page, previousDate)} className="document-action" title="Previous period" aria-label="Previous period"><ChevronLeft size={20} /></Link>
+                  <Link href={pageHref(page, nextDate)} className="document-action" title="Next period" aria-label="Next period"><ChevronRight size={20} /></Link>
+                </>
+              )
             )}
             <button type="button" className="document-action document-add" title="Add expense" aria-label="Add expense" onClick={() => openExpense()}><Plus size={20} /></button>
             <button className="document-action" title="Refresh records" aria-label="Refresh records" onClick={() => { void reload().catch(() => {}); }}><RefreshCw size={20} /></button>

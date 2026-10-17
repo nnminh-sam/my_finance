@@ -105,7 +105,9 @@
   flex-direction: column;
   gap: 8px;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-anchor: none;
   position: relative;
   scroll-snap-type: y proximity;
   -webkit-overflow-scrolling: touch;
@@ -114,9 +116,13 @@
 .calendar-week-row {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
   gap: 8px;
   scroll-snap-align: start;
   width: 100%;
+  flex: 0 0 calc((100% - 32px) / 5);
+  height: calc((100% - 32px) / 5);
+  min-height: 0;
 }
 
 /* Day Cell */
@@ -128,7 +134,9 @@
   flex-direction: column;
   gap: 4px;
   cursor: pointer;
-  min-height: 110px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   transition: all 0.2s;
   color: var(--text-main);
 }
@@ -192,15 +200,30 @@
   font-weight: 900;
 }
 
+@keyframes calendarFillLeftToRight {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(-6px);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+}
+
 .calendar-day-total-desktop {
   font-size: 1.125rem;
   font-weight: 900;
   color: var(--text-main);
   white-space: nowrap;
+  animation: calendarFillLeftToRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .calendar-day-total-mobile {
   display: none;
+  animation: calendarFillLeftToRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .calendar-spending-list {
@@ -208,11 +231,14 @@
   flex-direction: column;
   gap: 4px;
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .calendar-no-expenses {
   font-size: 0.75rem;
   color: var(--text-muted);
+  animation: calendarFillLeftToRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .calendar-spending-row {
@@ -223,6 +249,8 @@
   font-size: 0.75rem;
   line-height: 1.25;
   color: var(--text-main);
+  animation: calendarFillLeftToRight 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--row-idx, 0) * 35ms);
 }
 
 .calendar-spending-label {
@@ -371,11 +399,14 @@
 
   .calendar-week-row {
     gap: 4px;
+    flex: 0 0 calc((100% - 16px) / 5);
+    height: calc((100% - 16px) / 5);
+    min-height: 0;
   }
 
   /* Day Cell on Mobile */
   .calendar-day-cell {
-    min-height: 48px;
+    min-height: 0;
     height: 100%;
     padding: 4px 2px;
     gap: 2px;
@@ -451,7 +482,7 @@
   }
 
   .calendar-day-cell {
-    min-height: 44px;
+    min-height: 0;
     height: 100%;
     padding: 4px 2px;
   }

@@ -27,12 +27,14 @@ export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
     async updateSettings(updates: Partial<FinanceSettings>): Promise<FinanceSettings> {
       return (await request<{ settings: FinanceSettings }>('/settings', json('PUT', updates))).settings;
     },
-    async getSpendings(): Promise<Spending[]> {
+    async getSpendings(range?: { startDate?: string; endDate?: string }): Promise<Spending[]> {
       const records = new Map<string, Spending>();
       const visited = new Set<string>();
       let cursor: string | null = null;
       do {
         const query = new URLSearchParams({ limit: '500' });
+        if (range?.startDate) query.set('startDate', range.startDate);
+        if (range?.endDate) query.set('endDate', range.endDate);
         if (cursor) query.set('cursor', cursor);
         const page = await request<{ spendings: Spending[]; nextCursor: string | null }>(`/spendings?${query}`);
         for (const spending of page.spendings) records.set(spending.id, spending);

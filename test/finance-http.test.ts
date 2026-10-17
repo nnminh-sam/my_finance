@@ -39,10 +39,11 @@ class MemoryFinanceStore implements FinanceStore {
     this.settings.set(userId, settings);
     return structuredClone(settings);
   }
-  async listSpendings(userId: string, limit: number, cursor?: string) {
+  async listSpendings(userId: string, limit: number, cursor?: string, startDate?: string, endDate?: string) {
     this.check();
     await this.syncRepeatSpendings(userId);
-    const rows = [...this.rows(userId).values()].filter(row => !cursor || row.id > cursor)
+    const rows = [...this.rows(userId).values()]
+      .filter(row => (!cursor || row.id > cursor) && (!startDate || row.date >= startDate) && (!endDate || row.date <= endDate))
       .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     const spendings = rows.slice(0, limit);
     return { spendings: structuredClone(spendings), nextCursor: rows.length > limit ? spendings[spendings.length - 1].id : null };
