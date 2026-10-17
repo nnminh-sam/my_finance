@@ -1,22 +1,38 @@
 {
   "name": "my_finance",
-  "workspaces": [
-    "packages/*"
-  ],
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "type": "module",
+  "description": "MyFinance personal finance tracker built with Next.js and Neon PostgreSQL",
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace=@my-finance/server\" \"npm run dev --workspace=@my-finance/client\"",
-    "dev:client": "npm run dev --workspace=@my-finance/client",
-    "dev:server": "npm run dev --workspace=@my-finance/server",
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm test --workspaces --if-present"
+    "dev": "next dev -p 5173",
+    "docs:build": "node docs/html/build.mjs",
+    "build": "node docs/html/build.mjs && next build",
+    "start": "next start -p 5173",
+    "lint": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "db:migrate": "tsx scripts/migrate.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "dotenv": "^16.4.5",
+    "lucide-react": "^1.55.0",
+    "next": "^15.3.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "tsx": "^4.7.1",
     "typescript": "^5.4.0"
   },
-  "author": "minhnn",
-  "type": "commonjs"
+  "author": "minhnn"
 }
