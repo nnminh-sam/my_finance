@@ -1,6 +1,7 @@
 'use client';
 
 import { CalendarView } from './CalendarView';
+import { SalaryCycleView } from './SalaryCycleView';
 import { WeekView } from './WeekView';
 import { DayDetails } from './DayDetails';
 import { AnalyticsView } from './AnalyticsView';
@@ -18,6 +19,19 @@ export function CalendarPageView() {
       currentDate={currentDate}
       onActiveMonthChange={onActiveDateChange}
       onDateClick={openDate}
+      onEditIncome={(month?: string) => openIncomeModal(month || incomeMonth(currentDate))}
+    />
+  );
+}
+
+export function SalaryCyclePageView() {
+  const { currentDate, openDate, openIncomeModal } = useFinanceShell();
+  const router = useRouter();
+  return (
+    <SalaryCycleView
+      currentDate={currentDate}
+      onDateClick={openDate}
+      onNavigateDate={(date) => router.push(pageHref('cycle', date))}
       onEditIncome={(month?: string) => openIncomeModal(month || incomeMonth(currentDate))}
     />
   );

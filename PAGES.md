@@ -12,6 +12,7 @@ Tracker uses a unified **Next.js App Router** architecture at the repository roo
 | `login`     | `/login`     | `src/app/(auth)/login/page.tsx`         | `(auth)`    | No        |
 | `signup`    | `/signup`    | `src/app/(auth)/signup/page.tsx`        | `(auth)`    | No        |
 | `calendar`  | `/calendar`  | `src/app/(finance)/calendar/page.tsx`   | `(finance)` | Yes       |
+| `cycle`     | `/cycle`     | `src/app/(finance)/cycle/page.tsx`      | `(finance)` | Yes       |
 | `week`      | `/week`      | `src/app/(finance)/week/page.tsx`       | `(finance)` | Yes       |
 | `day`       | `/day`       | `src/app/(finance)/day/page.tsx`        | `(finance)` | Yes       |
 | `analytics` | `/analytics` | `src/app/(finance)/analytics/page.tsx`  | `(finance)` | Yes       |

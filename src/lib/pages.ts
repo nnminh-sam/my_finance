@@ -3,6 +3,7 @@ export const pages = {
   login: { path: '/login', html: 'login.html', title: 'Sign in · MyFinance', protected: false },
   signup: { path: '/signup', html: 'signup.html', title: 'Create account · MyFinance', protected: false },
   calendar: { path: '/calendar', html: 'calendar.html', title: 'Calendar · MyFinance', protected: true },
+  cycle: { path: '/cycle', html: 'cycle.html', title: 'Salary Cycle · MyFinance', protected: true },
   week: { path: '/week', html: 'week.html', title: 'Week · MyFinance', protected: true },
   day: { path: '/day', html: 'day.html', title: 'Day details · MyFinance', protected: true },
   analytics: { path: '/analytics', html: 'analytics.html', title: 'Analytics · MyFinance', protected: true },
@@ -10,7 +11,7 @@ export const pages = {
 } as const;
 
 export type Page = keyof typeof pages;
-export type FinancePage = 'calendar' | 'week' | 'day' | 'analytics' | 'profile';
+export type FinancePage = 'calendar' | 'cycle' | 'week' | 'day' | 'analytics' | 'profile';
 
 export function isPage(value: string | undefined): value is Page {
   return value !== undefined && Object.hasOwn(pages, value);

@@ -52,7 +52,7 @@ export interface IncomeEntry extends IncomeEntryInput {
   id: string;
 }
 
-export type ViewMode = 'month' | 'week' | 'day' | 'profile' | 'analytics';
+export type ViewMode = 'month' | 'cycle' | 'week' | 'day' | 'profile' | 'analytics';
 
 export interface UserSettings {
   income: number;
