@@ -1,11 +1,26 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { addMonths, format, isToday, startOfMonth, subMonths } from 'date-fns';
+import {
+  addDays,
+  addMonths,
+  differenceInCalendarDays,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameMonth,
+  isToday,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+} from 'date-fns';
 import {
   Briefcase,
+  Calendar,
   CalendarClock,
   Car,
+  ChevronDown,
   CircleDollarSign,
   Coffee,
   Edit2,
@@ -74,6 +89,18 @@ const CategoryIcon = ({
   return <IconComp size={size} />;
 };
 
+function ordinalDay(d: number): string {
+  const suffix =
+    d === 1 || d === 21
+      ? 'st'
+      : d === 2 || d === 22
+        ? 'nd'
+        : d === 3 || d === 23
+          ? 'rd'
+          : 'th';
+  return `${d}${suffix}`;
+}
+
 export interface SalaryCycleViewProps {
   currentDate: Date;
   onDateClick: (date: Date) => void;
@@ -95,11 +122,44 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
   const [config, setConfig] = useState<SalaryCycleConfig>(() =>
     defaultSalaryCycleConfig(),
   );
+  const [openPopover, setOpenPopover] = useState<'baseDay' | 'monthDate' | null>(null);
+  const baseDayPopoverRef = useRef<HTMLDivElement>(null);
+  const monthDatePopoverRef = useRef<HTMLDivElement>(null);
 
   // Load persisted salary cycle preferences for the authenticated user
   useEffect(() => {
     setConfig(loadSalaryCycleConfig(user?.id));
   }, [user?.id]);
+
+  // Close popovers on outside click or Escape key
+  useEffect(() => {
+    if (!openPopover) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        openPopover === 'baseDay' &&
+        baseDayPopoverRef.current &&
+        !baseDayPopoverRef.current.contains(target)
+      ) {
+        setOpenPopover(null);
+      } else if (
+        openPopover === 'monthDate' &&
+        monthDatePopoverRef.current &&
+        !monthDatePopoverRef.current.contains(target)
+      ) {
+        setOpenPopover(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenPopover(null);
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openPopover]);
 
   const updateConfig = (updater: (prev: SalaryCycleConfig) => SalaryCycleConfig) => {
     setConfig((prev) => {
@@ -175,6 +235,7 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
       ...prev,
       salaryDay: clamped,
     }));
+    setOpenPopover(null);
   };
 
   const handleWeekendToggle = (checked: boolean) => {
@@ -191,15 +252,14 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
     }));
   };
 
-  const handleDelayStep = (delta: number) => {
+  const setMonthManualDelay = (newDelay: number) => {
+    const clamped = clampDelayDays(newDelay);
     updateConfig((prev) => {
-      const currentDelay = prev.monthDelays[cycle.cycleMonth] ?? 0;
-      const nextDelay = clampDelayDays(currentDelay + delta);
       const nextDelays = { ...prev.monthDelays };
-      if (nextDelay === 0) {
+      if (clamped === 0) {
         delete nextDelays[cycle.cycleMonth];
       } else {
-        nextDelays[cycle.cycleMonth] = nextDelay;
+        nextDelays[cycle.cycleMonth] = clamped;
       }
       return {
         ...prev,
@@ -208,16 +268,30 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
     });
   };
 
-  const handleResetDelay = () => {
-    updateConfig((prev) => {
-      const nextDelays = { ...prev.monthDelays };
-      delete nextDelays[cycle.cycleMonth];
-      return {
-        ...prev,
-        monthDelays: nextDelays,
-      };
-    });
+  const handleDelayStep = (delta: number) => {
+    const currentDelay = config.monthDelays[cycle.cycleMonth] ?? 0;
+    setMonthManualDelay(currentDelay + delta);
   };
+
+  const handleResetDelay = () => {
+    setMonthManualDelay(0);
+  };
+
+  // Mini calendar days for picking the exact payday date for the active month
+  const miniMonthCalendarDays = useMemo(() => {
+    const mStart = startOfMonth(cycle.nominalStartDate);
+    const mEnd = endOfMonth(mStart);
+    return eachDayOfInterval({
+      start: startOfWeek(mStart, { weekStartsOn: 1 }),
+      end: endOfWeek(mEnd, { weekStartsOn: 1 }),
+    });
+  }, [cycle.nominalStartDate]);
+
+  // Default payday for this month (nominal + weekend shift, before manual delay)
+  const defaultMonthPayday = useMemo(
+    () => addDays(cycle.nominalStartDate, cycle.weekendShiftDays),
+    [cycle.nominalStartDate, cycle.weekendShiftDays],
+  );
 
   // Touch handlers for horizontal swipe between salary cycles
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -249,6 +323,8 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
     if (days === 0) return '0d';
     return days > 0 ? `+${days}d` : `${days}d`;
   };
+
+  const presetDays = [1, 5, 10, 15, 20, 25];
 
   return (
     <div
@@ -288,37 +364,244 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
         </div>
 
         <div className="salary-cycle-controls">
-          <div className="salary-cycle-control-group">
-            <label htmlFor="salary-cycle-day-select">Base payday:</label>
-            <select
-              id="salary-cycle-day-select"
-              className="salary-cycle-select"
-              value={config.salaryDay}
-              onChange={(e) => handleSalaryDayChange(Number(e.target.value))}
-              aria-label="Base salary day of month"
+          {/* Custom Popover 1: Base Payday Grid Picker (1st - 28th) */}
+          <div className="salary-picker-anchor" ref={baseDayPopoverRef}>
+            <button
+              type="button"
+              className={cn(
+                'salary-picker-trigger',
+                openPopover === 'baseDay' && 'is-open',
+              )}
+              aria-expanded={openPopover === 'baseDay'}
+              aria-haspopup="dialog"
+              onClick={() =>
+                setOpenPopover((prev) => (prev === 'baseDay' ? null : 'baseDay'))
+              }
             >
-              {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => {
-                const suffix =
-                  d === 1 || d === 21
-                    ? 'st'
-                    : d === 2 || d === 22
-                      ? 'nd'
-                      : d === 3 || d === 23
-                        ? 'rd'
-                        : 'th';
-                return (
-                  <option key={d} value={d}>
-                    {d}
-                    {suffix} of month
-                  </option>
-                );
-              })}
-            </select>
+              <Calendar size={14} aria-hidden="true" style={{ color: 'var(--primary)' }} />
+              <span className="salary-picker-trigger-label">Payday:</span>
+              <span className="salary-picker-trigger-value">
+                {ordinalDay(config.salaryDay)} of month
+              </span>
+              <ChevronDown size={14} className="salary-picker-trigger-chevron" aria-hidden="true" />
+            </button>
+
+            {openPopover === 'baseDay' && (
+              <div
+                className="salary-picker-popover salary-picker-popover-left"
+                role="dialog"
+                aria-label="Choose recurring base payday of month"
+              >
+                <div className="salary-picker-header">
+                  <div>
+                    <div className="salary-picker-title">Monthly Base Payday</div>
+                    <div className="salary-picker-subtitle">
+                      Select the recurring day of the month your salary is normally paid (1st–28th).
+                    </div>
+                  </div>
+                </div>
+
+                <div className="salary-picker-presets">
+                  {presetDays.map((pDay) => (
+                    <button
+                      key={pDay}
+                      type="button"
+                      className={cn(
+                        'salary-picker-preset-chip',
+                        config.salaryDay === pDay && 'is-active',
+                      )}
+                      onClick={() => handleSalaryDayChange(pDay)}
+                    >
+                      {ordinalDay(pDay)}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="salary-day-grid">
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      className={cn(
+                        'salary-day-grid-btn',
+                        config.salaryDay === d && 'is-selected',
+                      )}
+                      onClick={() => handleSalaryDayChange(d)}
+                      aria-label={`${ordinalDay(d)} of every month`}
+                      aria-pressed={config.salaryDay === d}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="salary-picker-footer">
+                  <span>Currently: Every {ordinalDay(config.salaryDay)}</span>
+                  <button
+                    type="button"
+                    className="salary-cycle-reset-btn"
+                    onClick={() => handleSalaryDayChange(5)}
+                  >
+                    Default (5th)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Custom Popover 2: Month-Specific Actual Payday Calendar Picker & Delay Stepper */}
+          <div className="salary-picker-anchor" ref={monthDatePopoverRef}>
+            <button
+              type="button"
+              className={cn(
+                'salary-picker-trigger',
+                openPopover === 'monthDate' && 'is-open',
+              )}
+              aria-expanded={openPopover === 'monthDate'}
+              aria-haspopup="dialog"
+              onClick={() =>
+                setOpenPopover((prev) => (prev === 'monthDate' ? null : 'monthDate'))
+              }
+              title="Click to pick exact payday date or adjust delay for this month only"
+            >
+              <span className="salary-picker-trigger-label">
+                {format(cycle.nominalStartDate, 'MMM')} start:
+              </span>
+              <span
+                className={cn(
+                  'salary-picker-trigger-value',
+                  cycle.manualDelayDays !== 0 && 'has-delay',
+                )}
+                style={
+                  cycle.manualDelayDays !== 0 ? { color: 'var(--warning)' } : undefined
+                }
+              >
+                {format(cycle.startDate, 'MMM d')}
+                {cycle.manualDelayDays !== 0 &&
+                  ` (${formatDelayLabel(cycle.manualDelayDays)})`}
+              </span>
+              <ChevronDown size={14} className="salary-picker-trigger-chevron" aria-hidden="true" />
+            </button>
+
+            {openPopover === 'monthDate' && (
+              <div
+                className="salary-picker-popover"
+                role="dialog"
+                aria-label={`Adjust payday for ${format(cycle.nominalStartDate, 'MMMM yyyy')}`}
+              >
+                <div className="salary-picker-header">
+                  <div>
+                    <div className="salary-picker-title">
+                      {format(cycle.nominalStartDate, 'MMMM yyyy')} Payday
+                    </div>
+                    <div className="salary-picker-subtitle">
+                      Pick the exact date you received salary in{' '}
+                      {format(cycle.nominalStartDate, 'MMMM')} (only affects this month).
+                    </div>
+                  </div>
+                </div>
+
+                <div className="salary-day-grid">
+                  {weekDays.map((w) => (
+                    <div key={w} className="salary-day-grid-weekday">
+                      {w.slice(0, 2)}
+                    </div>
+                  ))}
+                  {miniMonthCalendarDays.map((d) => {
+                    const diffFromDefault = differenceInCalendarDays(
+                      d,
+                      defaultMonthPayday,
+                    );
+                    const allowed = diffFromDefault >= -7 && diffFromDefault <= 14;
+                    const isSelected =
+                      format(d, 'yyyy-MM-dd') === format(cycle.startDate, 'yyyy-MM-dd');
+                    const isDefault =
+                      format(d, 'yyyy-MM-dd') ===
+                      format(defaultMonthPayday, 'yyyy-MM-dd');
+                    const inNominalMonth = isSameMonth(d, cycle.nominalStartDate);
+
+                    return (
+                      <button
+                        key={format(d, 'yyyy-MM-dd')}
+                        type="button"
+                        disabled={!allowed}
+                        className={cn(
+                          'salary-day-grid-btn',
+                          isSelected && 'is-selected',
+                          !isSelected && isDefault && 'is-nominal',
+                        )}
+                        style={
+                          !allowed
+                            ? { opacity: 0.22, cursor: 'not-allowed' }
+                            : !inNominalMonth && !isSelected
+                              ? { opacity: 0.55 }
+                              : undefined
+                        }
+                        onClick={() => {
+                          setMonthManualDelay(diffFromDefault);
+                          setOpenPopover(null);
+                        }}
+                        title={
+                          allowed
+                            ? `${format(d, 'EEE, MMM d, yyyy')} (${formatDelayLabel(diffFromDefault)} from scheduled payday)`
+                            : `${format(d, 'MMM d')} is outside the -7d to +14d adjustment window`
+                        }
+                      >
+                        {format(d, 'd')}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="salary-picker-footer">
+                  <div className="salary-cycle-delay-stepper">
+                    <span>Shift:</span>
+                    <button
+                      type="button"
+                      className="salary-cycle-step-btn"
+                      onClick={() => handleDelayStep(-1)}
+                      disabled={cycle.manualDelayDays <= -7}
+                      aria-label="Earlier by 1 day"
+                    >
+                      −
+                    </button>
+                    <span
+                      className={cn(
+                        'salary-cycle-delay-val',
+                        cycle.manualDelayDays !== 0 && 'has-delay',
+                      )}
+                    >
+                      {formatDelayLabel(cycle.manualDelayDays)}
+                    </span>
+                    <button
+                      type="button"
+                      className="salary-cycle-step-btn"
+                      onClick={() => handleDelayStep(1)}
+                      disabled={cycle.manualDelayDays >= 14}
+                      aria-label="Later by 1 day"
+                    >
+                      +
+                    </button>
+                  </div>
+                  {cycle.manualDelayDays !== 0 ? (
+                    <button
+                      type="button"
+                      className="salary-cycle-reset-btn"
+                      onClick={handleResetDelay}
+                    >
+                      Reset to {format(defaultMonthPayday, 'MMM d')}
+                    </button>
+                  ) : (
+                    <span>On schedule</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <label
             className="salary-cycle-weekend-toggle"
-            title="If base payday falls on Saturday or Sunday, automatically shift cycle start to Monday"
+            title="When your base payday falls on a Saturday or Sunday, automatically shift the cycle start to the following Monday"
           >
             <input
               type="checkbox"
@@ -339,53 +622,6 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
             />
             <span>End on payday</span>
           </label>
-
-          <div
-            className="salary-cycle-control-group"
-            title="Delay or advance payday for this specific month only"
-          >
-            <label>{format(cycle.nominalStartDate, 'MMM')} delay:</label>
-            <div className="salary-cycle-delay-stepper">
-              <button
-                type="button"
-                className="salary-cycle-step-btn"
-                onClick={() => handleDelayStep(-1)}
-                disabled={cycle.manualDelayDays <= -7}
-                aria-label={`Decrease delay for ${format(cycle.nominalStartDate, 'MMMM yyyy')}`}
-                title="Earlier by 1 day"
-              >
-                −
-              </button>
-              <span
-                className={cn(
-                  'salary-cycle-delay-val',
-                  cycle.manualDelayDays !== 0 && 'has-delay',
-                )}
-              >
-                {formatDelayLabel(cycle.manualDelayDays)}
-              </span>
-              <button
-                type="button"
-                className="salary-cycle-step-btn"
-                onClick={() => handleDelayStep(1)}
-                disabled={cycle.manualDelayDays >= 14}
-                aria-label={`Increase delay for ${format(cycle.nominalStartDate, 'MMMM yyyy')}`}
-                title="Delay by 1 day"
-              >
-                +
-              </button>
-              {cycle.manualDelayDays !== 0 && (
-                <button
-                  type="button"
-                  className="salary-cycle-reset-btn"
-                  onClick={handleResetDelay}
-                  aria-label="Reset month delay to 0"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 

@@ -9,6 +9,7 @@
 
 /* Cycle Configuration & Range Banner */
 .salary-cycle-banner {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -22,6 +23,7 @@
     color-mix(in srgb, var(--primary) 10%, var(--bg-card)) 0%,
     var(--bg-card) 100%
   );
+  z-index: 15;
 }
 
 .salary-cycle-banner-info {
@@ -72,7 +74,183 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 8px 10px;
+}
+
+/* Custom Popover Picker */
+.salary-picker-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.salary-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.salary-picker-trigger:hover,
+.salary-picker-trigger.is-open {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--bg-card-hover));
+}
+
+.salary-picker-trigger-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.salary-picker-trigger-value {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.salary-picker-trigger-chevron {
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.salary-picker-trigger.is-open .salary-picker-trigger-chevron {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+.salary-picker-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 310px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.salary-picker-popover-left {
+  right: auto;
+  left: 0;
+}
+
+.salary-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.salary-picker-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.salary-picker-subtitle {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.salary-picker-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.salary-picker-preset-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  background: var(--bg-main);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.salary-picker-preset-chip:hover {
+  border-color: var(--primary);
+  color: var(--text-main);
+}
+
+.salary-picker-preset-chip.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.salary-day-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.salary-day-grid-btn {
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
+  background: var(--bg-main);
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.salary-day-grid-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 16%, var(--bg-main));
+  transform: translateY(-1px);
+}
+
+.salary-day-grid-btn.is-selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 0 12px var(--primary-glow);
+}
+
+.salary-day-grid-btn.is-nominal {
+  border: 1.5px dashed var(--primary);
+}
+
+.salary-day-grid-weekday {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  padding-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.salary-picker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+  font-size: 0.73rem;
+  color: var(--text-muted);
 }
 
 .salary-cycle-control-group {
@@ -91,22 +269,6 @@
   font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
-}
-
-.salary-cycle-select {
-  background: transparent;
-  color: var(--text-main);
-  font-weight: 700;
-  font-size: 0.78rem;
-  border: none;
-  outline: none;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.salary-cycle-select option {
-  background: var(--bg-card);
-  color: var(--text-main);
 }
 
 .salary-cycle-delay-stepper {
@@ -174,6 +336,12 @@
   padding: 5px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.salary-cycle-weekend-toggle:hover {
+  border-color: color-mix(in srgb, var(--primary) 50%, var(--border-color));
+  color: var(--text-main);
 }
 
 .salary-cycle-weekend-toggle input {
@@ -250,12 +418,28 @@
 
   .salary-cycle-controls {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 6px;
+  }
+
+  .salary-picker-trigger {
+    padding: 4px 8px;
+    font-size: 0.72rem;
+  }
+
+  .salary-picker-popover {
+    left: 0;
+    right: auto;
+    width: min(300px, calc(100vw - 32px));
   }
 
   .salary-cycle-control-group {
     padding: 3px 8px;
+    font-size: 0.72rem;
+  }
+
+  .salary-cycle-weekend-toggle {
+    padding: 4px 8px;
     font-size: 0.72rem;
   }
 
