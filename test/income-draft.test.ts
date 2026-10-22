@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createIncomeDraft, isIncomeDraftDirty, isValidIncomeDate, validateIncomeDraft } from '../src/lib/incomeDraft';
+import { createIncomeDraft, describeIncomeDraft, isIncomeDraftDirty, isValidIncomeDate, validateIncomeDraft } from '../src/lib/incomeDraft';
 import type { IncomeDraft } from '../src/lib/incomeDraft';
 import type { Income } from '../src/types';
 
@@ -48,4 +48,14 @@ test('dirty detection compares every field against the opening snapshot', () => 
     assert.equal(isIncomeDraftDirty({ ...snapshot, [field]: `${snapshot[field]}x` }, snapshot), true, field);
   }
   assert.equal(isIncomeDraftDirty({ ...snapshot, frequency: 'yearly' }, snapshot), true);
+});
+
+test('income draft: describes the schedule in plain language', () => {
+  assert.equal(describeIncomeDraft({ amount: '', frequency: 'monthly', startDate: '2026-10-22', endDate: '' }), null);
+  assert.equal(describeIncomeDraft({ amount: '12abc', frequency: 'monthly', startDate: '2026-10-22', endDate: '' }), null);
+  assert.equal(describeIncomeDraft({ amount: '32000000', frequency: 'monthly', startDate: '2026-10-22', endDate: '' }), '32.000.000 ₫ on day 22 of every month, from 22 Oct 2026, with no end date.');
+  assert.equal(describeIncomeDraft({ amount: '500000', frequency: 'once', startDate: '2026-10-22', endDate: '' }), '500.000 ₫ once, on Thursday, 22 Oct 2026.');
+  assert.equal(describeIncomeDraft({ amount: '1500000', frequency: 'weekly', startDate: '2026-10-23', endDate: '2026-12-31' }), '1.500.000 ₫ every Friday, from 23 Oct 2026, until 31 Dec 2026.');
+  assert.equal(describeIncomeDraft({ amount: '100', frequency: 'yearly', startDate: '2026-01-20', endDate: '' }), '100 ₫ every year on 20 Jan, from 20 Jan 2026, with no end date.');
+  assert.match(describeIncomeDraft({ amount: '100', frequency: 'monthly', startDate: '2026-01-31', endDate: '' })!, /shorter months/);
 });

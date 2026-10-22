@@ -127,8 +127,8 @@ my_finance/
 │   │   ├── ExpenseModal.tsx            # Create/edit single spending & repeat rule
 │   │   ├── MonthlyIncomeModal.tsx      # Dialog showing and adding income for one month
 │   │   ├── IncomeSources.tsx           # Income source list, month breakdown & add/edit/delete form
-│   │   ├── UserProfile.tsx             # Profile page sections & repeat rule manager
-│   │   ├── ProfileSection.tsx          # Collapsible editor card for profile sections
+│   │   ├── UserProfile.tsx             # Profile: identity header, section tabs, categories, repeats, preferences
+│   │   ├── ProfileSection.tsx          # Shared Save/Cancel editor actions
 │   │   └── FinancePageViews.tsx        # Client view wrappers connecting pages to FinanceShellContext
 │   ├── contexts/                       # React Context providers
 │   │   ├── ThemeContext.tsx            # Theme (system preference + localStorage 'tracker_theme')
@@ -147,6 +147,7 @@ my_finance/
 │   │   ├── heatmap.ts                  # Relative spending intensity RGBA scaling
 │   │   ├── analytics.ts                # Statistical engine (OLS forecast, Tukey outliers, Gini, Pareto)
 │   │   ├── salaryCycle.ts              # Payday, weekend shift, month delays, cycle ranges, localStorage config
+│   │   ├── repeatRules.ts              # Repeat spending labels, monthly cost estimate & progress
 │   │   ├── calendarWindow.ts           # Calendar month range & scroll-driven week fetch batching
 │   │   ├── expenseDraft.ts             # Dirty-state detection for the ExpenseModal form
 │   │   ├── expenseBatch.ts             # Repeat expense / multi-item creation helper
@@ -190,6 +191,7 @@ my_finance/
     ├── http.test.ts                    # Auth HTTP contract, CSRF, rate limit
     ├── finance-http.test.ts            # Finance HTTP CRUD, pagination, category validation
     ├── recurrence.test.ts              # Recurrence batch generation
+    ├── repeat-rules.test.ts            # Repeat spending labels & monthly estimate
     ├── service-error.test.ts           # Error sanitization
     ├── neon.test.ts                    # (Integration, opt-in) real Neon auth concurrency
     └── finance-neon.test.ts            # (Integration, opt-in) real Neon category-lock race
