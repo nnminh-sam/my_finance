@@ -9,7 +9,7 @@ This document illustrates the functional capabilities of **MyFinance** through U
 | Actor | Type | Description |
 | :--- | :--- | :--- |
 | **Guest (Unauthenticated User)** | Primary Human Actor | A visitor who has not yet signed in. Can register a new account, sign in with email and password, or toggle the local light/dark appearance theme. |
-| **Authenticated User** | Primary Human Actor | A signed-in user managing their personal finances across Calendar, Week, Day, Analytics, and Profile views. |
+| **Authenticated User** | Primary Human Actor | A signed-in user managing their personal finances across Calendar, Pay Cycle, Week, Day, Analytics, and Profile views. |
 | **Recurrence Sync Engine** | Internal System Actor | Automated backend subsystem (`syncRepeatSpendings`) triggered during data loads or explicit sync calls to materialize upcoming recurring expenses within a 14-day lookahead horizon. |
 
 ---
@@ -54,6 +54,12 @@ flowchart LR
             UC17(["Inspect Single-Day Transactions (/day)"])
             UC18(["Analyze Spending Forecast, Anomalies & Concentration (/analytics)"])
         end
+
+        subgraph UC_Cycle["Salary (Pay) Cycle"]
+            UC19(["View Spending per Salary Cycle (/cycle)"])
+            UC20(["Configure Payday, Weekend Shift & Cycle End"])
+            UC21(["Adjust This Month's Payday (Delay / Early Payout)"])
+        end
     end
 
     Guest --> UC1 & UC2 & UC5
@@ -61,8 +67,9 @@ flowchart LR
     User --> UC6 & UC7 & UC8 & UC9
     User --> UC11 & UC12 & UC13 & UC14
     User --> UC15 & UC16 & UC17 & UC18
+    User --> UC19 & UC20 & UC21
 
-    UC15 & UC16 -.->|"«include»"| UC10
+    UC15 & UC16 & UC19 -.->|"«include» (GET /spendings)"| UC10
     UC8 -.->|"«include»"| UC10
     SyncEngine --> UC10
 ```
@@ -79,7 +86,7 @@ flowchart LR
     User(["👤 Authenticated User"])
 
     subgraph AuthBoundary["Authentication & Access Control Boundary"]
-        A1(["Access Protected Route (/calendar, /week, /day, /analytics, /profile)"])
+        A1(["Access Protected Route (/calendar, /cycle, /week, /day, /analytics, /profile)"])
         A2(["Redirect to /login?next=#lt;safeReturnPath#gt;"])
         A3(["Submit Login Credentials"])
         A4(["Submit Registration Details"])
@@ -150,6 +157,35 @@ flowchart LR
 
 ---
 
+### 3.4 Salary (Pay) Cycle Use Cases
+
+```mermaid
+flowchart LR
+    User(["👤 Authenticated User"])
+
+    subgraph CycleBoundary["Salary Cycle Domain (client-side, /cycle)"]
+        C1(["Open Pay Cycle View (current cycle)"])
+        C2(["Navigate to Previous / Next Cycle (header arrows or swipe)"])
+        C3(["Set Base Payday (day 1–28, day-grid popover)"])
+        C4(["Toggle Weekend → Monday Shift"])
+        C5(["Toggle Include Next Payday in Cycle"])
+        C6(["Set This Month's Actual Payday (mini-calendar or ±1 day, −7…+14)"])
+        C7(["Reset This Month's Delay"])
+        C8(["Load Spendings for Cycle Grid Range"])
+        C9(["Compute Cycle Income, Spending, Top Categories & Leftover"])
+        C10(["Persist Config in localStorage (per user, per device)"])
+        C11(["Open Day Details / Edit Cycle Month Income"])
+    end
+
+    User --> C1 & C2 & C3 & C4 & C5 & C6 & C7 & C11
+    C1 & C2 -.->|"«include»"| C8
+    C1 & C2 -.->|"«include»"| C9
+    C3 & C4 & C5 & C6 & C7 -.->|"«include»"| C10
+    C3 & C4 & C5 & C6 & C7 -.->|"«include»"| C9
+```
+
+---
+
 ## 4. Use Case Specifications Summary
 
 | ID | Use Case Name | Primary Actor | Entry Point / Endpoint | Key Business Rules & Postconditions |
@@ -161,3 +197,6 @@ flowchart LR
 | **UC-09** | **Stop Repeat Rule** | Authenticated User | `/profile` → `DELETE /api/v1/finance/repeat-rules/:id?deleteFuture=true` | Deletes future generated spendings (`date >= today`) and deletes the rule row; historical past spendings remain intact with `repeat_rule_id = NULL`. |
 | **UC-12** | **Manage Monthly Bonus Income** | Authenticated User | `/profile` or `MonthlyIncomeModal` → `POST/PUT/DELETE /api/v1/finance/income-entries` | Stores non-recurring bonus/extra income scoped to a specific `YYYY-MM` month. Effective monthly income is `settings.income + sum(entries for YYYY-MM)`. |
 | **UC-18** | **View Analytics & Forecast** | Authenticated User | `/analytics` (`computeMonthlyAnalytics`) | Computes daily series, 7-day moving average, OLS cumulative projection with $95\%$ confidence interval, Tukey outlier days, category MoM changes, $7 \times 24$ punch card, Pareto curve, Gini index, and actionable text insights. |
+| **UC-19** | **View Salary Cycle** | Authenticated User | `/cycle?date=YYYY-MM-DD` (`SalaryCycleView`, `getSalaryCycleForMonth`) | Cycle runs from the month's actual payday to the next month's actual payday (inclusive by default). Loads spendings for the whole Monday–Sunday grid via `GET /spendings?startDate=&endDate=`. Shows cycle spending, top categories, peak day, income of the anchor month (recurring + additional), and leftover. |
+| **UC-20** | **Configure Pay Cycle** | Authenticated User | `/cycle` settings banner | Payday 1–28 (default 5), weekend-to-Monday shift (default on), include next payday as cycle end (default on). Saved immediately to `localStorage['tracker_salary_cycle_v1_<userId>']`; not synced to the server or other devices. |
+| **UC-21** | **Adjust Month Payday** | Authenticated User | `/cycle` mini-calendar / ±1-day steppers | Stores a per-month delay (−7…+14 days) keyed by `YYYY-MM`; resetting removes it. Changes both this cycle's start and the previous cycle's end. |
