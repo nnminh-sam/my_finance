@@ -102,15 +102,15 @@ const toneIcon: Record<InsightTone, React.ReactNode> = {
 
 export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
   const { settings } = useSettings();
-  const { spendings, incomeEntries } = useFinance();
+  const { spendings, incomes } = useFinance();
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [searchQueries, setSearchQueries] = useState<Record<string, string>>({});
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const a = useMemo(
-    () => computeMonthlyAnalytics(new Date(year, month, 1), settings, spendings, incomeEntries),
-    [year, month, settings, spendings, incomeEntries],
+    () => computeMonthlyAnalytics(new Date(year, month, 1), settings, spendings, incomes),
+    [year, month, settings, spendings, incomes],
   );
 
   const categorySpendings = useMemo(() => {
@@ -160,7 +160,7 @@ export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) 
   };
 
   const monthLabel = format(a.monthStart, 'MMMM yyyy');
-  const incomeBreakdown = `Recurring base ${a.baseIncome.toLocaleString('vi-VN')} ₫ · Additional ${a.additionalIncome.toLocaleString('vi-VN')} ₫`;
+  const incomeBreakdown = `Recurring ${a.recurringIncome.toLocaleString('vi-VN')} ₫ · One-time ${a.oneTimeIncome.toLocaleString('vi-VN')} ₫`;
 
   if (a.isFutureMonth || !a.hasData) {
     return (

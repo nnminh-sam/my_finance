@@ -116,7 +116,7 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
 }) => {
   const { user } = useAuth();
   const { settings } = useSettings();
-  const { spendings, incomeEntries, fetchWeeksSpendings } = useFinance();
+  const { spendings, incomes, fetchWeeksSpendings } = useFinance();
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const [config, setConfig] = useState<SalaryCycleConfig>(() =>
@@ -186,10 +186,9 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
   }, [cycle, fetchWeeksSpendings]);
 
   // Income for this salary cycle (uses the cycle's anchor month)
-  const { baseIncome, additionalIncome, totalIncome } = getMonthIncome(
-    settings.income,
+  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
     cycle.cycleMonth,
-    incomeEntries,
+    incomes,
   );
 
   // Compute cycle spending & category totals strictly across the salary cycle days
@@ -638,7 +637,7 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
                 type="button"
                 className="overview-income-edit"
                 onClick={() => onEditIncome(cycle.cycleMonth)}
-                aria-label={`Edit additional income for ${format(cycle.nominalStartDate, 'MMMM yyyy')}`}
+                aria-label={`Manage income for ${format(cycle.nominalStartDate, 'MMMM yyyy')}`}
                 aria-haspopup="dialog"
               >
                 <Edit2 size={12} aria-hidden="true" />
@@ -683,12 +682,12 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
           </div>
 
           <div className="calendar-stat-subtext">
-            <span className="hide-mobile">Recurring base </span>
-            <span className="show-mobile">Base </span>
-            {baseIncome.toLocaleString('vi-VN')} ₫ ·{' '}
-            <span className="hide-mobile">Additional </span>
-            <span className="show-mobile">Extra </span>
-            {additionalIncome.toLocaleString('vi-VN')} ₫ ·{' '}
+            <span className="hide-mobile">Recurring </span>
+            <span className="show-mobile">Recur. </span>
+            {recurringIncome.toLocaleString('vi-VN')} ₫ ·{' '}
+            <span className="hide-mobile">One-time </span>
+            <span className="show-mobile">Once </span>
+            {oneTimeIncome.toLocaleString('vi-VN')} ₫ ·{' '}
             <span>
               {format(cycle.startDate, 'MMM d')} – {format(cycle.endDate, 'MMM d')}
             </span>

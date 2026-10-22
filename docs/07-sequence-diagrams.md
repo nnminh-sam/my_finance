@@ -88,7 +88,7 @@ sequenceDiagram
 
 ## 3. Protected Page Load, Initial Fetch & Date-Range Spending Loading
 
-When an authenticated user opens a protected page (e.g., `/week?date=2026-10-17`), Next.js mounts the persistent `(finance)` layout shell (`src/app/(finance)/layout.tsx`). `FinanceProvider.reload()` loads **settings, income entries, and repeat rules** in parallel. Spendings are **not** part of `reload()`: they are fetched per date range through `fetchWeeksSpendings`, and the backend syncs due repeat rules (14-day horizon) before answering each spendings or repeat-rules read.
+When an authenticated user opens a protected page (e.g., `/week?date=2026-10-17`), Next.js mounts the persistent `(finance)` layout shell (`src/app/(finance)/layout.tsx`). `FinanceProvider.reload()` loads **settings, incomes, and repeat rules** in parallel. Spendings are **not** part of `reload()`: they are fetched per date range through `fetchWeeksSpendings`, and the backend syncs due repeat rules (14-day horizon) before answering each spendings or repeat-rules read.
 
 ```mermaid
 sequenceDiagram
@@ -106,15 +106,15 @@ sequenceDiagram
     Browser->>Shell: Mount Finance Shell (auth guard, persists across next/link navigations)
     Shell->>FinCtx: Mount FinanceProvider(userId) -> reload() (serialized, single-flight)
 
-    par reload(): settings, income entries, repeat rules
+    par reload(): settings, incomes, repeat rules
         FinCtx->>API: GET /settings (Bearer token)
         API->>Store: getSettings(userId)
         Store->>DB: Transaction (ReadCommitted): INSERT default ON CONFLICT DO NOTHING + SELECT
         DB-->>FinCtx: 200 { settings }
     and
-        FinCtx->>API: GET /income-entries?limit=500 (repeat with cursor until null)
-        API->>DB: SELECT ... WHERE user_id = $1 AND id > cursor ORDER BY id LIMIT 501
-        DB-->>FinCtx: 200 { incomeEntries, nextCursor }
+        FinCtx->>API: GET /incomes?limit=500 (repeat with cursor until null)
+        API->>DB: SELECT ... FROM finance_incomes WHERE user_id = $1 AND id > cursor ORDER BY id LIMIT 501
+        DB-->>FinCtx: 200 { incomes, nextCursor }
     and
         FinCtx->>API: GET /repeat-rules
         API->>Store: listRepeatRules(userId) -> syncRepeatSpendings(userId)
@@ -146,7 +146,7 @@ sequenceDiagram
 | `/week`, `/day`, `/analytics` | Shell prefetch when the URL date changes | 1st of (date − 1 month) to 1st of (date + 2 months) |
 | `/profile` | none | — |
 
-Window focus and the header **Refresh** button call `reload()` again, which refreshes settings, income entries, and repeat rules. Already-loaded spendings stay in memory; ranges are fetched again when the shell date changes.
+Window focus and the header **Refresh** button call `reload()` again, which refreshes settings, incomes, and repeat rules. Already-loaded spendings stay in memory; ranges are fetched again when the shell date changes.
 
 ---
 

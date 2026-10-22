@@ -1,11 +1,11 @@
 import { authenticateRequest, HttpError } from "../auth/http";
 import type { AuthStore } from "../auth/store";
 import type { FinanceStore } from "./store";
-import { incomeEntryInput, pagination, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
+import { incomeInput, pagination, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
 
-function incomeEntryId(value: unknown): string {
+function incomeId(value: unknown): string {
   try { return uuid(value); }
-  catch { throw new HttpError(404, "Income entry not found"); }
+  catch { throw new HttpError(404, "Income not found"); }
 }
 
 function repeatRuleId(value: unknown): string {
@@ -93,27 +93,27 @@ export async function handleFinanceRequest(
     }
   }
 
-  if (subpath === "/income-entries") {
+  if (subpath === "/incomes") {
     if (method === "GET" || method === "HEAD") {
       const { limit, cursor } = pagination(query);
-      return jsonResponse(await store.listIncomeEntries(user.id, limit, cursor));
+      return jsonResponse(await store.listIncomes(user.id, limit, cursor));
     }
     if (method === "POST") {
-      const incomeEntry = await store.createIncomeEntry(user.id, incomeEntryInput(body));
-      return jsonResponse({ incomeEntry }, 201);
+      const income = await store.createIncome(user.id, incomeInput(body));
+      return jsonResponse({ income }, 201);
     }
   }
 
-  const incomeMatch = /^\/income-entries\/([^/]+)$/.exec(subpath);
+  const incomeMatch = /^\/incomes\/([^/]+)$/.exec(subpath);
   if (incomeMatch) {
     const rawId = decodeURIComponent(incomeMatch[1]);
     if (method === "PUT") {
-      const incomeEntry = await store.updateIncomeEntry(user.id, incomeEntryId(rawId), incomeEntryInput(body));
-      if (!incomeEntry) throw new HttpError(404, "Income entry not found");
-      return jsonResponse({ incomeEntry });
+      const income = await store.updateIncome(user.id, incomeId(rawId), incomeInput(body));
+      if (!income) throw new HttpError(404, "Income not found");
+      return jsonResponse({ income });
     }
     if (method === "DELETE") {
-      if (!await store.deleteIncomeEntry(user.id, incomeEntryId(rawId))) throw new HttpError(404, "Income entry not found");
+      if (!await store.deleteIncome(user.id, incomeId(rawId))) throw new HttpError(404, "Income not found");
       return new Response(null, { status: 204, headers: responseHeaders });
     }
   }

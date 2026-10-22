@@ -37,10 +37,13 @@ Welcome to the architecture documentation suite for **MyFinance**, a full-stack 
    - Expense and settings writes lock the user's `finance_settings` row (`SELECT ... FOR UPDATE`) inside a `ReadCommitted` Neon transaction ([`src/server/finance/store.ts`](../src/server/finance/store.ts)) to prevent category-deletion race conditions.
    - Recurring expenses (`daily`, `weekdays`, `weekly`, `monthly`) are generated in bounded batches (capped at 100 occurrences) by [`src/server/finance/recurrence.ts`](../src/server/finance/recurrence.ts) and automatically synced ahead of a 14-day horizon during `GET /api/v1/finance/spendings` and `GET /api/v1/finance/repeat-rules`.
 
-5. **Date-Range Spending Loading**:
-   - The initial finance load fetches only settings, income entries, and repeat rules. Spendings are fetched on demand by date range (`GET /api/v1/finance/spendings?startDate=&endDate=`) through `fetchWeeksSpendings` in [`src/contexts/FinanceContext.tsx`](../src/contexts/FinanceContext.tsx) and merged by ID into shared state.
+5. **Income Sources**:
+   - `finance_incomes` stores each income stream (salary, freelance, allowance, gift, ...) with an amount per payment and a `once`/`daily`/`weekly`/`monthly`/`yearly` schedule. The client computes each month's income from the schedules ([`src/lib/income.ts`](../src/lib/income.ts)) and the Calendar, Week, and Pay Cycle views show the month's left over against spending. Migration `005_incomes.sql` copied the legacy single income value and month bonuses.
+
+6. **Date-Range Spending Loading**:
+   - The initial finance load fetches only settings, incomes, and repeat rules. Spendings are fetched on demand by date range (`GET /api/v1/finance/spendings?startDate=&endDate=`) through `fetchWeeksSpendings` in [`src/contexts/FinanceContext.tsx`](../src/contexts/FinanceContext.tsx) and merged by ID into shared state.
    - The calendar loads week batches as the user scrolls ([`src/lib/calendarWindow.ts`](../src/lib/calendarWindow.ts)); the other date-based pages prefetch from one month before to two months after the viewed date.
 
-6. **Salary (Pay) Cycle View**:
+7. **Salary (Pay) Cycle View**:
    - `/cycle` groups spending by pay period instead of calendar month: from one payday to the next, with a configurable payday (1–28), weekend-to-Monday shift, optional inclusion of the next payday, and per-month delay/early-payout adjustments (−7 to +14 days).
    - The cycle configuration is a per-user, per-device preference stored in `localStorage` (`tracker_salary_cycle_v1_<userId>`), computed by [`src/lib/salaryCycle.ts`](../src/lib/salaryCycle.ts).

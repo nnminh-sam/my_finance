@@ -34,7 +34,7 @@ Tracker uses a unified **Next.js App Router** architecture at the repository roo
 
 Date-specific links carry the date as a query parameter, for example `/day?date=2026-10-11`, `/week?date=2026-10-11`, or `/cycle?date=2026-10-11`. `readPageDate` in `src/lib/navigation.ts` parses and validates the query string. `/calendar` is the exception: it always opens on the current month, removes any `?date=` from the URL, and moves between months in memory.
 
-Expense drafts, additional-income modals, and changed profile/settings forms register both a browser `beforeunload` warning and an in-app client-navigation confirmation guard via `useUnsavedChanges` (`src/hooks/useUnsavedChanges.ts`). Successful saves and explicit logout remove their relevant guards. Documents restored from the browser's back/forward cache (`pageshow` with `event.persisted`) reload to revalidate authentication and data.
+Expense drafts, income forms and the month income dialog, and changed profile/settings forms register both a browser `beforeunload` warning and an in-app client-navigation confirmation guard via `useUnsavedChanges` (`src/hooks/useUnsavedChanges.ts`). Successful saves and explicit logout remove their relevant guards. Documents restored from the browser's back/forward cache (`pageshow` with `event.persisted`) reload to revalidate authentication and data.
 
 ## Local development and production build
 

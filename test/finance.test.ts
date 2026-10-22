@@ -25,8 +25,6 @@ function response(body: unknown, status = 200) {
 }
 
 const settings: FinanceSettings = {
-  income: 10000,
-
   avatar: 'https://example.test/avatar.png',
   categories: [{ id: 'food', name: 'Food', color: '#123456', icon: 'Utensils' }],
 };
@@ -96,8 +94,8 @@ function assertJsonRequest(call: { path: string; init?: RequestInit }, path: str
 }
 
 test('settings reads and partial updates return server settings', async () => {
-  const updates = { income: 12000 };
-  const saved = { ...settings, income: 11999, avatar: 'https://example.test/server-avatar.png' };
+  const updates = { avatar: 'https://example.test/new-avatar.png' };
+  const saved = { ...settings, avatar: 'https://example.test/server-avatar.png' };
   const { api, calls } = scriptedApi([
     response({ settings }),
     response({ settings: saved }),
@@ -106,7 +104,7 @@ test('settings reads and partial updates return server settings', async () => {
   assert.deepEqual(calls[0], { path: '/api/v1/finance/settings', init: undefined });
   assert.deepEqual(await api.updateSettings(updates), saved);
   assertJsonRequest(calls[1], '/api/v1/finance/settings', 'PUT', updates);
-  assert.deepEqual(updates, { income: 12000 });
+  assert.deepEqual(updates, { avatar: 'https://example.test/new-avatar.png' });
   assert.equal(calls.length, 2);
 });
 
@@ -288,7 +286,7 @@ test('syncRepeatRules posts asOfDate payload and returns created count', async (
 type FinanceApi = ReturnType<typeof createFinanceApi>;
 const operations: [string, (api: FinanceApi) => Promise<unknown>][] = [
   ['getSettings', api => api.getSettings()],
-  ['updateSettings', api => api.updateSettings({ income: 12000 })],
+  ['updateSettings', api => api.updateSettings({ avatar: '' })],
   ['getSpendings', api => api.getSpendings()],
   ['createSpending', api => api.createSpending(input)],
   ['updateSpending', api => api.updateSpending(spending(1).id, input)],

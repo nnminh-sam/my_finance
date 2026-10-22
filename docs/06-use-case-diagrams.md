@@ -42,8 +42,8 @@ flowchart LR
         end
 
         subgraph UC_IncomeSettings["Income & Profile Settings"]
-            UC11(["Update Recurring Monthly Income"])
-            UC12(["Add / Edit / Delete Month-Specific Bonus Income"])
+            UC11(["View Income Sources & Month Breakdown"])
+            UC12(["Add / Edit / Delete Income Source (Once, Daily, Weekly, Monthly, Yearly)"])
             UC13(["Customize Categories (Name, Color, Icon)"])
             UC14(["Update Profile Avatar URL"])
         end
@@ -138,9 +138,10 @@ flowchart LR
     User(["👤 Authenticated User"])
 
     subgraph IncomeAnalyticsBoundary["Income & Analytics Domain"]
-        I1(["Set Base Recurring Monthly Income (/profile)"])
-        I2(["Manage Month-Specific Additional Income (/profile or Calendar/Week Modal)"])
-        I3(["Compute Effective Month Income (Base + Sum of Month Entries)"])
+        I1(["Manage Income Sources (/profile): source, name, amount, frequency, period"])
+        I2(["Add / Review a Month's Income (Calendar, Week, Pay Cycle dialog)"])
+        I3(["Compute Month Income (Sum of amount × payments in the month)"])
+        I4(["Compute Left Over (Month Income − Month Spending)"])
 
         V1(["Browse Calendar / Week Heatmap"])
         V2(["View Statistical Analytics Dashboard (/analytics)"])
@@ -152,6 +153,7 @@ flowchart LR
 
     User --> I1 & I2 & V1 & V2
     V1 & V2 -.->|"«include»"| I3
+    V1 -.->|"«include»"| I4
     V2 -.->|"«include»"| V3 & V4 & V5 & V6
 ```
 
@@ -195,7 +197,7 @@ flowchart LR
 | **UC-06** | **Add Single Expense** | Authenticated User | `ExpenseModal` → `POST /api/v1/finance/spendings` | Locks `finance_settings` row (`FOR UPDATE`), verifies category exists in user's active categories, inserts UUID spending with exact decimal amount ($>0 \dots 10^{12}$), `YYYY-MM-DD` date, and `HH:mm` time. |
 | **UC-08** | **Create Repeat Rule** | Authenticated User | `ExpenseModal` → `POST /api/v1/finance/repeat-rules` | Validates frequency (`daily`, `weekdays`, `weekly`, `monthly`) and end condition (`unlimited`, `occurrences` $\le 100$, `until_date`). Inserts rule and bulk-inserts initial batch of up to 100 occurrences in a single transaction. |
 | **UC-09** | **Stop Repeat Rule** | Authenticated User | `/profile` → `DELETE /api/v1/finance/repeat-rules/:id?deleteFuture=true` | Deletes future generated spendings (`date >= today`) and deletes the rule row; historical past spendings remain intact with `repeat_rule_id = NULL`. |
-| **UC-12** | **Manage Monthly Bonus Income** | Authenticated User | `/profile` or `MonthlyIncomeModal` → `POST/PUT/DELETE /api/v1/finance/income-entries` | Stores non-recurring bonus/extra income scoped to a specific `YYYY-MM` month. Effective monthly income is `settings.income + sum(entries for YYYY-MM)`. |
+| **UC-12** | **Manage Income Sources** | Authenticated User | `/profile` (`IncomeSources`) or `MonthlyIncomeModal` → `GET/POST/PUT/DELETE /api/v1/finance/incomes` | Each source has a required source label (e.g. Salary), optional name, positive amount per payment, frequency (`once`, `daily`, `weekly`, `monthly`, `yearly`), start date, and optional end date (none for one-time). Month income = Σ `amount × payments in the month`; Calendar, Week, and Pay Cycle show **Left Over = month income − spending**. Rows are owner-scoped and never lock settings. |
 | **UC-18** | **View Analytics & Forecast** | Authenticated User | `/analytics` (`computeMonthlyAnalytics`) | Computes daily series, 7-day moving average, OLS cumulative projection with $95\%$ confidence interval, Tukey outlier days, category MoM changes, $7 \times 24$ punch card, Pareto curve, Gini index, and actionable text insights. |
 | **UC-19** | **View Salary Cycle** | Authenticated User | `/cycle?date=YYYY-MM-DD` (`SalaryCycleView`, `getSalaryCycleForMonth`) | Cycle runs from the month's actual payday to the next month's actual payday (inclusive by default). Loads spendings for the whole Monday–Sunday grid via `GET /spendings?startDate=&endDate=`. Shows cycle spending, top categories, peak day, income of the anchor month (recurring + additional), and leftover. |
 | **UC-20** | **Configure Pay Cycle** | Authenticated User | `/cycle` settings banner | Payday 1–28 (default 5), weekend-to-Monday shift (default on), include next payday as cycle end (default on). Saved immediately to `localStorage['tracker_salary_cycle_v1_<userId>']`; not synced to the server or other devices. |

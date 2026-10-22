@@ -83,7 +83,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onEditIncome,
 }) => {
   const { settings } = useSettings();
-  const { spendings, incomeEntries, fetchWeeksSpendings } = useFinance();
+  const { spendings, incomes, fetchWeeksSpendings } = useFinance();
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const ignoreMonthSyncUntilRef = useRef<number>(0);
@@ -342,8 +342,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
   }, [activeMonthStr, currentDate]);
 
-  const { baseIncome, additionalIncome, totalIncome } = getMonthIncome(
-    settings.income, incomeMonth(activeDate), incomeEntries,
+  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
+    incomeMonth(activeDate), incomes,
   );
 
   const activeMonthStart = startOfMonth(activeDate);
@@ -634,7 +634,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 type="button"
                 className="overview-income-edit"
                 onClick={() => onEditIncome(incomeMonth(activeDate))}
-                aria-label={`Edit additional income for ${format(activeDate, 'MMMM yyyy')}`}
+                aria-label={`Manage income for ${format(activeDate, 'MMMM yyyy')}`}
                 aria-haspopup="dialog"
               >
                 <Edit2 size={12} aria-hidden="true" /><span className="hide-mobile">Edit</span>
@@ -669,7 +669,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
 
           <div className="calendar-stat-subtext">
-            <span className="hide-mobile">Recurring base </span><span className="show-mobile">Base </span>{baseIncome.toLocaleString("vi-VN")} ₫ · <span className="hide-mobile">Additional </span><span className="show-mobile">Extra </span>{additionalIncome.toLocaleString("vi-VN")} ₫
+            <span className="hide-mobile">Recurring </span><span className="show-mobile">Recur. </span>{recurringIncome.toLocaleString("vi-VN")} ₫ · <span className="hide-mobile">One-time </span><span className="show-mobile">Once </span>{oneTimeIncome.toLocaleString("vi-VN")} ₫
           </div>
         </div>
 

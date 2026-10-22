@@ -62,7 +62,7 @@ flowchart TB
 ```mermaid
 flowchart BT
     subgraph Tier1["Tier 1: Fast Pure Unit & Domain Logic Tests (Always Run)"]
-        DomainLogic["Domain Logic: spendings, income, heatmap, analytics, expenseBatch, expenseDraft, incomeEntryDraft, calendar-scroll, salary-cycle"]
+        DomainLogic["Domain Logic: spendings, income, heatmap, analytics, expenseBatch, expenseDraft, incomeDraft, calendar-scroll, salary-cycle"]
         RoutingTests["App Router & Manifest Tests: pages.test.ts (App Router layout & metadata parity), navigation.test.ts"]
         ServerPrimitives["Server Primitives: crypto.test.ts (scrypt/tokens), recurrence.test.ts, service-error.test.ts"]
     end
@@ -88,11 +88,11 @@ flowchart BT
 | [`test/navigation.test.ts`](../test/navigation.test.ts) | Validates date query parsing (`?date=YYYY-MM-DD`), calendar date preservation across UTC boundaries, and `safeReturnPath` open-redirect prevention. |
 | [`test/auth.test.ts`](../test/auth.test.ts) | Simulates multi-tab Web Locks mutual exclusion, BroadcastChannel session broadcasting, memory token access, and auto-refresh intervals. |
 | [`test/finance.test.ts`](../test/finance.test.ts) | Tests `/api/v1/finance` typed client, automatic cursor-pagination loop detection, and CRUD operations. |
-| [`test/income-api.test.ts`](../test/income-api.test.ts) | Verifies monthly bonus income API endpoints and input validation. |
+| [`test/income-api.test.ts`](../test/income-api.test.ts) | Verifies the `/api/v1/finance/incomes` client: cursor traversal, CRUD payloads, and error handling. |
 | [`test/spendings.test.ts`](../test/spendings.test.ts) | Tests daily spendings aggregation, filtering, and compact VND currency formatting. |
-| [`test/income.test.ts`](../test/income.test.ts) | Tests effective monthly income calculation (recurring base + month-specific bonus income). |
+| [`test/income.test.ts`](../test/income.test.ts) | Tests income occurrence counting per frequency (once, daily, weekly, monthly with short-month clamping, yearly with Feb 29) and month totals in exact cents. |
 | [`test/heatmap.test.ts`](../test/heatmap.test.ts) | Validates calendar spending intensity RGBA scaling. |
-| [`test/expense-draft.test.ts`](../test/expense-draft.test.ts) & [`test/income-entry-draft.test.ts`](../test/income-entry-draft.test.ts) | Tests dirty-state detection and reset semantics for unsaved form drafts. |
+| [`test/expense-draft.test.ts`](../test/expense-draft.test.ts) & [`test/income-draft.test.ts`](../test/income-draft.test.ts) | Tests dirty-state detection and reset semantics for unsaved form drafts. |
 | [`test/expense-batch.test.ts`](../test/expense-batch.test.ts) | Tests repeat rule creation and multi-expense batch submission. |
 | [`test/calendar-scroll.test.ts`](../test/calendar-scroll.test.ts) | Verifies calendar window helpers: scroll direction, month range expansion, and scroll-driven week fetch batches (`src/lib/calendarWindow.ts`). |
 | [`test/salary-cycle.test.ts`](../test/salary-cycle.test.ts) | Verifies salary cycle math: payday clamping, weekend-to-Monday shift, per-month delays, cycle start/end with and without the next payday, and active-cycle resolution (`src/lib/salaryCycle.ts`). |
@@ -102,7 +102,7 @@ flowchart BT
 | [`test/recurrence.test.ts`](../test/recurrence.test.ts) | Validates occurrence generation for daily, weekdays, weekly, and monthly rules up to the 100-occurrence cap. |
 | [`test/service-error.test.ts`](../test/service-error.test.ts) | Verifies zero-leak error sanitization, mapping PostgreSQL error codes to safe diagnostics. |
 | [`test/neon.test.ts`](../test/neon.test.ts) | *(Integration)* Real Neon DB tests for concurrent refresh rotation, token replay detection, and rate limits. |
-| [`test/finance-neon.test.ts`](../test/finance-neon.test.ts) | *(Integration)* Real Neon DB tests for row-level locking (`SELECT ... FOR UPDATE`) during concurrent category edits and expense writes. |
+| [`test/finance-neon.test.ts`](../test/finance-neon.test.ts) | *(Integration)* Real Neon DB tests for row-level locking during concurrent category edits and expense writes, income CRUD/constraints, and migration 005 (copies legacy income once; reruns never restore deleted rows). |
 
 ---
 
@@ -121,7 +121,7 @@ sequenceDiagram
     CI->>Script: npm run db:migrate
     Script->>Script: Load & validate DATABASE_URL via src/server/config.ts
     Script->>FS: Read directory & filter /^\d+_[a-z0-9_]+\.sql$/
-    FS-->>Script: Sorted: 001_auth.sql, 002_finance.sql, 003_month_income.sql, 004_repeat_spendings.sql
+    FS-->>Script: Sorted: 001_auth.sql … 005_incomes.sql
 
     loop For each migration file in numeric order
         Script->>FS: readFile(file, "utf8")

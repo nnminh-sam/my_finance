@@ -1,5 +1,5 @@
 import { HttpError } from "../auth/http";
-import { CATEGORY_ICONS, type Category, type FinanceSettings, type IncomeEntryInput, type SpendingInput } from "./model";
+import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category, type FinanceSettings, type IncomeFrequency, type IncomeInput, type SpendingInput } from "./model";
 
 function invalid(field: string): never { throw new HttpError(400, `Invalid ${field}`); }
 function object(value: unknown, allowed: readonly string[]): Record<string, unknown> {
@@ -33,9 +33,8 @@ function categories(value: unknown): Category[] {
   });
 }
 export function settingsPatch(value: unknown): Partial<FinanceSettings> {
-  const body = object(value, ["income", "avatar", "categories"]);
+  const body = object(value, ["avatar", "categories"]);
   const patch: Partial<FinanceSettings> = {};
-  if (Object.hasOwn(body, "income")) patch.income = money(body.income, "income");
   if (Object.hasOwn(body, "avatar")) {
     const avatar = text(body.avatar, "avatar", 2048, true);
     if (avatar !== "") {
@@ -130,14 +129,23 @@ export function repeatRuleInput(value: unknown): import("./model").RepeatRuleInp
     frequency, interval, daysOfWeek, endType, totalOccurrences, endDate,
   };
 }
-export function incomeEntryInput(value: unknown): IncomeEntryInput {
-  const body = object(value, ["month", "amount", "description"]);
-  const month = text(body.month, "month", 7);
-  if (!/^(?!0000)\d{4}-(?:0[1-9]|1[0-2])$/.test(month)) return invalid("month");
+export function incomeInput(value: unknown): IncomeInput {
+  const body = object(value, ["source", "name", "amount", "frequency", "startDate", "endDate"]);
+  if (typeof body.source !== "string") return invalid("source");
+  const source = text(body.source.trim(), "source", 100);
+  if (body.name !== undefined && typeof body.name !== "string") return invalid("name");
+  const name = text((body.name ?? "").trim(), "name", 500, true);
   const amount = money(body.amount, "amount", true);
-  if (typeof body.description !== "string" || /[\u0000-\u001f\u007f-\u009f]/.test(body.description)) return invalid("description");
-  const description = text(body.description.trim(), "description", 500);
-  return { month, amount, description };
+  if (typeof body.frequency !== "string" || !(INCOME_FREQUENCIES as readonly string[]).includes(body.frequency)) return invalid("frequency");
+  const frequency = body.frequency as IncomeFrequency;
+  const startDate = validDate(body.startDate, "startDate");
+  let endDate: string | null = null;
+  if (body.endDate !== undefined && body.endDate !== null) {
+    if (frequency === "once") return invalid("endDate (not allowed for one-time income)");
+    endDate = validDate(body.endDate, "endDate");
+    if (endDate < startDate) return invalid("endDate cannot be before startDate");
+  }
+  return { source, name, amount, frequency, startDate, endDate };
 }
 export function uuid(value: unknown): string {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return invalid("UUID");
