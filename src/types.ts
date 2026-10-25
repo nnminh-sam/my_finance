@@ -42,21 +42,24 @@ export interface RepeatRule extends RepeatRuleInput {
   createdAt: string;
 }
 
-export interface IncomeEntryInput {
-  month: string; // YYYY-MM
-  amount: number;
-  description: string;
+export type IncomeFrequency = 'once' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+export interface IncomeInput {
+  source: string; // e.g. Salary, Freelance, Gift
+  name: string; // e.g. employer or client; may be empty
+  amount: number; // paid per occurrence
+  frequency: IncomeFrequency;
+  startDate: string; // YYYY-MM-DD; the payment date for one-time income
+  endDate: string | null; // YYYY-MM-DD inclusive; null = no end (always null for one-time income)
 }
 
-export interface IncomeEntry extends IncomeEntryInput {
+export interface Income extends IncomeInput {
   id: string;
 }
 
 export type ViewMode = 'month' | 'cycle' | 'week' | 'day' | 'profile' | 'analytics';
 
 export interface UserSettings {
-  income: number;
-
   theme: 'dark' | 'light';
   name: string;
   email: string;

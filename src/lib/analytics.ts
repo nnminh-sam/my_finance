@@ -9,7 +9,7 @@ import {
   startOfMonth,
   subMonths,
 } from 'date-fns';
-import type { IncomeEntry, Spending, UserSettings } from '../types';
+import type { Income, Spending, UserSettings } from '../types';
 import { getMonthIncome, incomeMonth } from './income';
 
 /* ------------------------------------------------------------------ */
@@ -161,8 +161,8 @@ export interface MonthlyAnalytics {
 
   // income reference and spending activity (over elapsed days)
   income: number;
-  baseIncome: number;
-  additionalIncome: number;
+  recurringIncome: number;
+  oneTimeIncome: number;
   savingsRate: number; // based on projection; meaningful only when income > 0
   activity: { noSpend: number; active: number };
   longestNoSpendStreak: number;
@@ -213,9 +213,9 @@ const weekdayIndex = (d: Date) => (getDay(d) + 6) % 7; // Monday = 0
 
 export const computeMonthlyAnalytics = (
   monthDate: Date,
-  settings: Pick<UserSettings, 'income' | 'categories'>,
+  settings: Pick<UserSettings, 'categories'>,
   allSpendings: Spending[],
-  incomeEntries: readonly IncomeEntry[] = [],
+  incomes: readonly Income[] = [],
 ): MonthlyAnalytics => {
   const today = startOfDay(new Date());
   const monthStart = startOfMonth(monthDate);
@@ -224,8 +224,8 @@ export const computeMonthlyAnalytics = (
   const isCurrentMonth = isSameMonth(monthStart, today);
   const isFutureMonth = isAfter(monthStart, today);
   const elapsedDays = isFutureMonth ? 0 : isCurrentMonth ? today.getDate() : daysInMonth;
-  const { baseIncome, additionalIncome, totalIncome: income } = getMonthIncome(
-    settings.income, incomeMonth(monthStart), incomeEntries,
+  const { recurringIncome, oneTimeIncome, totalIncome: income } = getMonthIncome(
+    incomeMonth(monthStart), incomes,
   );
 
   const spendings = getSpendingsForMonth(monthStart, undefined, allSpendings);
@@ -431,8 +431,8 @@ export const computeMonthlyAnalytics = (
     dailyRate,
     r2: reg.r2,
     income,
-    baseIncome,
-    additionalIncome,
+    recurringIncome,
+    oneTimeIncome,
     savingsRate,
     activity,
     longestNoSpendStreak,

@@ -2,16 +2,24 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getSpendingsForDate, getTopSpendingsForDate, getTotalForDate, formatCompactSpending } from '../src/lib/spendings';
 import { computeMonthlyAnalytics, getSpendingsForMonth } from '../src/lib/analytics';
-import type { IncomeEntry, Spending } from '../src/types';
+import type { Income, Spending } from '../src/types';
 
+// `income` is a test shorthand for a monthly recurring income source passed to the analytics.
 const settings = {
   income: 10000,
-
   categories: [
     { id: 'food', name: 'Food', color: '#123456', icon: 'Utensils' },
     { id: 'travel', name: 'Travel', color: '#654321', icon: 'Bus' },
   ],
 };
+
+function recurring(amount: number): Income {
+  return { id: 'salary', source: 'Salary', name: '', amount, frequency: 'monthly', startDate: '2000-01-01', endDate: null };
+}
+
+function analyze(date: Date, values: typeof settings, spendings: Spending[], incomes: readonly Income[] = []) {
+  return computeMonthlyAnalytics(date, values, spendings, values.income > 0 ? [recurring(values.income), ...incomes] : incomes);
+}
 
 function spending(id: string, date: string, time: string, amount: number, category = 'food'): Spending {
   return { id, date, time, amount, category, description: id };
@@ -72,7 +80,7 @@ test('month filtering respects year, month, and inclusive day cutoffs', () => {
 });
 
 test('empty monthly analytics have no data, transactions, generated spendings, or spending totals', () => {
-  const result = computeMonthlyAnalytics(new Date(2020, 0, 15, 12), settings, []);
+  const result = analyze(new Date(2020, 0, 15, 12), settings, []);
   assert.equal(result.hasData, false);
   assert.deepEqual(result.spendings, []);
   assert.equal(result.total, 0);
@@ -108,7 +116,7 @@ test('empty monthly analytics have no data, transactions, generated spendings, o
 test('monthly analytics aggregate only the supplied month and preserve input records', () => {
   const before = snapshot(records);
   const settingsBefore = JSON.parse(JSON.stringify(settings));
-  const result = computeMonthlyAnalytics(new Date(2020, 0, 15, 12), settings, records);
+  const result = analyze(new Date(2020, 0, 15, 12), settings, records);
 
   assert.equal(result.hasData, true);
   assert.deepEqual(result.spendings, [lunch, dinner, commute]);
@@ -129,8 +137,8 @@ test('monthly analytics aggregate only the supplied month and preserve input rec
   assert.deepEqual(result.projection, []);
 
   assert.equal(result.income, 10000);
-  assert.equal(result.baseIncome, 10000);
-  assert.equal(result.additionalIncome, 0);
+  assert.equal(result.recurringIncome, 10000);
+  assert.equal(result.oneTimeIncome, 0);
   assert.equal(result.savingsRate, 0.94);
   assert.deepEqual(result.activity, { noSpend: 29, active: 2 });
   assert.equal(result.longestNoSpendStreak, 16);
@@ -152,7 +160,7 @@ test('monthly analytics aggregate only the supplied month and preserve input rec
 });
 
 test('category and month comparisons use controlled current and previous month sums', () => {
-  const result = computeMonthlyAnalytics(new Date(2020, 0, 15, 12), settings, records);
+  const result = analyze(new Date(2020, 0, 15, 12), settings, records);
   assert.equal(result.prevSamePeriodTotal, 300);
   assert.equal(result.prevFullTotal, 300);
   assert.equal(result.momChange, 1);
@@ -178,8 +186,8 @@ test('category and month comparisons use controlled current and previous month s
 
 test('monthly analytics do not reuse another call’s data or synthesize missing baselines', () => {
   const january = new Date(2020, 0, 15, 12);
-  computeMonthlyAnalytics(january, settings, records);
-  const onlyCurrent = computeMonthlyAnalytics(january, settings, [lunch]);
+  analyze(january, settings, records);
+  const onlyCurrent = analyze(january, settings, [lunch]);
   assert.equal(onlyCurrent.total, 300);
   assert.equal(onlyCurrent.txCount, 1);
   assert.equal(onlyCurrent.prevSamePeriodTotal, 0);
@@ -190,7 +198,7 @@ test('monthly analytics do not reuse another call’s data or synthesize missing
   ]);
   assert.deepEqual(onlyCurrent.trend.map(month => month.total), [0, 0, 0, 0, 0, 300]);
 
-  const otherMonths = computeMonthlyAnalytics(january, settings, [previousFood, nextMonth]);
+  const otherMonths = analyze(january, settings, [previousFood, nextMonth]);
   assert.equal(otherMonths.hasData, false);
   assert.equal(otherMonths.total, 0);
   assert.deepEqual(otherMonths.spendings, []);
@@ -198,7 +206,7 @@ test('monthly analytics do not reuse another call’s data or synthesize missing
   assert.equal(otherMonths.prevFullTotal, 200);
   assert.deepEqual(otherMonths.trend.map(month => month.total), [0, 0, 0, 0, 200, 0]);
 
-  const empty = computeMonthlyAnalytics(january, settings, []);
+  const empty = analyze(january, settings, []);
   assert.equal(empty.hasData, false);
   assert.equal(empty.total, 0);
   assert.deepEqual(empty.spendings, []);
@@ -211,7 +219,7 @@ test('no-spend streaks reset on any active day regardless of spending volume', (
     spending('large', '2020-01-08', '12:00', 100000),
     spending('last-day', '2020-01-31', '12:00', 1),
   ];
-  const result = computeMonthlyAnalytics(new Date(2020, 0, 15, 12), settings, values);
+  const result = analyze(new Date(2020, 0, 15, 12), settings, values);
   assert.deepEqual(result.activity, { noSpend: 28, active: 3 });
   assert.equal(result.longestNoSpendStreak, 22);
   assert.equal(result.currentNoSpendStreak, 0);
@@ -222,7 +230,7 @@ test('unset income does not generate income comparisons or overspending warnings
   const today = new Date();
   const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
   const values = [spending('current', date, '12:00', 600)];
-  const result = computeMonthlyAnalytics(today, { ...settings, income: 0 }, values);
+  const result = analyze(today, { ...settings, income: 0 }, values);
   assert.equal(result.income, 0);
   assert.equal(result.savingsRate, 0);
   assert.equal(result.total, 600);
@@ -232,7 +240,7 @@ test('unset income does not generate income comparisons or overspending warnings
   assert.equal(result.currentNoSpendStreak, result.elapsedDays - 1);
   assert.ok(!result.insights.some(insight => /income|budget|target|limit|overspend/i.test(`${insight.title} ${insight.detail}`)));
 
-  const empty = computeMonthlyAnalytics(today, { ...settings, income: 0 }, []);
+  const empty = analyze(today, { ...settings, income: 0 }, []);
   assert.equal(empty.total, 0);
   assert.equal(empty.projectedTotal, 0);
   assert.equal(empty.savingsRate, 0);
@@ -242,7 +250,7 @@ test('unset income does not generate income comparisons or overspending warnings
 test('future months do not count unelapsed days as no-spend activity', () => {
   const today = new Date();
   const future = new Date(today.getFullYear() + 1, 0, 1, 12);
-  const result = computeMonthlyAnalytics(future, settings, []);
+  const result = analyze(future, settings, []);
   assert.equal(result.elapsedDays, 0);
   assert.deepEqual(result.activity, { noSpend: 0, active: 0 });
   assert.equal(result.longestNoSpendStreak, 0);
@@ -250,12 +258,12 @@ test('future months do not count unelapsed days as no-spend activity', () => {
   assert.deepEqual(result.insights, []);
 });
 
-function incomeEntry(id: string, month: string, amount: number): IncomeEntry {
-  return { id, month, amount, description: id };
+function incomeEntry(id: string, month: string, amount: number): Income {
+  return { id, source: 'Bonus', name: id, amount, frequency: 'once', startDate: `${month}-01`, endDate: null };
 }
 
 test('analytics add only selected-month income while leaving spending and recurring settings unchanged', () => {
-  const entries: readonly IncomeEntry[] = Object.freeze([
+  const entries: readonly Income[] = Object.freeze([
     Object.freeze(incomeEntry('bonus', '2020-01', 200)),
     Object.freeze(incomeEntry('gift', '2020-01', 50)),
     Object.freeze(incomeEntry('other-month', '2020-02', 900)),
@@ -264,9 +272,9 @@ test('analytics add only selected-month income while leaving spending and recurr
   const settingsBefore = JSON.parse(JSON.stringify(settings));
   const recordsBefore = snapshot(records);
   const entriesBefore = entries.map(value => ({ ...value }));
-  const result = computeMonthlyAnalytics(new Date(2020, 0, 15, 12), settings, records, entries);
-  assert.equal(result.baseIncome, 10000);
-  assert.equal(result.additionalIncome, 250);
+  const result = analyze(new Date(2020, 0, 15, 12), settings, records, entries);
+  assert.equal(result.recurringIncome, 10000);
+  assert.equal(result.oneTimeIncome, 250);
   assert.equal(result.income, 10250);
   assert.equal(result.total, 600);
   assert.equal(result.projectedTotal, 600);
@@ -283,13 +291,13 @@ test('analytics use additional income with zero base and do not treat income as 
   const date = new Date(2020, 0, 15, 12);
   const entries = [incomeEntry('extra', '2020-01', 1000)];
   const zeroBase = { ...settings, income: 0 };
-  const result = computeMonthlyAnalytics(date, zeroBase, records, entries);
-  assert.equal(result.baseIncome, 0);
-  assert.equal(result.additionalIncome, 1000);
+  const result = analyze(date, zeroBase, records, entries);
+  assert.equal(result.recurringIncome, 0);
+  assert.equal(result.oneTimeIncome, 1000);
   assert.equal(result.income, 1000);
   assert.equal(result.total, 600);
   assert.equal(result.savingsRate, 0.4);
-  const empty = computeMonthlyAnalytics(date, zeroBase, [], entries);
+  const empty = analyze(date, zeroBase, [], entries);
   assert.equal(empty.income, 1000);
   assert.equal(empty.hasData, false);
   assert.equal(empty.total, 0);
@@ -302,12 +310,12 @@ test('analytics use additional income with zero base and do not treat income as 
 });
 
 test('analytics preserve exact cents in base, additional, and effective income', () => {
-  const result = computeMonthlyAnalytics(new Date(2020, 0, 15, 12), { ...settings, income: 0.1 }, [], [
+  const result = analyze(new Date(2020, 0, 15, 12), { ...settings, income: 0.1 }, [], [
     incomeEntry('extra', '2020-01', 0.2),
     incomeEntry('excluded', '2021-01', 0.99),
   ]);
-  assert.equal(result.baseIncome, 0.1);
-  assert.equal(result.additionalIncome, 0.2);
+  assert.equal(result.recurringIncome, 0.1);
+  assert.equal(result.oneTimeIncome, 0.2);
   assert.equal(result.income, 0.3);
 });
 
@@ -315,15 +323,15 @@ test('analytics recalculate income and savings after editing, moving, or deletin
   const date = new Date(2020, 0, 15, 12);
   const entries = [incomeEntry('extra', '2020-01', 1000)];
   const edited = entries.map(value => ({ ...value, amount: 2000 }));
-  const moved = edited.map(value => ({ ...value, month: '2020-02' }));
-  for (const [values, additionalIncome] of [[entries, 1000], [edited, 2000], [moved, 0], [[], 0]] as const) {
-    const result = computeMonthlyAnalytics(date, settings, records, values);
-    assert.equal(result.baseIncome, 10000);
-    assert.equal(result.additionalIncome, additionalIncome);
-    assert.equal(result.income, 10000 + additionalIncome);
+  const moved = edited.map(value => ({ ...value, startDate: '2020-02-01' }));
+  for (const [values, oneTimeIncome] of [[entries, 1000], [edited, 2000], [moved, 0], [[], 0]] as const) {
+    const result = analyze(date, settings, records, values);
+    assert.equal(result.recurringIncome, 10000);
+    assert.equal(result.oneTimeIncome, oneTimeIncome);
+    assert.equal(result.income, 10000 + oneTimeIncome);
     assert.equal(result.savingsRate, (result.income - 600) / result.income);
   }
-  assert.equal(computeMonthlyAnalytics(new Date(2020, 1, 15, 12), settings, [], moved).income, 12000);
+  assert.equal(analyze(new Date(2020, 1, 15, 12), settings, [], moved).income, 12000);
   assert.equal(settings.income, 10000);
 });
 
@@ -334,21 +342,21 @@ test('historical and future analytics use the selected month and year rather tha
     incomeEntry('current', '2020-01', 9999),
     incomeEntry('future', '2021-01', 300),
   ];
-  const past = computeMonthlyAnalytics(new Date(2019, 11, 15, 12), settings, records, entries);
+  const past = analyze(new Date(2019, 11, 15, 12), settings, records, entries);
   assert.equal(past.isCurrentMonth, false);
   assert.equal(past.isFutureMonth, false);
-  assert.equal(past.baseIncome, 10000);
-  assert.equal(past.additionalIncome, 200);
+  assert.equal(past.recurringIncome, 10000);
+  assert.equal(past.oneTimeIncome, 200);
   assert.equal(past.income, 10200);
   assert.equal(past.total, 300);
-  const future = computeMonthlyAnalytics(new Date(2021, 0, 15, 12), settings, [], entries);
+  const future = analyze(new Date(2021, 0, 15, 12), settings, [], entries);
   assert.equal(future.isFutureMonth, true);
-  assert.equal(future.baseIncome, 10000);
-  assert.equal(future.additionalIncome, 300);
+  assert.equal(future.recurringIncome, 10000);
+  assert.equal(future.oneTimeIncome, 300);
   assert.equal(future.income, 10300);
-  const noExtras = computeMonthlyAnalytics(new Date(2021, 1, 15, 12), settings, [], entries);
+  const noExtras = analyze(new Date(2021, 1, 15, 12), settings, [], entries);
   assert.equal(noExtras.income, 10000);
-  assert.equal(noExtras.additionalIncome, 0);
+  assert.equal(noExtras.oneTimeIncome, 0);
   assert.equal(settings.income, 10000);
 });
 
@@ -359,24 +367,24 @@ test('current-month projected savings and overspend insights reference effective
     spending(`day-${index + 1}`, `2020-01-${String(index + 1).padStart(2, '0')}`, '12:00', 100),
   );
   const base = Object.freeze({ ...settings, income: 2000 });
-  const withoutExtras = computeMonthlyAnalytics(date, base, values);
+  const withoutExtras = analyze(date, base, values);
   assert.equal(withoutExtras.projectedTotal, 3100);
   assert.ok(withoutExtras.insights.some(insight => insight.title === 'On pace to overspend your income'));
-  const withExtras = computeMonthlyAnalytics(date, base, values, [
+  const withExtras = analyze(date, base, values, [
     incomeEntry('extra', '2020-01', 2000),
     incomeEntry('excluded-month', '2020-02', 50000),
     incomeEntry('excluded-year', '2021-01', 50000),
   ]);
   assert.equal(withExtras.isCurrentMonth, true);
-  assert.equal(withExtras.baseIncome, 2000);
-  assert.equal(withExtras.additionalIncome, 2000);
+  assert.equal(withExtras.recurringIncome, 2000);
+  assert.equal(withExtras.oneTimeIncome, 2000);
   assert.equal(withExtras.income, 4000);
   assert.equal(withExtras.total, 1500);
   assert.equal(withExtras.projectedTotal, 3100);
   assert.equal(withExtras.savingsRate, 900 / 4000);
   assert.ok(withExtras.insights.some(insight => insight.title === 'Projected spending within monthly income'));
   assert.ok(!withExtras.insights.some(insight => insight.title === 'On pace to overspend your income'));
-  const extrasOnly = computeMonthlyAnalytics(date, { ...base, income: 0 }, values, [
+  const extrasOnly = analyze(date, { ...base, income: 0 }, values, [
     incomeEntry('extra', '2020-01', 4000),
   ]);
   assert.equal(extrasOnly.income, 4000);

@@ -4,7 +4,7 @@ Tracker uses a unified **Next.js App Router** architecture at the repository roo
 
 ## Page manifest and App Router organization
 
-`src/pages.ts` is the source of truth for page IDs, paths, titles, and protection metadata.
+`src/lib/pages.ts` is the source of truth for page IDs, paths, titles, and protection metadata.
 
 | Page ID     | Public path  | App Router segment                      | Route Group | Protected |
 | ----------- | ------------ | --------------------------------------- | ----------- | --------- |
@@ -21,20 +21,20 @@ Tracker uses a unified **Next.js App Router** architecture at the repository roo
 ### Layout hierarchy
 
 1. **Root Layout (`src/app/layout.tsx`)**:
-   - Configures default title (`MyFinance`), favicon (`/favicon.svg`), global stylesheets (`src/index.css`, `src/navigation.css`), and JavaScript-required `<noscript>` notice.
+   - Configures default title (`MyFinance`), favicon (`/favicon.svg`), global stylesheets (`src/styles/globals.css`, `src/styles/navigation.css`), and JavaScript-required `<noscript>` notice.
    - Injects an inline synchronous theme initializer before hydration to prevent light/dark mode flash, and mounts `ThemeProvider` + `AuthProvider` (`src/app/providers.tsx`).
 2. **Auth Route Group (`src/app/(auth)/layout.tsx`)**:
    - Wraps `/login` and `/signup`. Redirects already-authenticated users to their requested `?next=` destination (validated via `safeReturnPath`) or `/calendar`.
 3. **Finance Persistent Shell (`src/app/(finance)/layout.tsx`)**:
-   - Wraps `/calendar`, `/week`, `/day`, `/analytics`, and `/profile`.
+   - Wraps `/calendar`, `/cycle`, `/week`, `/day`, `/analytics`, and `/profile`; the header navigation shows Calendar, Pay Cycle, Week, Analytics, and Profile.
    - Redirects unauthenticated visitors to `/login?next=...`.
    - Keeps `FinanceProvider`, `SettingsProvider`, the top navigation bar, and the shared `ExpenseModal` / `MonthlyIncomeModal` mounted across client-side page transitions (`next/link`), avoiding redundant Neon API re-fetches when switching tabs.
 
 ## Navigation, date links, and unsaved-changes guards
 
-Date-specific links carry the date as a query parameter, for example `/day?date=2026-10-11`, `/week?date=2026-10-11`, or `/calendar?date=2026-10-11`. `readPageDate` in `src/navigation.ts` parses and validates the query string.
+Date-specific links carry the date as a query parameter, for example `/day?date=2026-10-11`, `/week?date=2026-10-11`, or `/cycle?date=2026-10-11`. `readPageDate` in `src/lib/navigation.ts` parses and validates the query string. `/calendar` is the exception: it always opens on the current month, removes any `?date=` from the URL, and moves between months in memory.
 
-Expense drafts, additional-income modals, and changed profile/settings forms register both a browser `beforeunload` warning and an in-app client-navigation confirmation guard via `useUnsavedChanges` (`src/useUnsavedChanges.ts`). Successful saves and explicit logout remove their relevant guards. Documents restored from the browser's back/forward cache (`pageshow` with `event.persisted`) reload to revalidate authentication and data.
+Expense drafts, income forms and the month income dialog, and changed profile/settings forms register both a browser `beforeunload` warning and an in-app client-navigation confirmation guard via `useUnsavedChanges` (`src/hooks/useUnsavedChanges.ts`). Successful saves and explicit logout remove their relevant guards. Documents restored from the browser's back/forward cache (`pageshow` with `event.persisted`) reload to revalidate authentication and data.
 
 ## Local development and production build
 
@@ -52,6 +52,8 @@ Build and start the production server:
 npm run build
 npm run start
 ```
+
+`npm run build` first regenerates the HTML documentation (`npm run docs:build`) into `docs/html/` and `public/docs/`, served at `/docs`.
 
 ## Production and 404s
 

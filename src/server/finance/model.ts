@@ -1,16 +1,23 @@
 export interface Category { id: string; name: string; color: string; icon: string }
 export interface FinanceSettings {
-  income: number;
-
   avatar: string;
   categories: Category[];
 }
 export interface SpendingInput { amount: number; description: string; category: string; date: string; time: string; repeatRuleId?: string | null }
 export interface Spending extends SpendingInput { id: string }
 export interface SpendingPage { spendings: Spending[]; nextCursor: string | null }
-export interface IncomeEntryInput { month: string; amount: number; description: string }
-export interface IncomeEntry extends IncomeEntryInput { id: string }
-export interface IncomeEntryPage { incomeEntries: IncomeEntry[]; nextCursor: string | null }
+export const INCOME_FREQUENCIES = ["once", "daily", "weekly", "monthly", "yearly"] as const;
+export type IncomeFrequency = typeof INCOME_FREQUENCIES[number];
+export interface IncomeInput {
+  source: string;
+  name: string;
+  amount: number;
+  frequency: IncomeFrequency;
+  startDate: string; // YYYY-MM-DD; the only date for one-time income
+  endDate: string | null; // YYYY-MM-DD inclusive, null = no end; always null for one-time income
+}
+export interface Income extends IncomeInput { id: string }
+export interface IncomePage { incomes: Income[]; nextCursor: string | null }
 
 export type RepeatFrequency = "daily" | "weekdays" | "weekly" | "monthly";
 export type RepeatEndType = "unlimited" | "occurrences" | "until_date";
@@ -44,7 +51,7 @@ export const CATEGORY_ICONS = new Set([
 
 export function defaultFinanceSettings(): FinanceSettings {
   return {
-    income: 0, avatar: "",
+    avatar: "",
     categories: [
       { id: "Food", name: "Food", color: "#10b981", icon: "Utensils" },
       { id: "Transport", name: "Transport", color: "#3b82f6", icon: "Car" },

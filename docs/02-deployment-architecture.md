@@ -33,7 +33,7 @@ flowchart TB
         NeonHTTP --> PG
     end
 
-    Browser -->|"1. GET /calendar?date=2026-10-17"| EdgeRouter
+    Browser -->|"1. GET /week?date=2026-10-17"| EdgeRouter
     Browser -->|"2. GET /api/v1/finance/spendings"| EdgeRouter
     Browser -->|"3. GET /unknown-path"| EdgeRouter
 
@@ -65,7 +65,7 @@ By specifying `framework: "nextjs"`, Vercel automatically detects the Next.js Ap
 Routing is orchestrated natively by the Next.js App Router:
 
 1. **API Requests (`/api/*`)**: Handled by the dynamic route handlers in [`src/app/api/route.ts`](../src/app/api/route.ts) and [`src/app/api/[...slug]/route.ts`](../src/app/api/[...slug]/route.ts), which pass incoming standard Web `Request` objects directly to `app.fetch(request)`.
-2. **Persistent Shell Layout (`(finance)`)**: Authenticated routes (`/calendar`, `/week`, `/day`, `/analytics`, `/profile`) are grouped under `src/app/(finance)/`. Navigations between these routes preserve the layout shell (`src/app/(finance)/layout.tsx`), header navigation, and modal dialogs while updating the page view and query string (e.g., `?date=2026-10-17`).
+2. **Persistent Shell Layout (`(finance)`)**: Authenticated routes (`/calendar`, `/cycle`, `/week`, `/day`, `/analytics`, `/profile`) are grouped under `src/app/(finance)/`. Navigations between these routes preserve the layout shell (`src/app/(finance)/layout.tsx`), header navigation, and modal dialogs while updating the page view and query string (e.g., `/week?date=2026-10-17`). `/calendar` always opens on the current month and strips any `?date=` from the URL; it navigates months in memory.
 3. **Auth Route Group (`(auth)`)**: `/login` and `/signup` are grouped under `src/app/(auth)/` with their own lightweight layout that redirects already-authenticated visitors to `/calendar` or their requested return URL.
 4. **Root Index (`/`)**: Handled by `src/app/page.tsx`, redirecting authenticated users to `/calendar` and guests to `/login`.
 5. **Static Assets & Architecture Documentation**: Files in `public/` (such as `favicon.svg` and `icons.svg`) and pre-built architecture documentation in `public/docs/` (`index.html`, `01..07-*.html`, assets) are served directly by Vercel CDN edges. Navigating to `/docs` redirects to `/docs/index.html` via [`next.config.ts`](../next.config.ts).
@@ -76,7 +76,7 @@ flowchart TD
     Incoming["Incoming HTTP Request (Pathname + Query)"]
     CheckAPI{"Matches /api or /api/[...slug] ?"}
     CheckPublicAsset{"Matches /favicon.svg, /icons.svg ?"}
-    CheckAppRoute{"Matches App Router Page? (/, /login, /signup, /calendar, /week, /day, /analytics, /profile)"}
+    CheckAppRoute{"Matches App Router Page? (/, /login, /signup, /calendar, /cycle, /week, /day, /analytics, /profile)"}
 
     RouteHandler["Route Handler (src/app/api/[...slug]/route.ts -> app.fetch)"]
     StaticServe["Serve Public Static Asset from /public"]
@@ -143,7 +143,7 @@ Configuration is resolved and validated at startup by [`src/server/config.ts`](.
 ```mermaid
 flowchart LR
     P1["1. Process Environment (Vercel Env Vars / Shell Exports)"]
-    P2["2. Repository Root /.env"]
+    P2["2. Repository Root /.env (dotenv, never overrides)"]
     Parser["parseConfig(process.env) (src/server/config.ts)"]
     RuntimeConfig["Validated Config { databaseUrl, appOrigin, production }"]
 
@@ -160,6 +160,6 @@ flowchart LR
 | `APP_ORIGIN` | Next.js Server | **Yes** (Defaults to `http://localhost:5173` locally) | Exact browser origin (`scheme://host[:port]`) with no path, credentials, query, or wildcard. Must use `https://` when `production` is `true`. Enforced by CORS and strict mutation `Origin` checks. |
 | `NODE_ENV` | Next.js Server / Build | No | When `"production"`, enables `production` mode (requires HTTPS `APP_ORIGIN` and sets `Secure` flag on `mf_refresh` cookie). Set automatically by `next build` and `next start`. |
 | `VERCEL` / `VERCEL_ENV` | Platform | Auto | When `VERCEL="1"` and `VERCEL_ENV !== "development"`, enables `production` mode automatically. |
-| `PORT` | Local HTTP Server (`app.ts listen`) | No | Defaults to `0` or custom port when using standalone HTTP server listener (e.g. in test suites). |
+| `PORT` | Standalone listener (`app.listen`) | No | Not read by `next dev` / `next start` (both are pinned to port 5173 in `package.json`). Only relevant if code calls `app.listen()` directly; tests listen on port `0`. |
 | `AUTH_TEST_DATABASE_URL` | Test Suite | Optional | Isolated, pre-migrated Neon PostgreSQL URL for running real SQL concurrency & auth integration tests (`test/neon.test.ts`). |
 | `FINANCE_TEST_DATABASE_URL` | Test Suite | Optional | Isolated, pre-migrated Neon PostgreSQL URL for running real SQL finance & category-lock race tests (`test/finance-neon.test.ts`). |
