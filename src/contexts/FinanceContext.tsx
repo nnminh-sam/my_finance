@@ -5,12 +5,12 @@ import type { ReactNode } from 'react';
 import { errorMessage, getAuthState } from '../services/auth';
 import { createFinanceApi } from '../services/finance';
 import type { FinanceSettings, SpendingInput } from '../services/finance';
-import type { IncomeEntry, IncomeEntryInput, RepeatRule, RepeatRuleInput, Spending } from '../types';
+import type { Income, IncomeInput, RepeatRule, RepeatRuleInput, Spending } from '../types';
 
 interface FinanceContextValue {
   settings: FinanceSettings;
   spendings: Spending[];
-  incomeEntries: IncomeEntry[];
+  incomes: Income[];
   repeatRules: RepeatRule[];
   loading: boolean;
   hasLoaded: boolean;
@@ -21,9 +21,9 @@ interface FinanceContextValue {
   createSpending: (input: SpendingInput) => Promise<void>;
   updateSpending: (id: string, input: SpendingInput) => Promise<void>;
   deleteSpending: (id: string) => Promise<void>;
-  createIncomeEntry: (input: IncomeEntryInput) => Promise<void>;
-  updateIncomeEntry: (id: string, input: IncomeEntryInput) => Promise<void>;
-  deleteIncomeEntry: (id: string) => Promise<void>;
+  createIncome: (input: IncomeInput) => Promise<void>;
+  updateIncome: (id: string, input: IncomeInput) => Promise<void>;
+  deleteIncome: (id: string) => Promise<void>;
   createRepeatRule: (input: RepeatRuleInput) => Promise<RepeatRule>;
   deleteRepeatRule: (id: string, deleteFuture?: boolean) => Promise<void>;
 }
@@ -31,13 +31,13 @@ interface FinanceContextValue {
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
 const api = createFinanceApi();
 const emptySettings: FinanceSettings = {
-  income: 0, avatar: '', categories: [],
+  avatar: '', categories: [],
 };
 
 export function FinanceProvider({ userId, children }: { userId: string; children: ReactNode }) {
   const [settings, setSettings] = useState<FinanceSettings>(emptySettings);
   const [spendings, setSpendings] = useState<Spending[]>([]);
-  const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([]);
+  const [incomes, setIncomes] = useState<Income[]>([]);
   const [repeatRules, setRepeatRules] = useState<RepeatRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -90,12 +90,12 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     reloadFlight.current = serialize(async () => {
       if (!loaded.current) setLoading(true);
       try {
-        const [nextSettings, nextIncomeEntries, nextRepeatRules] = await Promise.all([
-          api.getSettings(), api.getIncomeEntries(), api.getRepeatRules(),
+        const [nextSettings, nextIncomes, nextRepeatRules] = await Promise.all([
+          api.getSettings(), api.getIncomes(), api.getRepeatRules(),
         ]);
         if (!currentAccount()) return;
         setSettings(nextSettings);
-        setIncomeEntries(nextIncomeEntries);
+        setIncomes(nextIncomes);
         setRepeatRules(nextRepeatRules);
         loaded.current = true;
         setHasLoaded(true);
@@ -141,19 +141,19 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     if (currentAccount()) setSpendings(records => records.filter(record => record.id !== id));
   }), [serialize, currentAccount]);
 
-  const createIncomeEntry = useCallback((input: IncomeEntryInput) => serialize(async () => {
-    const saved = await api.createIncomeEntry(input);
-    if (currentAccount()) setIncomeEntries(records => [...records.filter(record => record.id !== saved.id), saved]);
+  const createIncome = useCallback((input: IncomeInput) => serialize(async () => {
+    const saved = await api.createIncome(input);
+    if (currentAccount()) setIncomes(records => [...records.filter(record => record.id !== saved.id), saved]);
   }), [serialize, currentAccount]);
 
-  const updateIncomeEntry = useCallback((id: string, input: IncomeEntryInput) => serialize(async () => {
-    const saved = await api.updateIncomeEntry(id, input);
-    if (currentAccount()) setIncomeEntries(records => [...records.filter(record => record.id !== saved.id), saved]);
+  const updateIncome = useCallback((id: string, input: IncomeInput) => serialize(async () => {
+    const saved = await api.updateIncome(id, input);
+    if (currentAccount()) setIncomes(records => [...records.filter(record => record.id !== saved.id), saved]);
   }), [serialize, currentAccount]);
 
-  const deleteIncomeEntry = useCallback((id: string) => serialize(async () => {
-    await api.deleteIncomeEntry(id);
-    if (currentAccount()) setIncomeEntries(records => records.filter(record => record.id !== id));
+  const deleteIncome = useCallback((id: string) => serialize(async () => {
+    await api.deleteIncome(id);
+    if (currentAccount()) setIncomes(records => records.filter(record => record.id !== id));
   }), [serialize, currentAccount]);
 
   const createRepeatRule = useCallback((input: RepeatRuleInput) => serialize(async () => {
@@ -183,9 +183,9 @@ export function FinanceProvider({ userId, children }: { userId: string; children
 
   return (
     <FinanceContext.Provider value={{
-      settings, spendings, incomeEntries, repeatRules, loading, hasLoaded, error,
+      settings, spendings, incomes, repeatRules, loading, hasLoaded, error,
       reload, fetchWeeksSpendings, updateSettings, createSpending, updateSpending, deleteSpending,
-      createIncomeEntry, updateIncomeEntry, deleteIncomeEntry,
+      createIncome, updateIncome, deleteIncome,
       createRepeatRule, deleteRepeatRule
     }}>
       {children}

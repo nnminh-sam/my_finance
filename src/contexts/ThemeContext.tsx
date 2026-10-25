@@ -6,7 +6,9 @@ import type { ReactNode } from 'react';
 type Theme = 'light' | 'dark';
 interface ThemeContextValue {
   theme: Theme;
-  setTheme: (theme: Theme) => void;
+  /** The saved choice for this device; null follows the system setting. */
+  preference: Theme | null;
+  setTheme: (theme: Theme | null) => void;
 }
 
 const STORAGE_KEY = 'tracker_theme';
@@ -65,17 +67,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const setTheme = (next: Theme) => {
+  const setTheme = (next: Theme | null) => {
     setPreference(next);
-    applyTheme(next);
+    applyTheme(next ?? systemTheme());
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      if (next) localStorage.setItem(STORAGE_KEY, next);
+      else localStorage.removeItem(STORAGE_KEY);
     } catch {
       // Theme selection still works for this session when browser storage is blocked.
     }
   };
 
-  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ theme, preference, setTheme }}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
