@@ -61,3 +61,30 @@ export function isIncomeDraftDirty(draft: IncomeDraft, snapshot: IncomeDraft): b
   const fields: (keyof IncomeDraft)[] = ['id', 'source', 'name', 'amount', 'frequency', 'startDate', 'endDate'];
   return fields.some(field => draft[field] !== snapshot[field]);
 }
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Plain-language schedule for the income form, or null until amount and start date are valid. */
+export function describeIncomeDraft(draft: Pick<IncomeDraft, 'amount' | 'frequency' | 'startDate' | 'endDate'>): string | null {
+  const amount = Number(draft.amount);
+  if (!/^\d+(?:\.\d{1,2})?$/.test(draft.amount) || !(amount > 0) || !isValidIncomeDate(draft.startDate)) return null;
+  const [year, month, day] = draft.startDate.split('-').map(Number);
+  const dateLabel = (y: number, m: number, d: number) => `${d} ${MONTHS[m - 1]} ${y}`;
+  const value = new Date(0);
+  value.setUTCFullYear(year, month - 1, day);
+  const money = `${amount.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} ₫`;
+  const start = dateLabel(year, month, day);
+  if (draft.frequency === 'once') return `${money} once, on ${WEEKDAYS[value.getUTCDay()]}, ${start}.`;
+
+  const every = {
+    daily: 'every day',
+    weekly: `every ${WEEKDAYS[value.getUTCDay()]}`,
+    monthly: `on day ${day} of every month`,
+    yearly: `every year on ${day} ${MONTHS[month - 1]}`,
+  }[draft.frequency];
+  const validEnd = draft.endDate !== '' && isValidIncomeDate(draft.endDate) && draft.endDate >= draft.startDate;
+  const end = validEnd ? `until ${dateLabel(...(draft.endDate.split('-').map(Number) as [number, number, number]))}` : 'with no end date';
+  const shortMonths = draft.frequency === 'monthly' && day > 28 ? ' In shorter months it is paid on the last day.' : '';
+  return `${money} ${every}, from ${start}, ${end}.${shortMonths}`;
+}

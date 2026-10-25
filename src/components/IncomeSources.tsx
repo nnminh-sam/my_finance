@@ -1,15 +1,14 @@
 'use client';
 
 import { useId, useLayoutEffect, useRef, useState } from 'react';
-import { CircleDollarSign, Edit2, Plus, Trash2 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Briefcase, CalendarClock, ChevronLeft, ChevronRight, CircleDollarSign, Gift, Laptop, Pencil, Plus, Trash2, TrendingUp, Wallet, X } from 'lucide-react';
+import { addMonths, format, parseISO } from 'date-fns';
 import { errorMessage } from '../services/auth';
 import { useFinance } from '../contexts/FinanceContext';
 import { describeIncomeSchedule, getMonthIncome, INCOME_FREQUENCY_LABELS, INCOME_SOURCE_SUGGESTIONS, incomeMonth } from '../lib/income';
-import { createIncomeDraft, isIncomeDraftDirty, validateIncomeDraft } from '../lib/incomeDraft';
+import { createIncomeDraft, describeIncomeDraft, isIncomeDraftDirty, validateIncomeDraft } from '../lib/incomeDraft';
 import type { IncomeDraft } from '../lib/incomeDraft';
 import type { Income, IncomeFrequency } from '../types';
-import { EditorActions } from './ProfileSection';
 
 export interface IncomeEditorState {
   dirty: boolean;
@@ -29,6 +28,21 @@ type Editor = { draft: IncomeDraft; snapshot: IncomeDraft };
 const money = (amount: number) => `${amount.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} ₫`;
 const isValidMonth = (month: string) => /^(?!0000)\d{4}-(?:0[1-9]|1[0-2])$/.test(month);
 const incomeLabel = (income: Pick<Income, 'source' | 'name'>) => income.name ? `${income.source} · ${income.name}` : income.source;
+const shiftMonth = (month: string, by: number) => format(addMonths(parseISO(`${month}-01`), by), 'yyyy-MM');
+const SOURCE_ICONS: Record<string, typeof CircleDollarSign> = {
+  salary: Briefcase,
+  freelance: Laptop,
+  bonus: Gift,
+  gift: Gift,
+  allowance: Wallet,
+  investment: TrendingUp,
+};
+const knownSourceFor = (source: string) => INCOME_SOURCE_SUGGESTIONS.find(item => item.toLowerCase() === source.trim().toLowerCase());
+// Accept pasted grouping such as "32,000,000" or "32.000.000"; a single dot with 1–2 digits stays a decimal point.
+const normalizeAmount = (value: string) => {
+  const compact = value.replace(/[\s,_]/g, '');
+  return /^\d{1,3}(?:\.\d{3})+$/.test(compact) ? compact.replace(/\./g, '') : compact;
+};
 
 // New income defaults to today when viewing the current month, otherwise to the viewed month's first day.
 function defaultStartDate(month: string): string {
@@ -48,6 +62,7 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [customSource, setCustomSource] = useState(false);
   const requestLock = useRef(false);
   const id = useId();
   const dirty = editor !== null && isIncomeDraftDirty(editor.draft, editor.snapshot);
@@ -72,6 +87,7 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
     if (disabled || requestLock.current || !canDiscard()) return;
     const draft = createIncomeDraft(defaultStartDate(selectedMonth), income);
     setEditor({ draft, snapshot: { ...draft } });
+    setCustomSource(draft.source.trim() !== '' && !knownSourceFor(draft.source));
     setError(null);
     setNotice(null);
   };
@@ -87,6 +103,12 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
     setEditor(current => current && { ...current, draft: { ...current.draft, [field]: value } });
     setError(null);
     setNotice(null);
+  };
+
+  const pickSource = (source: string | null) => {
+    setCustomSource(source === null);
+    // Switching to Custom keeps a typed source but clears a preset one.
+    change('source', source ?? (editor && !knownSourceFor(editor.draft.source) ? editor.draft.source : ''));
   };
 
   const changeSelectedMonth = (month: string) => {
@@ -149,92 +171,147 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
 
   const frequencyOptions = Object.entries(INCOME_FREQUENCY_LABELS) as [IncomeFrequency, string][];
   const once = editor?.draft.frequency === 'once';
+  const adding = editor?.snapshot.id === undefined;
+  const knownSource = editor ? knownSourceFor(editor.draft.source) : undefined;
+  const schedule = editor ? describeIncomeDraft(editor.draft) : null;
 
   return (
-    <section className="profile-card profile-card-wide glass" aria-labelledby={`${id}-heading`} aria-busy={busy}>
-      <h2 id={`${id}-heading`} className="profile-section-heading">
-        {editor || blocked ? (
-          <span className="profile-section-title"><CircleDollarSign size={20} aria-hidden="true" />Income sources</span>
-        ) : (
-          <button type="button" className="profile-edit-section" onClick={() => openEditor()} aria-label="Add income source">
-            <span className="profile-section-title"><CircleDollarSign size={20} aria-hidden="true" />Income sources</span>
-            <span className="profile-edit-label"><Plus size={15} aria-hidden="true" />Add income</span>
-          </button>
-        )}
-      </h2>
-      <p id={`${id}-help`} className="profile-hint">Record each income separately: salary, freelance work, allowance, gifts, and so on. Each is paid once or repeats daily, weekly, monthly, or yearly; a month’s income is the sum of every payment that falls in it.</p>
-      {restrictToMonth ? (
-        <p className="profile-income-month">Income month: <time dateTime={selectedMonth}>{monthLabel}</time></p>
-      ) : (
-        <label className="profile-income-month">View month
-          <input type="month" min="0001-01" max="9999-12" value={selectedMonth} disabled={blocked} aria-describedby={`${id}-help`} onChange={event => changeSelectedMonth(event.target.value)} />
-        </label>
-      )}
-      <dl className="profile-income-breakdown" aria-label={`Income breakdown for ${monthLabel}`}>
-        <div><dt>Recurring income</dt><dd>{money(breakdown.recurringIncome)}</dd></div>
-        <div><dt>One-time income</dt><dd>+ {money(breakdown.oneTimeIncome)}</dd></div>
-        <div className="profile-income-total"><dt>Total for {monthLabel}</dt><dd>= {money(breakdown.totalIncome)}</dd></div>
+    <section className="profile-panel" aria-labelledby={`${id}-heading`} aria-busy={busy}>
+      <div className="profile-panel-head">
+        <div>
+          <h2 id={`${id}-heading`}>Income sources</h2>
+          <p id={`${id}-help`}>Salary, freelance work, allowance, gifts and other payments. Each one is paid once or repeats daily, weekly, monthly or yearly; a month’s income is the sum of every payment that falls in it.</p>
+        </div>
+        <div className="profile-panel-tools">
+          {restrictToMonth ? (
+            <p className="profile-income-month">Income month: <time dateTime={selectedMonth}>{monthLabel}</time></p>
+          ) : (
+            <div className="profile-month-switch" role="group" aria-label="Viewed month">
+              <button type="button" className="profile-icon-button" disabled={blocked} aria-label="Previous month" onClick={() => changeSelectedMonth(shiftMonth(selectedMonth, -1))}><ChevronLeft size={16} aria-hidden="true" /></button>
+              <input type="month" min="0001-01" max="9999-12" value={selectedMonth} disabled={blocked} aria-label="View month" aria-describedby={`${id}-help`} onChange={event => changeSelectedMonth(event.target.value)} />
+              <button type="button" className="profile-icon-button" disabled={blocked} aria-label="Next month" onClick={() => changeSelectedMonth(shiftMonth(selectedMonth, 1))}><ChevronRight size={16} aria-hidden="true" /></button>
+            </div>
+          )}
+          {!editor && (
+            <button type="button" className="profile-button profile-button-primary" disabled={blocked} onClick={() => openEditor()}><Plus size={16} aria-hidden="true" />Add income</button>
+          )}
+        </div>
+      </div>
+      <dl className="profile-card profile-summary" aria-label={`Income breakdown for ${monthLabel}`}>
+        <div><dt>Total for {monthLabel}</dt><dd className="profile-positive">{money(breakdown.totalIncome)}</dd></div>
+        <div><dt>Recurring</dt><dd>{money(breakdown.recurringIncome)}</dd></div>
+        <div><dt>One-time</dt><dd>{money(breakdown.oneTimeIncome)}</dd></div>
       </dl>
       {editor && (
-        <form className="profile-form profile-income-entry-form" noValidate aria-label={editor.snapshot.id === undefined ? 'Add income' : 'Edit income'} aria-busy={busy} onSubmit={event => { event.preventDefault(); void save(); }}>
-          <h3>{editor.snapshot.id === undefined ? 'Add income' : 'Edit income'}</h3>
-          <fieldset disabled={blocked} aria-describedby={`${id}-entry-help${error ? ` ${id}-error` : ''}`}>
-            <div className="profile-credentials">
-              <label>Source
-                <input type="text" required maxLength={100} list={`${id}-sources`} autoFocus value={editor.draft.source} placeholder="e.g. Salary" onChange={event => change('source', event.target.value)} />
-              </label>
-              <label>Name (optional)
-                <input type="text" maxLength={500} value={editor.draft.name} placeholder="e.g. Company, client, or person" onChange={event => change('name', event.target.value)} />
-              </label>
+        <form className="profile-card income-form" noValidate aria-labelledby={`${id}-form-title`} aria-busy={busy} onSubmit={event => { event.preventDefault(); void save(); }}>
+          <div className="income-form-head">
+            <h3 id={`${id}-form-title`}>{adding ? 'Add income' : `Edit ${incomeLabel(editor.snapshot)}`}</h3>
+            <button type="button" className="profile-icon-button" disabled={blocked} aria-label="Close without saving" onClick={cancel}><X size={18} aria-hidden="true" /></button>
+          </div>
+          <fieldset className="income-form-body" disabled={blocked}>
+            <div className="income-form-group" role="group" aria-labelledby={`${id}-source-label`}>
+              <span id={`${id}-source-label`} className="income-form-label">Source</span>
+              <div className="income-chips">
+                {INCOME_SOURCE_SUGGESTIONS.map(source => {
+                  const Icon = SOURCE_ICONS[source.toLowerCase()] ?? CircleDollarSign;
+                  return (
+                    <button key={source} type="button" className="income-chip" aria-pressed={!customSource && knownSource === source} onClick={() => pickSource(source)}>
+                      <Icon size={15} aria-hidden="true" />{source}
+                    </button>
+                  );
+                })}
+                <button type="button" className="income-chip" aria-pressed={customSource} onClick={() => pickSource(null)}>
+                  <Pencil size={15} aria-hidden="true" />Custom
+                </button>
+              </div>
+              {customSource && (
+                <input type="text" className="income-input" autoFocus maxLength={100} aria-label="Custom source" placeholder="Name the source, e.g. Rental" value={editor.draft.source} onChange={event => change('source', event.target.value)} />
+              )}
             </div>
-            <datalist id={`${id}-sources`}>
-              {INCOME_SOURCE_SUGGESTIONS.map(source => <option key={source} value={source} />)}
-            </datalist>
-            <div className="profile-credentials">
-              <label>Amount per payment (₫)
-                <input type="text" inputMode="decimal" required value={editor.draft.amount} placeholder="e.g. 500000" onChange={event => change('amount', event.target.value)} />
-              </label>
-              <label>Frequency
-                <select value={editor.draft.frequency} onChange={event => change('frequency', event.target.value as IncomeFrequency)}>
-                  {frequencyOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </label>
-            </div>
-            <div className="profile-credentials">
-              <label>{once ? 'Date received' : 'Start date (first payment)'}
-                <input type="date" min="0001-01-01" max="9999-12-31" required value={editor.draft.startDate} onChange={event => change('startDate', event.target.value)} />
+
+            <label className="income-form-group">
+              <span className="income-form-label">From <span className="income-optional">optional</span></span>
+              <input type="text" className="income-input" maxLength={500} value={editor.draft.name} placeholder="Employer, client or person" onChange={event => change('name', event.target.value)} />
+            </label>
+
+            <label className="income-form-group">
+              <span className="income-form-label">Amount per payment</span>
+              <span className="income-amount">
+                <input type="text" inputMode="decimal" autoComplete="off" required value={editor.draft.amount} placeholder="0" aria-describedby={`${id}-schedule`} onChange={event => change('amount', normalizeAmount(event.target.value))} />
+                <span aria-hidden="true">₫</span>
+              </span>
+            </label>
+
+            <fieldset className="income-form-group">
+              <legend className="income-form-label">How often</legend>
+              <div className="income-segmented">
+                {frequencyOptions.map(([value, label]) => (
+                  <label key={value} className="income-segment">
+                    <input type="radio" name={`${id}-frequency`} value={value} checked={editor.draft.frequency === value} onChange={() => change('frequency', value)} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="income-dates">
+              <label className="income-form-group">
+                <span className="income-form-label">{once ? 'Received on' : 'First payment'}</span>
+                <input type="date" className="income-input" min="0001-01-01" max="9999-12-31" required value={editor.draft.startDate} onChange={event => change('startDate', event.target.value)} />
               </label>
               {!once && (
-                <label>End date (optional)
-                  <input type="date" min={editor.draft.startDate || '0001-01-01'} max="9999-12-31" value={editor.draft.endDate} onChange={event => change('endDate', event.target.value)} />
+                <label className="income-form-group">
+                  <span className="income-form-label">Last payment <span className="income-optional">optional</span></span>
+                  <span className="income-date-clear">
+                    <input type="date" className="income-input" min={editor.draft.startDate || '0001-01-01'} max="9999-12-31" value={editor.draft.endDate} onChange={event => change('endDate', event.target.value)} />
+                    {editor.draft.endDate && <button type="button" className="profile-icon-button" aria-label="Remove last payment date" onClick={() => change('endDate', '')}><X size={16} aria-hidden="true" /></button>}
+                  </span>
                 </label>
               )}
             </div>
-            <p id={`${id}-entry-help`} className="profile-hint">Enter a positive amount per payment up to 1,000,000,000,000 ₫ with up to two decimal places. Weekly income repeats on the start date’s weekday; monthly and yearly income on its day of the month (moved to the last day in shorter months). Leave the end date empty if the income has no planned end.</p>
           </fieldset>
-          <EditorActions busy={blocked} onCancel={cancel} />
+
+          <p id={`${id}-schedule`} className={`income-schedule${schedule ? '' : ' income-schedule-empty'}`} aria-live="polite">
+            <CalendarClock size={18} aria-hidden="true" />
+            <span>{schedule ?? 'Enter an amount to see when this income is paid.'}</span>
+          </p>
+          {error && <p id={`${id}-error`} className="profile-error" role="alert">{error}</p>}
+          <div className="income-form-foot">
+            <button type="button" className="profile-button profile-button-ghost" disabled={blocked} onClick={cancel}>Cancel</button>
+            <button type="submit" className="profile-button profile-button-primary" disabled={blocked}>
+              {operation === 'save' ? 'Saving…' : adding ? 'Add income' : 'Save changes'}
+            </button>
+          </div>
         </form>
       )}
-      {error && <p id={`${id}-error`} className="profile-error" role="alert">{error}</p>}
-      {notice && <p className="profile-income-notice" role="status">{notice}</p>}
+      {error && !editor && <p id={`${id}-error`} className="profile-error" role="alert">{error}</p>}
+      {notice && <p className="profile-notice" role="status">{notice}</p>}
       {listed.length === 0 ? (
-        <p className="profile-hint">{restrictToMonth ? `No income received in ${monthLabel}.` : 'No income sources yet.'} Add income above to record a salary, freelance payment, gift, or other income.</p>
+        <p className="profile-card profile-empty">{restrictToMonth ? `No income received in ${monthLabel}.` : 'No income sources yet.'} Add income to record a salary, freelance payment, gift, or other income.</p>
       ) : (
-        <ul className="profile-income-entries" aria-label={restrictToMonth ? `Income received in ${monthLabel}` : 'All income sources'}>
+        <ul className="profile-card profile-list" aria-label={restrictToMonth ? `Income received in ${monthLabel}` : 'All income sources'}>
           {listed.map(income => {
             const item = contribution.get(income.id);
+            const Icon = SOURCE_ICONS[income.source.trim().toLowerCase()] ?? CircleDollarSign;
             return (
-              <li className="profile-income-entry" key={income.id}>
-                <div className="profile-income-entry-details">
+              <li className={`profile-list-item${item ? '' : ' profile-list-item-muted'}`} key={income.id}>
+                <span className="profile-glyph profile-glyph-income" aria-hidden="true"><Icon size={18} /></span>
+                <div className="profile-list-main">
                   <strong>{incomeLabel(income)}</strong>
-                  <span>{money(income.amount)} · {describeIncomeSchedule(income)}</span>
-                  <span>{item
-                    ? `${monthLabel}: ${item.occurrences > 1 ? `${item.occurrences} × ${money(income.amount)} = ` : ''}${money(item.total)}`
-                    : `Nothing received in ${monthLabel}`}</span>
+                  <span className="profile-meta">
+                    <span className={`profile-pill${item ? ' profile-pill-on' : ''}`}>{describeIncomeSchedule(income)}</span>
+                    <span>{money(income.amount)} per payment</span>
+                  </span>
                 </div>
-                <div className="profile-actions">
-                  <button type="button" className="profile-button" disabled={blocked} aria-label={`Edit ${incomeLabel(income)}`} onClick={() => openEditor(income)}><Edit2 size={16} aria-hidden="true" />Edit</button>
-                  <button type="button" className="profile-button profile-button-danger" disabled={blocked || editor !== null} aria-label={`Delete ${incomeLabel(income)}`} onClick={() => { void remove(income); }}><Trash2 size={16} aria-hidden="true" />{deletingId === income.id ? 'Deleting…' : 'Delete'}</button>
+                <div className="profile-amount">
+                  {item ? money(item.total) : '—'}
+                  <small>{item
+                    ? (item.occurrences > 1 ? `${item.occurrences} × ${money(income.amount)}` : `in ${monthLabel}`)
+                    : `Nothing in ${monthLabel}`}</small>
+                </div>
+                <div className="profile-row-actions">
+                  <button type="button" className="profile-icon-button" disabled={blocked} aria-label={`Edit ${incomeLabel(income)}`} onClick={() => openEditor(income)}><Pencil size={16} aria-hidden="true" /></button>
+                  <button type="button" className="profile-icon-button profile-icon-button-danger" disabled={blocked || editor !== null} aria-label={deletingId === income.id ? `Deleting ${incomeLabel(income)}` : `Delete ${incomeLabel(income)}`} onClick={() => { void remove(income); }}><Trash2 size={16} aria-hidden="true" /></button>
                 </div>
               </li>
             );

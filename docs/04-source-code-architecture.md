@@ -96,7 +96,7 @@ flowchart LR
         WeekUI["WeekView.tsx"]
         DayUI["DayDetails.tsx"]
         AnalyticsUI["AnalyticsView.tsx & charts.tsx"]
-        ProfileUI["UserProfile.tsx & ProfileSection.tsx"]
+        ProfileUI["UserProfile.tsx, IncomeSources.tsx ProfileUI["UserProfile.tsx & ProfileSection.tsx"] ProfileSection.tsx"]
         ExpenseUI["ExpenseModal.tsx"]
         IncomeUI["MonthlyIncomeModal.tsx & IncomeSources.tsx"]
     end
