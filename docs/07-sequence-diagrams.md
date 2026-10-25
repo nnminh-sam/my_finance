@@ -86,54 +86,67 @@ sequenceDiagram
 
 ---
 
-## 3. Protected Page Load, Initial Fetch & Horizon Auto-Sync
+## 3. Protected Page Load, Initial Fetch & Date-Range Spending Loading
 
-When an authenticated user loads a protected page (e.g., `/calendar`), Next.js mounts the persistent `(finance)` layout shell (`src/app/(finance)/layout.tsx`), which keeps `FinanceProvider` and navigation mounted. The provider loads settings, paginated spendings, paginated income entries, and repeat rules in parallel. The backend automatically evaluates and syncs recurring rules within the 14-day horizon before returning spendings.
+When an authenticated user opens a protected page (e.g., `/week?date=2026-10-17`), Next.js mounts the persistent `(finance)` layout shell (`src/app/(finance)/layout.tsx`). `FinanceProvider.reload()` loads **settings, income entries, and repeat rules** in parallel. Spendings are **not** part of `reload()`: they are fetched per date range through `fetchWeeksSpendings`, and the backend syncs due repeat rules (14-day horizon) before answering each spendings or repeat-rules read.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as User
-    participant Browser as Browser (/calendar -> src/app/(finance)/calendar/page.tsx)
+    participant Browser as Browser (/week -> src/app/(finance)/week/page.tsx)
     participant Shell as Persistent Shell ((finance)/layout.tsx)
-    participant FinCtx as FinanceContext & finance.ts
+    participant FinCtx as FinanceContext & services/finance.ts
     participant API as Next.js Finance Route Handler (/api/v1/finance)
     participant Store as FinanceStore & RecurrenceEngine
     participant DB as Neon PostgreSQL
 
-    User->>Browser: Navigate to /calendar?date=2026-10-17
+    User->>Browser: Navigate to /week?date=2026-10-17
     Browser->>Browser: Root layout mounts ThemeProvider + AuthProvider -> restoreSession()
-    Browser->>Shell: Mount Finance Shell layout (persists across next/link navigations)
-    Shell->>FinCtx: Mount FinanceProvider(userId) -> reload()
+    Browser->>Shell: Mount Finance Shell (auth guard, persists across next/link navigations)
+    Shell->>FinCtx: Mount FinanceProvider(userId) -> reload() (serialized, single-flight)
 
-    par Parallel Initial Data Fetch
-        FinCtx->>API: GET /api/v1/finance/settings (Bearer token)
+    par reload(): settings, income entries, repeat rules
+        FinCtx->>API: GET /settings (Bearer token)
         API->>Store: getSettings(userId)
-        Store->>DB: Transaction (ReadCommitted): INSERT default ON CONFLICT DO NOTHING + SELECT settings
+        Store->>DB: Transaction (ReadCommitted): INSERT default ON CONFLICT DO NOTHING + SELECT
         DB-->>FinCtx: 200 { settings }
     and
-        FinCtx->>API: GET /api/v1/finance/spendings?limit=500
-        API->>Store: listSpendings(userId, 500, cursor)
-        Store->>Store: syncRepeatSpendings(userId, today)
-        Store->>DB: SELECT * FROM finance_repeat_rules WHERE user_id = $1
-        loop For each rule where isRuleDueForSync(rule, today) == true
-            Store->>Store: generateOccurrences(rule, 100)
-            Store->>DB: Transaction: UPDATE finance_repeat_rules + Bulk INSERT finance_spendings
-        end
-        Store->>DB: SELECT ... FROM finance_spendings WHERE user_id = $1 ORDER BY id ASC LIMIT 501
-        DB-->>FinCtx: 200 { spendings, nextCursor } (Loops until nextCursor is null)
-    and
-        FinCtx->>API: GET /api/v1/finance/income-entries?limit=500
-        API->>DB: SELECT ... FROM finance_income_entries WHERE user_id = $1 ORDER BY id ASC LIMIT 501
+        FinCtx->>API: GET /income-entries?limit=500 (repeat with cursor until null)
+        API->>DB: SELECT ... WHERE user_id = $1 AND id > cursor ORDER BY id LIMIT 501
         DB-->>FinCtx: 200 { incomeEntries, nextCursor }
     and
-        FinCtx->>API: GET /api/v1/finance/repeat-rules
-        API->>DB: SELECT ... FROM finance_repeat_rules WHERE user_id = $1 ORDER BY created_at DESC
+        FinCtx->>API: GET /repeat-rules
+        API->>Store: listRepeatRules(userId) -> syncRepeatSpendings(userId)
+        Store->>DB: SELECT ... FROM finance_repeat_rules ORDER BY created_at DESC
         DB-->>FinCtx: 200 { repeatRules }
     end
+    FinCtx-->>Shell: hasLoaded = true -> FinanceGate renders SettingsProvider + header + page
 
-    FinCtx-->>Browser: hasLoaded = true -> Render CalendarView with heatmap & monthly totals
+    Shell->>FinCtx: fetchWeeksSpendings(date - 1 month (1st), date + 2 months (1st))
+    FinCtx->>API: GET /spendings?limit=500&startDate=2026-09-01&endDate=2026-12-01
+    API->>Store: listSpendings(userId, 500, cursor, startDate, endDate)
+    Store->>Store: syncRepeatSpendings(userId, today UTC) (errors swallowed)
+    loop For each rule where isRuleDueForSync(rule, today)
+        Store->>Store: generateOccurrences(rule, 100)
+        Store->>DB: Transaction: UPDATE finance_repeat_rules + bulk INSERT finance_spendings
+    end
+    Store->>DB: SELECT ... WHERE user_id = $1 AND date BETWEEN $4 AND $5 AND id > cursor ORDER BY id LIMIT 501
+    DB-->>FinCtx: 200 { spendings, nextCursor } (loop until nextCursor is null)
+    FinCtx->>FinCtx: Merge by id into shared spendings state
+    FinCtx-->>Browser: WeekView re-renders with the loaded range
 ```
+
+**Per-page spending loading:**
+
+| Page | What triggers `fetchWeeksSpendings` | Range |
+| :--- | :--- | :--- |
+| `/calendar` | `CalendarView` initial window and scroll (`getNextWeeksToFetch`) | Week batches (3 weeks per step, 4-week buffer); `?date=` is ignored and the view starts on the current month |
+| `/cycle` | Shell prefetch + `SalaryCycleView` for the cycle grid | Shell window plus first Monday to last Sunday of the cycle grid |
+| `/week`, `/day`, `/analytics` | Shell prefetch when the URL date changes | 1st of (date − 1 month) to 1st of (date + 2 months) |
+| `/profile` | none | — |
+
+Window focus and the header **Refresh** button call `reload()` again, which refreshes settings, income entries, and repeat rules. Already-loaded spendings stay in memory; ranges are fetched again when the shell date changes.
 
 ---
 
@@ -157,7 +170,7 @@ sequenceDiagram
 
     alt One-Time Expense (POST /api/v1/finance/spendings)
         FinCtx->>API: POST /api/v1/finance/spendings (Origin: APP_ORIGIN, Bearer token)
-        API->>API: ValidateOrigin + requireAuth + spendingInput(req.body)
+        API->>API: ValidateOrigin + authenticateRequest + spendingInput(body)
         API->>Store: createSpending(userId, validatedInput)
         Store->>DB: BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED
         Store->>DB: 1. INSERT INTO finance_settings ... ON CONFLICT DO NOTHING
@@ -168,7 +181,7 @@ sequenceDiagram
         API-->>FinCtx: 201 Created { spending }
     else Recurring Spending Rule (POST /api/v1/finance/repeat-rules)
         FinCtx->>API: POST /api/v1/finance/repeat-rules (Origin: APP_ORIGIN, Bearer token)
-        API->>API: ValidateOrigin + requireAuth + repeatRuleInput(req.body)
+        API->>API: ValidateOrigin + authenticateRequest + repeatRuleInput(body)
         API->>Store: createRepeatRule(userId, validatedInput)
         Store->>DB: Transaction 1 (ReadCommitted): ensure(userId) + lock(userId) + verify category allowed
         Store->>Store: generateOccurrences(ruleState, maxBatch = 100)
@@ -202,7 +215,7 @@ sequenceDiagram
     activate Lock
     Client->>API: POST /api/v1/auth/logout (Cookie: mf_refresh, Authorization: Bearer #lt;token#gt;)
     API->>API: Verify Origin === config.appOrigin
-    API->>API: res.clearCookie('mf_refresh', cookieOptions)
+    API->>API: Clear mf_refresh cookie (Set-Cookie with Max-Age=0)
     API->>DB: WITH target_sessions AS MATERIALIZED (SELECT session_id FROM auth_refresh_tokens WHERE token_hash = $1 UNION SELECT id FROM auth_sessions WHERE access_hash = $2) UPDATE auth_sessions SET revoked_at = COALESCE(revoked_at, now()) WHERE id IN (SELECT id FROM target_sessions)
     DB-->>API: Session family(ies) revoked
     API-->>Client: 204 No Content
@@ -212,4 +225,44 @@ sequenceDiagram
     Client->>Lock: Release Web Lock
     deactivate Lock
     Client->>Client: Redirect to /login
+```
+
+---
+
+## 6. Salary Cycle View: Configure Payday & Load Cycle Spendings
+
+The `/cycle` page computes pay periods entirely in the browser. Configuration changes are saved to `localStorage` and never sent to the server; only spendings for the cycle's date range are fetched.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User
+    participant View as SalaryCycleView.tsx
+    participant Cycle as lib/salaryCycle.ts
+    participant LS as localStorage (tracker_salary_cycle_v1_userId)
+    participant FinCtx as FinanceContext (fetchWeeksSpendings)
+    participant API as /api/v1/finance/spendings
+
+    User->>View: Open /cycle?date=2026-10-17
+    View->>Cycle: loadSalaryCycleConfig(userId)
+    Cycle->>LS: getItem(key) -> validate & clamp (default: day 5, shift on, include next payday on)
+    LS-->>View: SalaryCycleConfig
+    View->>Cycle: getSalaryCycleForMonth(currentDate, config)
+    Cycle->>Cycle: getPaydayForMonth(this month) and (next month): nominal day + weekend shift + month delay
+    Cycle-->>View: { startDate, endDate, days, weeks (Mon–Sun grid) }
+    View->>FinCtx: fetchWeeksSpendings(first grid Monday, last grid Sunday)
+    FinCtx->>API: GET ?startDate=&endDate= (cursor loop)
+    API-->>FinCtx: spendings (merged by id)
+    View->>View: Sum cycle days: spending, category totals, peak day, income (anchor month), leftover
+
+    User->>View: Pick base payday 10 / toggle weekend shift / set this month's payday +2 days
+    View->>Cycle: clampSalaryDay / clampDelayDays
+    View->>Cycle: saveSalaryCycleConfig(next, userId)
+    Cycle->>LS: setItem(key, JSON)
+    View->>Cycle: getSalaryCycleForMonth(currentDate, next)
+    View->>FinCtx: fetchWeeksSpendings(new grid range) (effect re-runs on every cycle change)
+    View-->>User: Re-rendered cycle grid & totals
+
+    User->>View: Click a day
+    View->>View: openDate(day) -> router.push(/day?date=YYYY-MM-DD)
 ```

@@ -32,6 +32,7 @@ flowchart TB
         
         subgraph ActivePageView["Active Page View (Client-Side Swap via next/link)"]
             CalPage["Calendar (/calendar) -> CalendarView.tsx"]
+            CycPage["Pay Cycle (/cycle) -> SalaryCycleView.tsx"]
             WkPage["Week (/week) -> WeekView.tsx"]
             DayPage["Day (/day) -> DayDetails.tsx"]
             AnaPage["Analytics (/analytics) -> AnalyticsView.tsx + charts.tsx"]
@@ -52,7 +53,7 @@ flowchart TB
     FinLayout --> FinShellCtx --> FinProv --> SetProv
     SetProv --> FinHeader & ActivePageView & PersistentModals
     PersistentModals --> ExpModal & IncModal
-    ActivePageView --> CalPage & WkPage & DayPage & AnaPage & ProfPage
+    ActivePageView --> CalPage & CycPage & WkPage & DayPage & AnaPage & ProfPage
 ```
 
 #### Key Layout Responsibilities
@@ -66,8 +67,9 @@ flowchart TB
    - If the user is already authenticated, automatically redirects them to their requested destination via `safeReturnPath(next)` or `/calendar`.
 3. **Finance Persistent Shell (`src/app/(finance)/layout.tsx`)**:
    - Enforces authentication: unauthenticated visitors are redirected to `/login?next=...`.
-   - Wraps the tree in `FinanceShellProvider`, `FinanceProvider`, and `SettingsProvider`.
-   - Keeps the navigation bar and global modal components (`ExpenseModal`, `MonthlyIncomeModal`) mounted across client transitions. Clicking between `/calendar`, `/week`, `/day`, `/analytics`, and `/profile` uses `next/link` to swap page views instantly without re-fetching settings, transactions, or rules from the backend.
+   - Wraps the tree in `FinanceProvider` (keyed by user ID), a `FinanceGate` that shows a loading/retry/sign-out screen until the first load succeeds, `SettingsProvider`, and `FinanceShellContext`.
+   - Keeps the navigation bar (Calendar, Pay Cycle, Week, Analytics, Profile) and global modal components (`ExpenseModal`, `MonthlyIncomeModal`) mounted across client transitions. Clicking between `/calendar`, `/cycle`, `/week`, `/day`, `/analytics`, and `/profile` uses `next/link` to swap page views without re-fetching settings, income entries, or rules.
+   - On `/cycle`, `/week`, `/day`, and `/analytics` it prefetches spendings for the window from one month before to two months after the URL date (`fetchWeeksSpendings`). `/calendar` ignores `?date=`, always starts on the current month, and loads its own week batches while scrolling.
 
 ---
 
@@ -80,6 +82,7 @@ flowchart LR
         LoginPage["(auth)/login/page.tsx"]
         SignupPage["(auth)/signup/page.tsx"]
         CalPage["(finance)/calendar/page.tsx"]
+        CycPage["(finance)/cycle/page.tsx"]
         WkPage["(finance)/week/page.tsx"]
         DayPage["(finance)/day/page.tsx"]
         AnaPage["(finance)/analytics/page.tsx"]
@@ -89,6 +92,7 @@ flowchart LR
     subgraph Components["UI Components (src/components)"]
         AuthUI["AuthScreen.tsx"]
         CalendarUI["CalendarView.tsx"]
+        CycleUI["SalaryCycleView.tsx"]
         WeekUI["WeekView.tsx"]
         DayUI["DayDetails.tsx"]
         AnalyticsUI["AnalyticsView.tsx & charts.tsx"]
@@ -105,17 +109,19 @@ flowchart LR
         ShellCtx["FinanceShellContext.tsx"]
     end
 
-    subgraph PureModules["Domain Logic & Utilities (src/)"]
-        AuthMod["auth.ts (Web Locks, BroadcastChannel, Memory Token)"]
-        FinMod["finance.ts (API Client & Cursor Traversal)"]
-        NavMod["navigation.ts (Date Query Builders & Safe Redirects)"]
-        PagesMod["pages.ts (Page Manifest & Metadata)"]
-        AnaMod["analytics.ts (OLS, Tukey, Pareto, Gini Engine)"]
-        SpendMod["spendings.ts (Date Filters & Currency Formatting)"]
-        IncMod["income.ts (Effective Income Math)"]
-        HeatMod["heatmap.ts (Spending Heatmap RGBA)"]
-        DraftMod["expenseDraft.ts & incomeEntryDraft.ts & useUnsavedChanges.ts"]
-        BatchMod["expenseBatch.ts"]
+    subgraph PureModules["Services, Domain Logic & Hooks"]
+        AuthMod["services/auth.ts (Web Locks, BroadcastChannel, Memory Token)"]
+        FinMod["services/finance.ts (API Client, Date Ranges & Cursor Traversal)"]
+        NavMod["lib/navigation.ts (Date Query Builders & Safe Redirects)"]
+        PagesMod["lib/pages.ts (Page Manifest & Metadata)"]
+        AnaMod["lib/analytics.ts (OLS, Tukey, Pareto, Gini Engine)"]
+        SpendMod["lib/spendings.ts (Date Filters & Currency Formatting)"]
+        IncMod["lib/income.ts (Effective Income Math)"]
+        HeatMod["lib/heatmap.ts (Spending Heatmap RGBA)"]
+        CycleMod["lib/salaryCycle.ts (Payday & Cycle Range Engine)"]
+        CalWinMod["lib/calendarWindow.ts (Scroll Window & Week Fetch Batches)"]
+        DraftMod["lib/expenseDraft.ts & lib/incomeEntryDraft.ts & hooks/useUnsavedChanges.ts"]
+        BatchMod["lib/expenseBatch.ts"]
     end
 
     Pages --> Components
@@ -123,6 +129,8 @@ flowchart LR
     Contexts --> PureModules
     AnalyticsUI --> AnaMod
     CalendarUI & WeekUI --> SpendMod & IncMod & HeatMod
+    CalendarUI --> CalWinMod
+    CycleUI --> CycleMod & SpendMod & IncMod
     DayUI --> SpendMod
     ProfileUI --> IncMod & DraftMod
     ExpenseUI --> DraftMod & BatchMod
@@ -133,9 +141,9 @@ flowchart LR
 
 ---
 
-### 1.3 Cross-Tab Authentication State Machine (`src/auth.ts`)
+### 1.3 Cross-Tab Authentication State Machine (`src/services/auth.ts`)
 
-[`src/auth.ts`](../src/auth.ts) implements a zero-trust, memory-only bearer token store synchronized across browser tabs:
+[`src/services/auth.ts`](../src/services/auth.ts) implements a zero-trust, memory-only bearer token store synchronized across browser tabs:
 - **No Tokens in Storage**: The active `accessToken` is stored strictly in JavaScript closure memory (`let session: Session | null`). `localStorage` holds only coordination metadata `{ revision: number, generation: string | null }` under the key `mf-auth-coordination`.
 - **Cross-Tab Mutual Exclusion**: All login, signup, refresh, and logout operations acquire an exclusive browser lock via `navigator.locks.request('mf-auth-mutation', ...)` (`withAuthLock`), preventing concurrent tab races on the single-use `mf_refresh` cookie.
 - **Cross-Tab Broadcast**: Upon acquiring the lock, `publishSession` updates `revision` and broadcasts `{ type: 'session', revision, session }` over `BroadcastChannel('mf-auth')` so all open tabs update their in-memory token simultaneously.
@@ -167,18 +175,49 @@ stateDiagram-v2
 
 To avoid out-of-order state overwrites (for instance, a slow background refresh overwriting a freshly created expense), [`src/contexts/FinanceContext.tsx`](../src/contexts/FinanceContext.tsx) serializes all operations:
 - `serialize(operation)` appends each mutation to a persistent promise chain (`queue.current`) and validates `currentAccount()` before and after execution.
-- `reload()` coalesces concurrent reload triggers (page mount, window focus, manual refresh) into a single in-flight promise (`reloadFlight.current`).
+- `reload()` coalesces concurrent reload triggers (page mount, window focus, manual refresh) into a single in-flight promise (`reloadFlight.current`). It loads **settings, income entries, and repeat rules only**, not spendings.
+- `fetchWeeksSpendings(startDate, endDate)` loads spendings for a date window (`GET /spendings?startDate=&endDate=`, following cursors until exhausted), de-duplicates identical in-flight ranges (`inFlightRanges`), and merges results by ID into the shared `spendings` array. It is not part of the serialized queue; `spendings` holds the union of every range loaded so far in this session.
+- Mutations (`createSpending`, `updateSpending`, `deleteSpending`, `createRepeatRule`, `deleteRepeatRule`, income entry CRUD, `updateSettings`) run through `serialize()` and patch local state with the server response.
 
 ---
 
-### 1.5 Statistical Analytics & Forecasting Engine (`src/analytics.ts`)
+### 1.5 Statistical Analytics & Forecasting Engine (`src/lib/analytics.ts`)
 
-[`src/analytics.ts`](../src/analytics.ts) is a pure functional calculation engine (`computeMonthlyAnalytics`) that derives:
+[`src/lib/analytics.ts`](../src/lib/analytics.ts) is a pure functional calculation engine (`computeMonthlyAnalytics`) that derives:
 - **Descriptive Statistics**: Daily totals, 7-day trailing moving average (`ma7`), mean, median (`quantile(0.5)`), standard deviation (`stdDev`), and Z-scores.
 - **Outlier Detection (Tukey's Fences)**: Computes interquartile range across active spending days; values exceeding $Q_3 + 1.5 \times (Q_3 - Q_1)$ are flagged as anomalies.
 - **Cumulative OLS Forecasting**: Fits an Ordinary Least Squares regression $y = \text{slope} \cdot x + \text{intercept}$ over elapsed daily spend, projecting the end-of-month total with a $95\%$ confidence band ($\pm 1.96 \cdot \sigma \cdot \sqrt{k}$).
 - **Concentration Analysis**: Computes the **Gini coefficient** and **Pareto 80% Lorenz curve** (fraction of spendings accounting for $80\%$ of total spend).
 - **Temporal Patterns**: $7 \times 24$ weekday-by-hour matrix, day-of-week averages, and natural-language summaries (`buildInsights`).
+
+---
+
+### 1.6 Salary (Pay) Cycle Engine (`src/lib/salaryCycle.ts`)
+
+The `/cycle` page ([`SalaryCycleView.tsx`](../src/components/SalaryCycleView.tsx)) shows spending per pay period instead of per calendar month. All computation is client-side and pure; no server API is involved.
+
+| Setting (`SalaryCycleConfig`) | Default | Rule |
+| :--- | :--- | :--- |
+| `salaryDay` | `5` | Day of month, clamped to 1–28 (and to the month length). |
+| `shiftWeekendToMonday` | `true` | Saturday paydays move +2 days, Sunday paydays +1 day. |
+| `includeNextPaydayInCycle` | `true` | When `true`, the cycle ends **on** the next payday; when `false`, the day before. |
+| `monthDelays` | `{}` | Per-month (`YYYY-MM`) adjustment in days, clamped to −7…+14; zero values are dropped. |
+
+- **Payday**: `getPaydayForMonth` = nominal day → + weekend shift → + month delay.
+- **Cycle range**: `getSalaryCycleForMonth(month)` runs from that month's actual payday to the next month's actual payday (inclusive or exclusive per setting); the end never precedes the start. It also returns Monday-first `weeks` for the grid.
+- **Active cycle**: `resolveActiveCycleMonthDate(today)` returns the previous month's cycle when today is before this month's payday.
+- **Totals**: cycle spending, category totals, and peak day are summed over the cycle days. Income uses the cycle's anchor month (`settings.income + income entries for YYYY-MM`), and `leftOver = income − cycle spending`.
+- **Persistence**: `loadSalaryCycleConfig` / `saveSalaryCycleConfig` read and write `localStorage['tracker_salary_cycle_v1_<userId>']`, validating and clamping on read. The configuration is **device-local** and does not sync across browsers.
+- **Data**: the view calls `fetchWeeksSpendings` for the full grid range (first Monday to last Sunday) so days that overflow into the next month are loaded. The UI provides a payday day-grid popover, a mini-calendar to pick this month's actual payday (stored as a delay), ±1-day steppers, and swipe navigation between cycles.
+
+---
+
+### 1.7 Scroll-Driven Calendar Window (`src/lib/calendarWindow.ts`)
+
+`CalendarView` renders a continuously scrollable week grid (5 visible weeks) instead of a single month:
+- The initial range preloads 2 months before and after the current month (`createInitialMonthRange`) and expands as the user scrolls (`expandMonthRange`).
+- `getNextWeeksToFetch` compares visible weeks against the already-fetched bounds in the scroll direction; within a 4-week buffer it requests the next 3-week batch via `fetchWeeksSpendings`.
+- Fetched days are revealed progressively (dates → totals/heatmap → details) to keep scrolling smooth.
 
 ---
 
@@ -258,7 +297,7 @@ classDiagram
         <<interface>>
         +getSettings(userId) Promise~FinanceSettings~
         +updateSettings(userId, patch) Promise~FinanceSettings~
-        +listSpendings(userId, limit, cursor?) Promise~SpendingPage~
+        +listSpendings(userId, limit, cursor?, startDate?, endDate?) Promise~SpendingPage~
         +createSpending(userId, input) Promise~Spending~
         +updateSpending(userId, id, input) Promise~Result~
         +deleteSpending(userId, id) Promise~boolean~
@@ -301,6 +340,10 @@ Because categories are stored as a JSONB array in `finance_settings.categories`,
 2. **`lock(userId)`**: `SELECT user_id FROM finance_settings WHERE user_id = $1 FOR UPDATE` acquires an exclusive PostgreSQL row lock on that user's settings.
 3. **Mutation Statement**: Executes `UPDATE finance_settings` or `INSERT/UPDATE finance_spendings ... WHERE EXISTS (SELECT 1 FROM finance_settings ...)`. Under `ReadCommitted` isolation, the query sees the freshly committed categories after waiting on the `FOR UPDATE` lock.
 
+`deleteSpending` uses the same ensure + lock protocol. Other writes do **not** hold the lock for the whole write:
+- **`createRepeatRule`** checks the category in transaction 1 (ensure + lock + `EXISTS`), then inserts the rule and its first batch of spendings in a separate transaction 2. The lock is released between them, so a concurrent category removal can slip in after the check.
+- **`deleteRepeatRule`** and **income entry** writes do not lock settings (income entries never touch categories).
+
 ---
 
 ### 2.3 Incremental Repeat-Rule & Horizon Sync Engine (`src/server/finance/recurrence.ts`)
@@ -337,3 +380,5 @@ flowchart TD
     AtomicTx --> Done
     Skip --> Done
 ```
+
+**Known limitation: concurrent sync.** `syncRepeatSpendings` reads rules without a row lock, and its `UPDATE finance_repeat_rules` does not check that `occurrences_created` / `last_generated_date` are unchanged. The client issues `GET /repeat-rules` (from `reload()`) and `GET /spendings` (from `fetchWeeksSpendings`) at about the same time, so two requests can generate the same batch and insert duplicate spendings for a due rule. A fix is to lock the rule (`SELECT ... FOR UPDATE`) or make the update conditional on the previously read progress values. Sync failures inside `listSpendings` / `listRepeatRules` are swallowed (`.catch(() => 0)`) so reads still succeed.

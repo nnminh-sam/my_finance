@@ -6,7 +6,7 @@ This document describes the high-level system architecture of **MyFinance**, inc
 
 ## 1. System Context
 
-**MyFinance** is a personal finance management system that enables authenticated users to track daily expenses, configure automated recurring spending rules, manage base and month-specific bonus income, customize spending categories, and analyze spending habits through statistical insights and forecasting.
+**MyFinance** is a personal finance management system that enables authenticated users to track daily expenses, configure automated recurring spending rules, manage base and month-specific bonus income, customize spending categories, review spending per salary (pay) cycle, and analyze spending habits through statistical insights and forecasting.
 
 ```mermaid
 flowchart LR
@@ -50,7 +50,7 @@ flowchart TB
             end
             subgraph FinGroup["(finance) Route Group (Persistent Shell)"]
                 FinLayout["Finance Layout (src/app/(finance)/layout.tsx: Auth Guard, Shell, Nav, Modals)"]
-                FinPages["Calendar, Week, Day, Analytics, Profile Pages (src/app/(finance)/*/page.tsx)"]
+                FinPages["Calendar, Pay Cycle, Week, Day, Analytics, Profile Pages (src/app/(finance)/*/page.tsx)"]
             end
         end
 
@@ -58,15 +58,18 @@ flowchart TB
             ThemeCtx["ThemeContext (System + localStorage 'tracker_theme')"]
             AuthCtx["AuthContext (useSyncExternalStore)"]
             FinShellCtx["FinanceShellContext (Active Modals & Date Navigation)"]
-            FinCtx["FinanceContext (Serialized Request Queue)"]
+            FinCtx["FinanceContext (Serialized Request Queue + Date-Range Spending Cache)"]
             SetCtx["SettingsContext (Merged User + Finance + Theme)"]
         end
 
         subgraph ClientCore["Client Domain & Coordination Modules"]
-            AuthClient["Auth Coordinator (src/auth.ts: Web Locks + BroadcastChannel)"]
-            FinanceClient["Finance API Client (src/finance.ts: Cursor Pagination & CRUD)"]
-            AnalyticsEngine["Analytics Engine (src/analytics.ts: OLS, Gini, Pareto, Tukey)"]
-            DraftGuards["Draft & Unsaved Changes Guards (src/expenseDraft.ts, src/useUnsavedChanges.ts)"]
+            AuthClient["Auth Coordinator (src/services/auth.ts: Web Locks + BroadcastChannel)"]
+            FinanceClient["Finance API Client (src/services/finance.ts: Cursor Pagination, Date Ranges & CRUD)"]
+            AnalyticsEngine["Analytics Engine (src/lib/analytics.ts: OLS, Gini, Pareto, Tukey)"]
+            CycleEngine["Salary Cycle Engine (src/lib/salaryCycle.ts: Payday & Cycle Ranges)"]
+            CalWindow["Calendar Window (src/lib/calendarWindow.ts: Scroll-Driven Week Fetching)"]
+            DraftGuards["Draft & Unsaved Changes Guards (src/lib/expenseDraft.ts, src/hooks/useUnsavedChanges.ts)"]
+            BrowserStore[("Browser localStorage: tracker_theme, mf-auth-coordination, tracker_salary_cycle_v1_*")]
         end
 
         RootLayout --> Providers
@@ -77,6 +80,8 @@ flowchart TB
         AuthCtx --> AuthClient
         FinCtx --> FinanceClient
         FinanceClient --> AuthClient
+        CycleEngine --> BrowserStore
+        ThemeCtx --> BrowserStore
     end
 
     subgraph APIServer["Next.js Serverless Backend Tier"]
@@ -86,7 +91,7 @@ flowchart TB
         AppEngine["Web Application Engine (src/server/application.ts: CORS, CSRF Origin Check, Body Limits)"]
         
         subgraph AuthModule["Auth Domain (src/server/auth/*)"]
-            AuthHTTP["Auth Request Handler & requireAuth (auth/http.ts)"]
+            AuthHTTP["Auth Request Handler & authenticateRequest (auth/http.ts)"]
             AuthCrypto["Scrypt KDF & SHA-256 Token Hashing (auth/crypto.ts)"]
             AuthStore["Neon Auth Store (auth/store.ts)"]
         end
@@ -236,10 +241,13 @@ erDiagram
    - If a user later removes a category from their settings, historical spendings retain their original category string and render with a graceful fallback in the UI.
 2. **UUID Cursor Pagination**:
    - `finance_spendings` and `finance_income_entries` are indexed by `(user_id, id)` and paginated in ascending UUID order (`id > $2::uuid ORDER BY id ASC LIMIT $3`).
+   - `GET /spendings` optionally accepts `startDate` / `endDate` (inclusive `YYYY-MM-DD`) to restrict the traversal to a date window; pagination order stays UUID-based.
    - Deleting a boundary record never invalidates the cursor value, and client loaders traverse pages of up to 500 records until `nextCursor` is `null`.
 3. **Non-Destructive Repeat Rule Deletion**:
    - `finance_spendings.repeat_rule_id` references `finance_repeat_rules(id) ON DELETE SET NULL`.
-   - When a user stops a repeat rule (`DELETE /api/v1/finance/repeat-rules/:id?deleteFuture=true`), upcoming generated spendings (`date >= today`) are deleted while past transactions remain intact with `repeat_rule_id = NULL`.
+   - When a user stops a repeat rule (`DELETE /api/v1/finance/repeat-rules/:id?deleteFuture=true`), upcoming generated spendings (`date >= today`, UTC) are deleted while past transactions remain intact with `repeat_rule_id = NULL`.
+4. **Device-Local Preferences**:
+   - Not everything is stored in Neon. The light/dark theme (`tracker_theme`), auth coordination metadata (`mf-auth-coordination`, no tokens), and the salary cycle configuration (`tracker_salary_cycle_v1_<userId>`) live in browser `localStorage` and do not sync across devices.
 
 ---
 

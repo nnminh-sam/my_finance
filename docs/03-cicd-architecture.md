@@ -6,6 +6,8 @@ This document describes the Continuous Integration and Continuous Deployment (CI
 
 ## 1. End-to-End CI/CD Pipeline Architecture
 
+> **Status: recommended pipeline, not yet automated.** The repository currently contains no CI configuration (no `.github/workflows/` or equivalent). Deployment relies on Vercel's Git integration, which runs `npm run build` on push. Type checking, tests, and `npm run db:migrate` must be run manually (or wired into a CI workflow) before merging and deploying. The diagram below is the target pipeline that the existing npm scripts support.
+
 The delivery pipeline ensures that every code change passes static type checking, unit tests, HTTP contract tests, and Next.js production build verification before deploying to Vercel Preview or Production environments.
 
 ```mermaid
@@ -18,7 +20,7 @@ flowchart TB
         Typecheck["TypeScript Compilation Check (npm run lint -> tsc --noEmit)"]
         UnitTests["Unit & Contract Tests (npm test -> test/*.test.ts)"]
         IntTests["Optional Isolated Neon DB Integration Tests (neon.test.ts & finance-neon.test.ts)"]
-        BuildVerify["Next.js Production Build Verification (npm run build -> next build)"]
+        BuildVerify["Docs + Next.js Production Build (npm run build -> docs/html/build.mjs && next build)"]
 
         Install --> Typecheck
         Typecheck --> UnitTests
@@ -60,7 +62,7 @@ flowchart TB
 ```mermaid
 flowchart BT
     subgraph Tier1["Tier 1: Fast Pure Unit & Domain Logic Tests (Always Run)"]
-        DomainLogic["Domain Logic: spendings, income, heatmap, analytics, expenseBatch, expenseDraft, incomeEntryDraft, calendar-scroll"]
+        DomainLogic["Domain Logic: spendings, income, heatmap, analytics, expenseBatch, expenseDraft, incomeEntryDraft, calendar-scroll, salary-cycle"]
         RoutingTests["App Router & Manifest Tests: pages.test.ts (App Router layout & metadata parity), navigation.test.ts"]
         ServerPrimitives["Server Primitives: crypto.test.ts (scrypt/tokens), recurrence.test.ts, service-error.test.ts"]
     end
@@ -82,7 +84,7 @@ flowchart BT
 
 | Suite / Test File | Purpose & Focus Area |
 | :--- | :--- |
-| [`test/pages.test.ts`](../test/pages.test.ts) | Verifies that all `pages.ts` entries map to valid Next.js App Router files (`src/app/**/page.tsx`), root layout branding, and `vercel.json` framework configuration. |
+| [`test/pages.test.ts`](../test/pages.test.ts) | Verifies that all `src/lib/pages.ts` entries (including `/cycle`) map to valid Next.js App Router files (`src/app/**/page.tsx`), root layout branding, and `vercel.json` framework configuration. |
 | [`test/navigation.test.ts`](../test/navigation.test.ts) | Validates date query parsing (`?date=YYYY-MM-DD`), calendar date preservation across UTC boundaries, and `safeReturnPath` open-redirect prevention. |
 | [`test/auth.test.ts`](../test/auth.test.ts) | Simulates multi-tab Web Locks mutual exclusion, BroadcastChannel session broadcasting, memory token access, and auto-refresh intervals. |
 | [`test/finance.test.ts`](../test/finance.test.ts) | Tests `/api/v1/finance` typed client, automatic cursor-pagination loop detection, and CRUD operations. |
@@ -92,7 +94,8 @@ flowchart BT
 | [`test/heatmap.test.ts`](../test/heatmap.test.ts) | Validates calendar spending intensity RGBA scaling. |
 | [`test/expense-draft.test.ts`](../test/expense-draft.test.ts) & [`test/income-entry-draft.test.ts`](../test/income-entry-draft.test.ts) | Tests dirty-state detection and reset semantics for unsaved form drafts. |
 | [`test/expense-batch.test.ts`](../test/expense-batch.test.ts) | Tests repeat rule creation and multi-expense batch submission. |
-| [`test/calendar-scroll.test.ts`](../test/calendar-scroll.test.ts) | Verifies calendar view scroll behavior and layout boundaries. |
+| [`test/calendar-scroll.test.ts`](../test/calendar-scroll.test.ts) | Verifies calendar window helpers: scroll direction, month range expansion, and scroll-driven week fetch batches (`src/lib/calendarWindow.ts`). |
+| [`test/salary-cycle.test.ts`](../test/salary-cycle.test.ts) | Verifies salary cycle math: payday clamping, weekend-to-Monday shift, per-month delays, cycle start/end with and without the next payday, and active-cycle resolution (`src/lib/salaryCycle.ts`). |
 | [`test/crypto.test.ts`](../test/crypto.test.ts) | Validates scrypt password hashing, timing-safe equality, dummy KDF, and token generators. |
 | [`test/http.test.ts`](../test/http.test.ts) | Tests `/api/v1/auth` HTTP endpoints: login, register, refresh rotation, rate limiting (10 attempts / 15m), and CSRF origin protection. |
 | [`test/finance-http.test.ts`](../test/finance-http.test.ts) | Tests `/api/v1/finance` HTTP endpoints: settings, spendings, repeat rules, cursor pagination, and input validation. |
@@ -144,7 +147,7 @@ sequenceDiagram
 
 ## 4. Build & Artifact Generation Pipeline
 
-When `npm run build` executes, Next.js compiles the entire unified application:
+When `npm run build` executes, it first regenerates the HTML documentation (`node docs/html/build.mjs`, writing `docs/html/*.html` and `public/docs/`), then Next.js compiles the entire unified application:
 
 ```mermaid
 flowchart LR
@@ -167,5 +170,6 @@ flowchart LR
 | **Lint / Typecheck** | `npm run lint` | Runs `tsc --noEmit` across all application, server, and test TypeScript source files. |
 | **Test** | `npm test` | Runs the automated test runner across all `test/*.test.ts` test suites. |
 | **Migrate DB** | `npm run db:migrate` | Applies pending numbered SQL migrations in `migrations/` to `DATABASE_URL`. |
-| **Build** | `npm run build` | Compiles and optimizes the Next.js App Router application and Route Handlers for production. |
+| **Docs** | `npm run docs:build` | Regenerates the HTML documentation site from `docs/*.md` into `docs/html/` and `public/docs/` (served at `/docs`). |
+| **Build** | `npm run build` | Runs `docs:build`, then compiles and optimizes the Next.js App Router application and Route Handlers for production. |
 | **Start Preview** | `npm run start` | Starts the production Next.js server locally on port 5173 (`next start -p 5173`). |
