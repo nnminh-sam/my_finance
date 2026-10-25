@@ -82,8 +82,9 @@ my_finance/
 ├── migrations/                         # Rerunnable numbered PostgreSQL DDL migrations
 │   ├── 001_auth.sql                    # auth_users, auth_sessions, auth_refresh_tokens, auth_login_limits
 │   ├── 002_finance.sql                 # finance_settings, finance_spendings
-│   ├── 003_month_income.sql            # finance_income_entries (month-specific additional income)
-│   └── 004_repeat_spendings.sql        # finance_repeat_rules + finance_spendings.repeat_rule_id
+│   ├── 003_month_income.sql            # finance_income_entries (legacy month-specific income)
+│   ├── 004_repeat_spendings.sql        # finance_repeat_rules + finance_spendings.repeat_rule_id
+│   └── 005_incomes.sql                 # finance_incomes (income sources) + one-time copy of legacy income
 ├── scripts/
 │   └── migrate.ts                      # CLI migration runner (executes migrations/*.sql in transactions)
 ├── docs/                               # Architecture documentation suite (Markdown source)
@@ -94,7 +95,7 @@ my_finance/
 │       ├── index.html, 01..07-*.html   # Generated pages (copied to public/docs/)
 │       └── assets/                     # Stylesheet (style.css) & client renderer (app.js)
 ├── src/
-│   ├── types.ts                        # Shared frontend types (Spending, RepeatRule, IncomeEntry, UserSettings, ...)
+│   ├── types.ts                        # Shared frontend types (Spending, RepeatRule, Income, UserSettings, ...)
 │   ├── app/                            # Next.js 15 App Router directory
 │   │   ├── layout.tsx                  # Root layout: theme init script, noscript notice, global CSS, providers
 │   │   ├── providers.tsx               # Client component mounting ThemeProvider and AuthProvider
@@ -124,8 +125,8 @@ my_finance/
 │   │   ├── AnalyticsView.tsx           # Statistical dashboard, KPI cards, and charts
 │   │   ├── charts.tsx                  # Custom SVG charts (forecast fan, Pareto, punch card, donut)
 │   │   ├── ExpenseModal.tsx            # Create/edit single spending & repeat rule
-│   │   ├── MonthlyIncomeModal.tsx      # Shortcut modal for one month's additional income
-│   │   ├── MonthlyIncomeEntries.tsx    # Reusable additional-income list & editor
+│   │   ├── MonthlyIncomeModal.tsx      # Dialog showing and adding income for one month
+│   │   ├── IncomeSources.tsx           # Income source list, month breakdown & add/edit/delete form
 │   │   ├── UserProfile.tsx             # Profile page sections & repeat rule manager
 │   │   ├── ProfileSection.tsx          # Collapsible editor card for profile sections
 │   │   └── FinancePageViews.tsx        # Client view wrappers connecting pages to FinanceShellContext
@@ -142,14 +143,14 @@ my_finance/
 │   │   ├── pages.ts                    # Page manifest: paths, titles, protection metadata
 │   │   ├── navigation.ts               # Query string builders (?date=) and safe redirect validation
 │   │   ├── spendings.ts                # Date filtering, daily totals & compact VND formatting
-│   │   ├── income.ts                   # Effective monthly income (recurring + additional entries)
+│   │   ├── income.ts                   # Income occurrences per frequency & month totals
 │   │   ├── heatmap.ts                  # Relative spending intensity RGBA scaling
 │   │   ├── analytics.ts                # Statistical engine (OLS forecast, Tukey outliers, Gini, Pareto)
 │   │   ├── salaryCycle.ts              # Payday, weekend shift, month delays, cycle ranges, localStorage config
 │   │   ├── calendarWindow.ts           # Calendar month range & scroll-driven week fetch batching
 │   │   ├── expenseDraft.ts             # Dirty-state detection for the ExpenseModal form
 │   │   ├── expenseBatch.ts             # Repeat expense / multi-item creation helper
-│   │   └── incomeEntryDraft.ts         # Dirty-state detection for additional-income forms
+│   │   └── incomeDraft.ts              # Income form validation & dirty-state detection
 │   ├── hooks/
 │   │   └── useUnsavedChanges.ts        # beforeunload and in-app navigation confirmation guards
 │   ├── styles/                         # Global and component CSS
@@ -176,13 +177,13 @@ my_finance/
     ├── navigation.test.ts              # Date query parsing and open-redirect prevention
     ├── auth.test.ts                    # Web Locks, BroadcastChannel, session lifecycle
     ├── finance.test.ts                 # Cursor pagination, loop protection, finance CRUD client
-    ├── income-api.test.ts              # Additional income client/API tests
+    ├── income-api.test.ts              # Income client (/incomes) tests
     ├── spendings.test.ts               # Daily totals and currency formatting
-    ├── income.test.ts                  # Effective monthly income calculations
+    ├── income.test.ts                  # Income occurrence & month total calculations
     ├── heatmap.test.ts                 # Heatmap intensity scaling
     ├── expense-batch.test.ts           # Batch expense submission
     ├── expense-draft.test.ts           # Expense modal dirty-draft guard
-    ├── income-entry-draft.test.ts      # Income entry dirty-draft guard
+    ├── income-draft.test.ts            # Income form validation & dirty-draft guard
     ├── calendar-scroll.test.ts         # Calendar window & week fetch batching
     ├── salary-cycle.test.ts            # Salary cycle payday/range calculations
     ├── crypto.test.ts                  # Password KDF and token primitives

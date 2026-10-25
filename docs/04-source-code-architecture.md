@@ -41,7 +41,7 @@ flowchart TB
 
         subgraph PersistentModals["Shared Modals (Stay Mounted)"]
             ExpModal["ExpenseModal (Single & Repeat Expense Form)"]
-            IncModal["MonthlyIncomeModal (Month-Specific Bonus Form)"]
+            IncModal["MonthlyIncomeModal (Income Sources for One Month)"]
         end
     end
 
@@ -98,7 +98,7 @@ flowchart LR
         AnalyticsUI["AnalyticsView.tsx & charts.tsx"]
         ProfileUI["UserProfile.tsx & ProfileSection.tsx"]
         ExpenseUI["ExpenseModal.tsx"]
-        IncomeUI["MonthlyIncomeModal.tsx & MonthlyIncomeEntries.tsx"]
+        IncomeUI["MonthlyIncomeModal.tsx & IncomeSources.tsx"]
     end
 
     subgraph Contexts["React Contexts (src/contexts)"]
@@ -116,11 +116,11 @@ flowchart LR
         PagesMod["lib/pages.ts (Page Manifest & Metadata)"]
         AnaMod["lib/analytics.ts (OLS, Tukey, Pareto, Gini Engine)"]
         SpendMod["lib/spendings.ts (Date Filters & Currency Formatting)"]
-        IncMod["lib/income.ts (Effective Income Math)"]
+        IncMod["lib/income.ts (Income Occurrences & Month Totals)"]
         HeatMod["lib/heatmap.ts (Spending Heatmap RGBA)"]
         CycleMod["lib/salaryCycle.ts (Payday & Cycle Range Engine)"]
         CalWinMod["lib/calendarWindow.ts (Scroll Window & Week Fetch Batches)"]
-        DraftMod["lib/expenseDraft.ts & lib/incomeEntryDraft.ts & hooks/useUnsavedChanges.ts"]
+        DraftMod["lib/expenseDraft.ts & lib/incomeDraft.ts & hooks/useUnsavedChanges.ts"]
         BatchMod["lib/expenseBatch.ts"]
     end
 
@@ -175,9 +175,9 @@ stateDiagram-v2
 
 To avoid out-of-order state overwrites (for instance, a slow background refresh overwriting a freshly created expense), [`src/contexts/FinanceContext.tsx`](../src/contexts/FinanceContext.tsx) serializes all operations:
 - `serialize(operation)` appends each mutation to a persistent promise chain (`queue.current`) and validates `currentAccount()` before and after execution.
-- `reload()` coalesces concurrent reload triggers (page mount, window focus, manual refresh) into a single in-flight promise (`reloadFlight.current`). It loads **settings, income entries, and repeat rules only**, not spendings.
+- `reload()` coalesces concurrent reload triggers (page mount, window focus, manual refresh) into a single in-flight promise (`reloadFlight.current`). It loads **settings, incomes, and repeat rules only**, not spendings.
 - `fetchWeeksSpendings(startDate, endDate)` loads spendings for a date window (`GET /spendings?startDate=&endDate=`, following cursors until exhausted), de-duplicates identical in-flight ranges (`inFlightRanges`), and merges results by ID into the shared `spendings` array. It is not part of the serialized queue; `spendings` holds the union of every range loaded so far in this session.
-- Mutations (`createSpending`, `updateSpending`, `deleteSpending`, `createRepeatRule`, `deleteRepeatRule`, income entry CRUD, `updateSettings`) run through `serialize()` and patch local state with the server response.
+- Mutations (`createSpending`, `updateSpending`, `deleteSpending`, `createRepeatRule`, `deleteRepeatRule`, income CRUD, `updateSettings`) run through `serialize()` and patch local state with the server response.
 
 ---
 
@@ -192,7 +192,26 @@ To avoid out-of-order state overwrites (for instance, a slow background refresh 
 
 ---
 
-### 1.6 Salary (Pay) Cycle Engine (`src/lib/salaryCycle.ts`)
+### 1.6 Income Sources & Monthly Income (`src/lib/income.ts`)
+
+Income is a list of sources (`Income`: `source`, `name`, `amount` per payment, `frequency`, `startDate`, `endDate`), managed in [`IncomeSources.tsx`](../src/components/IncomeSources.tsx) on `/profile` and in the month dialog (`MonthlyIncomeModal`) opened from the Calendar, Week, and Pay Cycle cards.
+
+- `countIncomeOccurrences(income, rangeStart, rangeEnd)` counts payments in an inclusive date window, using UTC calendar-date arithmetic:
+
+| Frequency | Payments |
+| :--- | :--- |
+| `once` | On `startDate` only |
+| `daily` | Every day from `startDate` to `endDate` |
+| `weekly` | Every 7 days from `startDate` (same weekday) |
+| `monthly` | On `startDate`'s day of month, clamped to the month's last day (31st → Feb 28/29, Apr 30) |
+| `yearly` | On `startDate`'s month and day each year (Feb 29 → Feb 28 in common years) |
+
+- `getMonthIncome(YYYY-MM, incomes)` returns `{ recurringIncome, oneTimeIncome, totalIncome, items }`, summing `amount × occurrences` in integer cents. Calendar, Week, Pay Cycle, and Analytics compute **Left Over = totalIncome − month (or cycle) spending** from it.
+- `lib/incomeDraft.ts` validates the form (source 1–100 chars, optional name ≤ 500, positive amount with ≤ 2 decimals, real dates, end ≥ start, no end date for one-time income) and tracks unsaved changes.
+
+---
+
+### 1.7 Salary (Pay) Cycle Engine (`src/lib/salaryCycle.ts`)
 
 The `/cycle` page ([`SalaryCycleView.tsx`](../src/components/SalaryCycleView.tsx)) shows spending per pay period instead of per calendar month. All computation is client-side and pure; no server API is involved.
 
@@ -206,13 +225,13 @@ The `/cycle` page ([`SalaryCycleView.tsx`](../src/components/SalaryCycleView.tsx
 - **Payday**: `getPaydayForMonth` = nominal day → + weekend shift → + month delay.
 - **Cycle range**: `getSalaryCycleForMonth(month)` runs from that month's actual payday to the next month's actual payday (inclusive or exclusive per setting); the end never precedes the start. It also returns Monday-first `weeks` for the grid.
 - **Active cycle**: `resolveActiveCycleMonthDate(today)` returns the previous month's cycle when today is before this month's payday.
-- **Totals**: cycle spending, category totals, and peak day are summed over the cycle days. Income uses the cycle's anchor month (`settings.income + income entries for YYYY-MM`), and `leftOver = income − cycle spending`.
+- **Totals**: cycle spending, category totals, and peak day are summed over the cycle days. Income is the anchor month's total from all income sources (`getMonthIncome(YYYY-MM, incomes)`), and `leftOver = income − cycle spending`.
 - **Persistence**: `loadSalaryCycleConfig` / `saveSalaryCycleConfig` read and write `localStorage['tracker_salary_cycle_v1_<userId>']`, validating and clamping on read. The configuration is **device-local** and does not sync across browsers.
 - **Data**: the view calls `fetchWeeksSpendings` for the full grid range (first Monday to last Sunday) so days that overflow into the next month are loaded. The UI provides a payday day-grid popover, a mini-calendar to pick this month's actual payday (stored as a delay), ±1-day steppers, and swipe navigation between cycles.
 
 ---
 
-### 1.7 Scroll-Driven Calendar Window (`src/lib/calendarWindow.ts`)
+### 1.8 Scroll-Driven Calendar Window (`src/lib/calendarWindow.ts`)
 
 `CalendarView` renders a continuously scrollable week grid (5 visible weeks) instead of a single month:
 - The initial range preloads 2 months before and after the current month (`createInitialMonthRange`) and expands as the user scrolls (`expandMonthRange`).
@@ -287,7 +306,7 @@ classDiagram
     class FinanceValidation {
         +settingsPatch(value) Partial~FinanceSettings~
         +spendingInput(value) SpendingInput
-        +incomeEntryInput(value) IncomeEntryInput
+        +incomeInput(value) IncomeInput
         +repeatRuleInput(value) RepeatRuleInput
         +pagination(query) LimitCursor
         +uuid(value) string
@@ -301,10 +320,10 @@ classDiagram
         +createSpending(userId, input) Promise~Spending~
         +updateSpending(userId, id, input) Promise~Result~
         +deleteSpending(userId, id) Promise~boolean~
-        +listIncomeEntries(userId, limit, cursor?) Promise~IncomeEntryPage~
-        +createIncomeEntry(userId, input) Promise~IncomeEntry~
-        +updateIncomeEntry(userId, id, input) Promise~IncomeEntry~
-        +deleteIncomeEntry(userId, id) Promise~boolean~
+        +listIncomes(userId, limit, cursor?) Promise~IncomePage~
+        +createIncome(userId, input) Promise~Income~
+        +updateIncome(userId, id, input) Promise~Income~
+        +deleteIncome(userId, id) Promise~boolean~
         +listRepeatRules(userId) Promise~RepeatRule[]~
         +createRepeatRule(userId, input) Promise~RuleAndSpendings~
         +deleteRepeatRule(userId, id, deleteFuture?) Promise~boolean~
@@ -342,7 +361,7 @@ Because categories are stored as a JSONB array in `finance_settings.categories`,
 
 `deleteSpending` uses the same ensure + lock protocol. Other writes do **not** hold the lock for the whole write:
 - **`createRepeatRule`** checks the category in transaction 1 (ensure + lock + `EXISTS`), then inserts the rule and its first batch of spendings in a separate transaction 2. The lock is released between them, so a concurrent category removal can slip in after the check.
-- **`deleteRepeatRule`** and **income entry** writes do not lock settings (income entries never touch categories).
+- **`deleteRepeatRule`** and **income** writes do not lock settings (incomes never touch categories).
 
 ---
 

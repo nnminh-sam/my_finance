@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { User, Mail, Calendar, Wallet, Tag, Plus, Sun, Moon, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat } from 'lucide-react';
+import { User, Mail, Calendar, Tag, Plus, Sun, Moon, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
@@ -10,8 +10,8 @@ import { errorMessage } from '../services/auth';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import type { CategoryData } from '../types';
 import { ProfileSection, EditorActions } from './ProfileSection';
-import { MonthlyIncomeEntries } from './MonthlyIncomeEntries';
-import type { IncomeEditorState } from './MonthlyIncomeEntries';
+import { IncomeSources } from './IncomeSources';
+import type { IncomeEditorState } from './IncomeSources';
 import '../styles/UserProfile.css';
 
 const ICONS = { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone };
@@ -57,7 +57,6 @@ export function UserProfile() {
   const { theme, setTheme } = useTheme();
   const { repeatRules, deleteRepeatRule } = useFinance();
   const [stoppingRepeatId, setStoppingRepeatId] = useState<string | null>(null);
-  const income = useSectionEditor<string>();
   const avatar = useSectionEditor<string>();
   const categories = useSectionEditor<CategoryData[]>();
   const appearance = useSectionEditor<'light' | 'dark'>();
@@ -65,21 +64,12 @@ export function UserProfile() {
   const loggingOut = useRef(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
-  const [incomeEntriesEditor, setIncomeEntriesEditor] = useState<IncomeEditorState>({ dirty: false, busy: false });
-  const dirty = income.dirty || avatar.dirty || categories.dirty || appearance.dirty || incomeEntriesEditor.dirty;
-  const pending = Boolean(income.state?.busy || avatar.state?.busy || categories.state?.busy || appearance.state?.busy || incomeEntriesEditor.busy);
+  const [incomeEditor, setIncomeEditor] = useState<IncomeEditorState>({ dirty: false, busy: false });
+  const dirty = avatar.dirty || categories.dirty || appearance.dirty || incomeEditor.dirty;
+  const pending = Boolean(avatar.state?.busy || categories.state?.busy || appearance.state?.busy || incomeEditor.busy);
   const initials = (user?.name || user?.email || '').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 
   useUnsavedChanges(!isLoggingOut && (dirty || pending));
-
-  const saveIncome = () => income.save(async draft => {
-    const value = draft.trim();
-    const amount = Number(value);
-    if (!/^\d+(?:\.\d{1,2})?$/.test(value) || !Number.isFinite(amount) || amount < 0 || amount > 1e12) {
-      throw new Error('Enter an amount from 0 to 1,000,000,000,000 with at most two decimal places. An empty amount is not valid.');
-    }
-    await updateSettings({ income: amount });
-  });
 
   const saveAvatar = () => avatar.save(async draft => {
     const value = draft.trim();
@@ -171,25 +161,7 @@ export function UserProfile() {
           )}
         </ProfileSection>
 
-        <ProfileSection id="income" title="Recurring monthly income" icon={<Wallet size={20} aria-hidden="true" />} editing={income.state !== null} onEdit={() => income.open(String(settings.income))}>
-          {income.state ? (
-            <form className="profile-form" noValidate aria-label="Edit recurring monthly income" aria-busy={income.state.busy} onSubmit={event => { event.preventDefault(); void saveIncome(); }}>
-              <fieldset disabled={income.state.busy}>
-                <label htmlFor="profile-income">Recurring monthly income (₫)</label>
-                <div className="profile-input-row">
-                  <input id="profile-income" type="text" inputMode="decimal" value={income.state.draft} autoFocus aria-invalid={Boolean(income.state.error)} aria-describedby={`profile-income-help${income.state.error ? ' profile-income-error' : ''}`} onChange={event => income.change(event.target.value)} />
-                  <button type="button" className="profile-button" onClick={() => income.change('')} aria-label="Clear recurring monthly income">Clear</button>
-                </div>
-                <p id="profile-income-help" className="profile-hint">0–1,000,000,000,000 ₫, with up to two decimal places. Zero is valid; an empty amount is not.</p>
-              </fieldset>
-              {income.state.error && <p id="profile-income-error" role="alert" className="profile-error">{income.state.error}</p>}
-              <EditorActions busy={income.state.busy} onCancel={income.cancel} />
-            </form>
-          ) : <p className="profile-income-value">{settings.income.toLocaleString('vi-VN', { maximumFractionDigits: 2 })} <span>₫ / month</span></p>}
-          <p className="profile-hint">This recurring base applies every month. Record bonuses and other one-off payments in Additional income by month below.</p>
-        </ProfileSection>
-
-        <MonthlyIncomeEntries disabled={isLoggingOut} onEditorStateChange={setIncomeEntriesEditor} />
+        <IncomeSources disabled={isLoggingOut} onEditorStateChange={setIncomeEditor} />
 
         <ProfileSection id="appearance" title="Appearance" icon={theme === 'light' ? <Sun size={20} aria-hidden="true" /> : <Moon size={20} aria-hidden="true" />} editing={appearance.state !== null} onEdit={() => appearance.open(theme)}>
           {appearance.state ? (

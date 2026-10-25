@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
-import { defaultFinanceSettings, type FinanceSettings, type IncomeEntry, type IncomeEntryInput, type IncomeEntryPage, type RepeatRule, type RepeatRuleInput, type Spending, type SpendingInput, type SpendingPage } from "./model";
+import { defaultFinanceSettings, type FinanceSettings, type Income, type IncomeInput, type IncomePage, type RepeatRule, type RepeatRuleInput, type Spending, type SpendingInput, type SpendingPage } from "./model";
 import { formatDateUtc, generateOccurrences, isRuleDueForSync, type RecurrenceState } from "./recurrence";
 
 export interface FinanceStore {
@@ -10,10 +10,10 @@ export interface FinanceStore {
   createSpending(userId: string, input: SpendingInput): Promise<Spending | undefined>;
   updateSpending(userId: string, id: string, input: SpendingInput): Promise<Spending | "not-found" | "invalid-category">;
   deleteSpending(userId: string, id: string): Promise<boolean>;
-  listIncomeEntries(userId: string, limit: number, cursor?: string): Promise<IncomeEntryPage>;
-  createIncomeEntry(userId: string, input: IncomeEntryInput): Promise<IncomeEntry>;
-  updateIncomeEntry(userId: string, id: string, input: IncomeEntryInput): Promise<IncomeEntry | undefined>;
-  deleteIncomeEntry(userId: string, id: string): Promise<boolean>;
+  listIncomes(userId: string, limit: number, cursor?: string): Promise<IncomePage>;
+  createIncome(userId: string, input: IncomeInput): Promise<Income>;
+  updateIncome(userId: string, id: string, input: IncomeInput): Promise<Income | undefined>;
+  deleteIncome(userId: string, id: string): Promise<boolean>;
   listRepeatRules(userId: string): Promise<RepeatRule[]>;
   createRepeatRule(userId: string, input: RepeatRuleInput): Promise<{ repeatRule: RepeatRule; spendings: Spending[] } | undefined>;
   deleteRepeatRule(userId: string, id: string, deleteFuture?: boolean): Promise<boolean>;
@@ -23,7 +23,7 @@ export interface FinanceStore {
 type Row = Record<string, unknown>;
 function settings(row: Row): FinanceSettings {
   return {
-    income: Number(row.income), avatar: String(row.avatar),
+    avatar: String(row.avatar),
     categories: row.categories as FinanceSettings["categories"],
   };
 }
@@ -35,8 +35,12 @@ function spending(row: Row): Spending {
   if (row.repeat_rule_id) result.repeatRuleId = String(row.repeat_rule_id);
   return result;
 }
-function incomeEntry(row: Row): IncomeEntry {
-  return { id: String(row.id), month: String(row.month), amount: Number(row.amount), description: String(row.description) };
+function income(row: Row): Income {
+  return {
+    id: String(row.id), source: String(row.source), name: String(row.name), amount: Number(row.amount),
+    frequency: String(row.frequency) as Income["frequency"], startDate: String(row.start_date),
+    endDate: row.end_date ? String(row.end_date) : null,
+  };
 }
 function repeatRule(row: Row): RepeatRule {
   return {
@@ -59,7 +63,7 @@ function repeatRule(row: Row): RepeatRule {
   };
 }
 
-const incomeEntryColumns = "id, to_char(month, 'YYYY-MM') AS month, amount, description";
+const incomeColumns = "id, source, name, amount, frequency, to_char(start_date, 'YYYY-MM-DD') AS start_date, to_char(end_date, 'YYYY-MM-DD') AS end_date";
 const spendingColumns = "id, amount, description, category, to_char(date, 'YYYY-MM-DD') AS date, to_char(date + time, 'HH24:MI') AS time, repeat_rule_id::text AS repeat_rule_id";
 const repeatRuleColumns = `id, user_id, amount, description, category,
   to_char(start_date, 'YYYY-MM-DD') AS start_date,
@@ -87,7 +91,7 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
   const store: FinanceStore = {
     async getSettings(userId) {
       const results = await sql.transaction([
-        ensure(userId), sql.query("SELECT income, avatar, categories FROM finance_settings WHERE user_id = $1", [userId]),
+        ensure(userId), sql.query("SELECT avatar, categories FROM finance_settings WHERE user_id = $1", [userId]),
       ], { isolationLevel: "ReadCommitted" });
       return settings(results[1][0]);
     },
@@ -95,9 +99,8 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
       const results = await sql.transaction([
         ensure(userId), lock(userId),
         sql.query(`UPDATE finance_settings SET
-          income = COALESCE($2::numeric, income),
-          avatar = COALESCE($3::text, avatar), categories = COALESCE($4::jsonb, categories)
-          WHERE user_id = $1 RETURNING income, avatar, categories`, [userId, patch.income ?? null,
+          avatar = COALESCE($2::text, avatar), categories = COALESCE($3::jsonb, categories)
+          WHERE user_id = $1 RETURNING avatar, categories`, [userId,
           patch.avatar ?? null, patch.categories === undefined ? null : JSON.stringify(patch.categories)]),
       ], { isolationLevel: "ReadCommitted" });
       return settings(results[2][0]);
@@ -138,26 +141,27 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
       if (row.spending) return spending(row.spending as Row);
       return row.found ? "invalid-category" : "not-found";
     },
-    async listIncomeEntries(userId, limit, cursor) {
-      const rows = await query(`SELECT ${incomeEntryColumns} FROM finance_income_entries
+    async listIncomes(userId, limit, cursor) {
+      const rows = await query(`SELECT ${incomeColumns} FROM finance_incomes
         WHERE user_id = $1 AND ($2::uuid IS NULL OR id > $2::uuid) ORDER BY id ASC LIMIT $3`, [userId, cursor ?? null, limit + 1]);
-      const incomeEntries = rows.slice(0, limit).map(incomeEntry);
-      return { incomeEntries, nextCursor: rows.length > limit ? incomeEntries[incomeEntries.length - 1].id : null };
+      const incomes = rows.slice(0, limit).map(income);
+      return { incomes, nextCursor: rows.length > limit ? incomes[incomes.length - 1].id : null };
     },
-    async createIncomeEntry(userId, input) {
-      const rows = await query(`INSERT INTO finance_income_entries (user_id, id, month, amount, description)
-        VALUES ($1, $2, $3::date, $4, $5) RETURNING ${incomeEntryColumns}`,
-        [userId, randomUUID(), `${input.month}-01`, input.amount, input.description]);
-      return incomeEntry(rows[0]);
+    async createIncome(userId, input) {
+      const rows = await query(`INSERT INTO finance_incomes (user_id, id, source, name, amount, frequency, start_date, end_date)
+        VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8::date) RETURNING ${incomeColumns}`,
+        [userId, randomUUID(), input.source, input.name, input.amount, input.frequency, input.startDate, input.endDate]);
+      return income(rows[0]);
     },
-    async updateIncomeEntry(userId, id, input) {
-      const rows = await query(`UPDATE finance_income_entries SET month = $3::date, amount = $4, description = $5
-        WHERE user_id = $1 AND id = $2 RETURNING ${incomeEntryColumns}`,
-        [userId, id, `${input.month}-01`, input.amount, input.description]);
-      return rows[0] ? incomeEntry(rows[0]) : undefined;
+    async updateIncome(userId, id, input) {
+      const rows = await query(`UPDATE finance_incomes SET source = $3, name = $4, amount = $5, frequency = $6,
+          start_date = $7::date, end_date = $8::date
+        WHERE user_id = $1 AND id = $2 RETURNING ${incomeColumns}`,
+        [userId, id, input.source, input.name, input.amount, input.frequency, input.startDate, input.endDate]);
+      return rows[0] ? income(rows[0]) : undefined;
     },
-    async deleteIncomeEntry(userId, id) {
-      const rows = await query("DELETE FROM finance_income_entries WHERE user_id = $1 AND id = $2 RETURNING id", [userId, id]);
+    async deleteIncome(userId, id) {
+      const rows = await query("DELETE FROM finance_incomes WHERE user_id = $1 AND id = $2 RETURNING id", [userId, id]);
       return rows.length > 0;
     },
     async deleteSpending(userId, id) {

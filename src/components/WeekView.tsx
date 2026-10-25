@@ -32,7 +32,7 @@ interface WeekViewProps {
 
 export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, onNavigateDate, onEditIncome }) => {
   const { settings } = useSettings();
-  const { spendings, incomeEntries } = useFinance();
+  const { spendings, incomes } = useFinance();
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -59,8 +59,8 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
     }
   };
 
-  const { baseIncome, additionalIncome, totalIncome } = getMonthIncome(
-    settings.income, incomeMonth(currentDate), incomeEntries,
+  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
+    incomeMonth(currentDate), incomes,
   );
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -104,7 +104,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
                 type="button"
                 className="overview-income-edit"
                 onClick={onEditIncome}
-                aria-label={`Edit additional income for ${format(currentDate, 'MMMM yyyy')}`}
+                aria-label={`Manage income for ${format(currentDate, 'MMMM yyyy')}`}
                 aria-haspopup="dialog"
               >
                 <Edit2 size={13} aria-hidden="true" />
@@ -137,7 +137,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
           </div>
 
           <div className="week-stat-subtext">
-            Recurring base {baseIncome.toLocaleString('vi-VN')} ₫ · Additional {additionalIncome.toLocaleString('vi-VN')} ₫
+            Recurring {recurringIncome.toLocaleString('vi-VN')} ₫ · One-time {oneTimeIncome.toLocaleString('vi-VN')} ₫
           </div>
         </div>
 
