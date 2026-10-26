@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { User, Mail, Calendar, Wallet, Tag, Plus, Sun, Moon, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat } from 'lucide-react';
+import { User, Mail, Calendar, Wallet, Tag, Plus, Sun, Moon, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat, RefreshCw } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
@@ -55,8 +55,9 @@ export function UserProfile() {
   const { settings, updateSettings } = useSettings();
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
-  const { repeatRules, deleteRepeatRule } = useFinance();
+  const { repeatRules, deleteRepeatRule, reload } = useFinance();
   const [stoppingRepeatId, setStoppingRepeatId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const income = useSectionEditor<string>();
   const avatar = useSectionEditor<string>();
   const categories = useSectionEditor<CategoryData[]>();
@@ -333,7 +334,28 @@ export function UserProfile() {
             <div><dt>Member ID</dt><dd>{user?.id ?? '—'}</dd></div>
             <div><dt>Joined date</dt><dd><Calendar size={16} aria-hidden="true" />{user ? <time dateTime={user.createdAt}>{new Date(user.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</time> : '—'}</dd></div>
           </dl>
-          <div className="profile-actions"><button type="button" className="profile-button profile-button-danger" disabled={isLoggingOut || pending} onClick={() => { void handleLogout(); }}>{isLoggingOut ? 'Signing out…' : 'Sign out'}</button></div>
+          <div className="profile-actions">
+            <button
+              type="button"
+              className="profile-button"
+              disabled={isRefreshing || isLoggingOut || pending}
+              onClick={async () => {
+                setIsRefreshing(true);
+                setLogoutError(null);
+                try {
+                  await reload();
+                } catch (failure) {
+                  setLogoutError(errorMessage(failure));
+                } finally {
+                  setIsRefreshing(false);
+                }
+              }}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              <span>{isRefreshing ? 'Refreshing…' : 'Refresh records'}</span>
+            </button>
+            <button type="button" className="profile-button profile-button-danger" disabled={isLoggingOut || pending} onClick={() => { void handleLogout(); }}>{isLoggingOut ? 'Signing out…' : 'Sign out'}</button>
+          </div>
           {logoutError && <p role="alert" className="profile-error">{logoutError}</p>}
         </section>
       </div>

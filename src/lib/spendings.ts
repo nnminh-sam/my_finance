@@ -17,12 +17,14 @@ export const getTopSpendingsForDate = (date: Date, count: number, spendings: Spe
     .slice(0, Math.max(0, count));
 
 export const formatCompactSpending = (amount: number): string => {
-  if (amount <= 0) return '0';
-  if (amount < 1000) return `${amount.toLocaleString('vi-VN')} ₫`;
-  const inK = amount / 1000;
+  if (amount === 0) return '0';
+  const sign = amount < 0 ? '-' : '';
+  const absAmount = Math.abs(amount);
+  if (absAmount < 1000) return `${sign}${absAmount.toLocaleString('vi-VN')} ₫`;
+  const inK = absAmount / 1000;
   const formatted = inK.toLocaleString('vi-VN', {
     maximumFractionDigits: 1,
   });
-  return `${formatted}k`;
+  return `${sign}${formatted}k`;
 };
 

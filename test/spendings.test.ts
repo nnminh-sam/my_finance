@@ -388,8 +388,11 @@ test('current-month projected savings and overspend insights reference effective
 test('formatCompactSpending formats amounts into compact k representation for mobile display', () => {
   assert.equal(formatCompactSpending(0), '0');
   assert.equal(formatCompactSpending(500), '500 ₫');
+  assert.equal(formatCompactSpending(-500), '-500 ₫');
   assert.equal(formatCompactSpending(50000), '50k');
   assert.equal(formatCompactSpending(125000), '125k');
+  assert.equal(formatCompactSpending(-522000), '-522k');
   assert.equal(formatCompactSpending(1000000), '1.000k');
   assert.equal(formatCompactSpending(9370000), '9.370k');
+  assert.equal(formatCompactSpending(13200000), '13.200k');
 });

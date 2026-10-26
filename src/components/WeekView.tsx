@@ -2,7 +2,7 @@
 
 import React, { useRef } from 'react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isToday, startOfMonth, endOfMonth, addWeeks, subWeeks } from 'date-fns';
-import { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Edit2, ChevronRight } from "lucide-react";
+import { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, ChevronRight } from "lucide-react";
 import { getSpendingsForDate, getTotalForDate, formatCompactSpending } from '../lib/spendings';
 import { useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -27,10 +27,10 @@ interface WeekViewProps {
   currentDate: Date;
   onDateClick: (date: Date) => void;
   onNavigateDate?: (date: Date) => void;
-  onEditIncome: () => void;
+  onEditIncome?: () => void;
 }
 
-export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, onNavigateDate, onEditIncome }) => {
+export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, onNavigateDate }) => {
   const { settings } = useSettings();
   const { spendings, incomeEntries } = useFinance();
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -100,25 +100,18 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
           <div className="week-overview-stat week-overview-income">
             <div className="overview-income-heading">
               <span className="week-stat-label">Income</span>
-              <button
-                type="button"
-                className="overview-income-edit"
-                onClick={onEditIncome}
-                aria-label={`Edit additional income for ${format(currentDate, 'MMMM yyyy')}`}
-                aria-haspopup="dialog"
-              >
-                <Edit2 size={13} aria-hidden="true" />
-              </button>
             </div>
             <span className="week-stat-value week-stat-income-value">
-              {totalIncome.toLocaleString('vi-VN')} ₫
+              <span className="hide-mobile">{totalIncome.toLocaleString('vi-VN')} ₫</span>
+              <span className="show-mobile">{formatCompactSpending(totalIncome)}</span>
             </span>
           </div>
 
           <div className="week-overview-stat week-overview-spending">
             <span className="week-stat-label">Spending</span>
             <span className="week-stat-value week-stat-spending-value">
-              {totalWeekSpending.toLocaleString('vi-VN')} ₫
+              <span className="hide-mobile">{totalWeekSpending.toLocaleString('vi-VN')} ₫</span>
+              <span className="show-mobile">{formatCompactSpending(totalWeekSpending)}</span>
             </span>
           </div>
 
@@ -132,12 +125,24 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
                   : "var(--text-muted)"
               }}
             >
-              {totalIncome > 0 ? `${leftOver.toLocaleString('vi-VN')} ₫` : "Not set"}
+              {totalIncome > 0 ? (
+                <>
+                  <span className="hide-mobile">{leftOver.toLocaleString('vi-VN')} ₫</span>
+                  <span className="show-mobile">{formatCompactSpending(leftOver)}</span>
+                </>
+              ) : (
+                "Not set"
+              )}
             </span>
           </div>
 
           <div className="week-stat-subtext">
-            Recurring base {baseIncome.toLocaleString('vi-VN')} ₫ · Additional {additionalIncome.toLocaleString('vi-VN')} ₫
+            <span className="hide-mobile">
+              Recurring base {baseIncome.toLocaleString('vi-VN')} ₫ · Additional {additionalIncome.toLocaleString('vi-VN')} ₫
+            </span>
+            <span className="show-mobile">
+              Base {formatCompactSpending(baseIncome)} · Extra {formatCompactSpending(additionalIncome)}
+            </span>
           </div>
         </div>
 

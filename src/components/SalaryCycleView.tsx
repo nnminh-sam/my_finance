@@ -23,7 +23,6 @@ import {
   ChevronDown,
   CircleDollarSign,
   Coffee,
-  Edit2,
   Film,
   Gift,
   Heart,
@@ -105,14 +104,13 @@ export interface SalaryCycleViewProps {
   currentDate: Date;
   onDateClick: (date: Date) => void;
   onNavigateDate?: (date: Date) => void;
-  onEditIncome: (month?: string) => void;
+  onEditIncome?: (month?: string) => void;
 }
 
 export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
   currentDate,
   onDateClick,
   onNavigateDate,
-  onEditIncome,
 }) => {
   const { user } = useAuth();
   const { settings } = useSettings();
@@ -634,19 +632,10 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
               <span className="calendar-stat-label">
                 <span className="hide-mobile">Cycle </span>Income
               </span>
-              <button
-                type="button"
-                className="overview-income-edit"
-                onClick={() => onEditIncome(cycle.cycleMonth)}
-                aria-label={`Edit additional income for ${format(cycle.nominalStartDate, 'MMMM yyyy')}`}
-                aria-haspopup="dialog"
-              >
-                <Edit2 size={12} aria-hidden="true" />
-                <span className="hide-mobile">Edit</span>
-              </button>
             </div>
             <span className="calendar-stat-value calendar-stat-income-value">
-              {totalIncome.toLocaleString('vi-VN')} ₫
+              <span className="hide-mobile">{totalIncome.toLocaleString('vi-VN')} ₫</span>
+              <span className="show-mobile">{formatCompactSpending(totalIncome)}</span>
             </span>
           </div>
 
@@ -655,7 +644,8 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
               <span className="hide-mobile">Cycle </span>Spending
             </span>
             <span className="calendar-stat-value calendar-stat-spending-value">
-              {totalCycleSpending.toLocaleString('vi-VN')} ₫
+              <span className="hide-mobile">{totalCycleSpending.toLocaleString('vi-VN')} ₫</span>
+              <span className="show-mobile">{formatCompactSpending(totalCycleSpending)}</span>
             </span>
           </div>
 
@@ -673,7 +663,10 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
               }}
             >
               {totalIncome > 0 ? (
-                `${leftOver.toLocaleString('vi-VN')} ₫`
+                <>
+                  <span className="hide-mobile">{leftOver.toLocaleString('vi-VN')} ₫</span>
+                  <span className="show-mobile">{formatCompactSpending(leftOver)}</span>
+                </>
               ) : (
                 <>
                   <span className="hide-mobile">Income </span>Not set
@@ -683,12 +676,13 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
           </div>
 
           <div className="calendar-stat-subtext">
-            <span className="hide-mobile">Recurring base </span>
-            <span className="show-mobile">Base </span>
-            {baseIncome.toLocaleString('vi-VN')} ₫ ·{' '}
-            <span className="hide-mobile">Additional </span>
-            <span className="show-mobile">Extra </span>
-            {additionalIncome.toLocaleString('vi-VN')} ₫ ·{' '}
+            <span className="hide-mobile">
+              Recurring base {baseIncome.toLocaleString('vi-VN')} ₫ · Additional {additionalIncome.toLocaleString('vi-VN')} ₫
+            </span>
+            <span className="show-mobile">
+              Base {formatCompactSpending(baseIncome)} · Extra {formatCompactSpending(additionalIncome)}
+            </span>{' '}
+            ·{' '}
             <span>
               {format(cycle.startDate, 'MMM d')} – {format(cycle.endDate, 'MMM d')}
             </span>
