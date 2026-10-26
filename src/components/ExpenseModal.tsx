@@ -30,10 +30,11 @@ import { createExpenseDraft, isExpenseDraftDirty, validateExpenseDraft, validate
 import type { ExpenseDraft } from '../lib/expenseDraft';
 import { nextExpenseDraft, prepareExpenseBatch, saveExpenseBatch, stageExpenseDraft } from '../lib/expenseBatch';
 import type { PreparedExpense, QueuedExpense } from '../lib/expenseBatch';
-import { createIncomeEntryDraft, isIncomeEntryDraftDirty, validateIncomeEntryDraft } from '../lib/incomeEntryDraft';
-import { incomeMonth } from '../lib/income';
+import { createIncomeDraft, isIncomeDraftDirty, validateIncomeDraft } from '../lib/incomeDraft';
+import type { IncomeDraft } from '../lib/incomeDraft';
+import { INCOME_FREQUENCY_LABELS, INCOME_SOURCE_SUGGESTIONS } from '../lib/income';
 import { formatMoneyInputDisplay, sanitizeMoneyInput } from '../lib/spendings';
-import type { IncomeEntryInput, Spending } from '../types';
+import type { IncomeFrequency, IncomeInput, Spending } from '../types';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import '../styles/ExpenseForm.css';
 
@@ -56,18 +57,24 @@ export interface ExpenseModalProps {
   expense?: Spending;
   onClose: () => void;
   onSaved?: (input: Omit<Spending, 'id'>, count: number) => void;
-  onIncomeSaved?: (input: IncomeEntryInput) => void;
+  onIncomeSaved?: (input: IncomeInput) => void;
 }
 
 // Mount only while open: each mount captures fresh local defaults and the opening trigger.
 export function ExpenseModal({ expense, onClose, onSaved, onIncomeSaved }: ExpenseModalProps) {
   const { settings } = useSettings();
-  const { createSpending, updateSpending, createRepeatRule, createIncomeEntry } = useFinance();
-  const [initial] = useState(() => ({
-    draft: createExpenseDraft(settings.categories, expense),
-    incomeDraft: createIncomeEntryDraft(incomeMonth(new Date())),
-    trigger: document.activeElement,
-  }));
+  const { createSpending, updateSpending, createRepeatRule, createIncome } = useFinance();
+  const [initial] = useState(() => {
+    const expenseDraft = createExpenseDraft(settings.categories, expense);
+    return {
+      draft: expenseDraft,
+      incomeDraft: {
+        ...createIncomeDraft(expenseDraft.date),
+        source: 'Salary',
+      },
+      trigger: document.activeElement,
+    };
+  });
 
   const editing = initial.draft.id !== undefined;
   const [mode, setMode] = useState<'spending' | 'income'>('spending');
@@ -98,7 +105,7 @@ export function ExpenseModal({ expense, onClose, onSaved, onIncomeSaved }: Expen
   const formId = useId();
 
   const spendingDirty = queue.length > 0 || isExpenseDraftDirty(draft, baseline);
-  const incomeDirty = isIncomeEntryDraftDirty(incomeDraft, incomeBaseline);
+  const incomeDirty = isIncomeDraftDirty(incomeDraft, incomeBaseline);
   const dirty = spendingDirty || incomeDirty;
 
   const displayedQueue = queue.map(entry => entry.key === activeKey ? { ...entry, draft } : entry);
@@ -162,9 +169,9 @@ export function ExpenseModal({ expense, onClose, onSaved, onIncomeSaved }: Expen
     setDraft(current => ({ ...current, [field]: nextValue }));
   };
 
-  const changeIncomeField = (field: 'month' | 'amount' | 'description', value: string) => {
+  const changeIncomeField = <K extends keyof Omit<IncomeDraft, 'id'>>(field: K, value: IncomeDraft[K]) => {
     if (saveLock.current) return;
-    const nextValue = field === 'amount' ? sanitizeMoneyInput(value) : value;
+    const nextValue = field === 'amount' ? sanitizeMoneyInput(String(value)) : value;
     setIncomeDraft(current => ({ ...current, [field]: nextValue }));
   };
 
@@ -229,9 +236,9 @@ export function ExpenseModal({ expense, onClose, onSaved, onIncomeSaved }: Expen
     setError(null);
 
     if (!editing && mode === 'income') {
-      let incomeInput: IncomeEntryInput;
+      let incomeInput: IncomeInput;
       try {
-        incomeInput = validateIncomeEntryDraft(incomeDraft);
+        incomeInput = validateIncomeDraft(incomeDraft);
       } catch (cause) {
         setError(cause instanceof Error && cause.message ? cause.message : 'Check the income details and try again.');
         return;
@@ -239,7 +246,7 @@ export function ExpenseModal({ expense, onClose, onSaved, onIncomeSaved }: Expen
       saveLock.current = true;
       setBusy(true);
       try {
-        await createIncomeEntry(incomeInput);
+        await createIncome(incomeInput);
         if (!mounted.current) return;
         onIncomeSaved?.(incomeInput);
         onClose();
@@ -407,31 +414,60 @@ export function ExpenseModal({ expense, onClose, onSaved, onIncomeSaved }: Expen
 
               <div className="expense-stack">
                 <div className="expense-field">
+                  <label htmlFor={`${formId}-income-source`}>Source</label>
+                  <select
+                    id={`${formId}-income-source`}
+                    value={incomeDraft.source}
+                    onChange={event => changeIncomeField('source', event.target.value)}
+                  >
+                    {INCOME_SOURCE_SUGGESTIONS.map(source => (
+                      <option key={source} value={source}>{source}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="expense-field">
                   <label htmlFor={`${formId}-income-desc`}>Description</label>
                   <input
                     id={`${formId}-income-desc`}
                     type="text"
-                    required
                     maxLength={500}
                     placeholder="e.g., Performance bonus, freelance"
-                    value={incomeDraft.description}
-                    onChange={event => changeIncomeField('description', event.target.value)}
+                    value={incomeDraft.name}
+                    onChange={event => changeIncomeField('name', event.target.value)}
                   />
                 </div>
 
-                <div className="expense-field">
-                  <label htmlFor={`${formId}-income-month`}>Income Month</label>
-                  <div className="expense-input-icon-wrap">
-                    <Calendar size={16} className="expense-input-leading-icon" aria-hidden="true" />
-                    <input
-                      id={`${formId}-income-month`}
-                      type="month"
-                      required
-                      min="0001-01"
-                      max="9999-12"
-                      value={incomeDraft.month}
-                      onChange={event => changeIncomeField('month', event.target.value)}
-                    />
+                <div className="expense-grid">
+                  <div className="expense-field">
+                    <label htmlFor={`${formId}-income-frequency`}>Frequency</label>
+                    <select
+                      id={`${formId}-income-frequency`}
+                      value={incomeDraft.frequency}
+                      onChange={event => changeIncomeField('frequency', event.target.value as IncomeFrequency)}
+                    >
+                      {(Object.keys(INCOME_FREQUENCY_LABELS) as IncomeFrequency[]).map(freq => (
+                        <option key={freq} value={freq}>{INCOME_FREQUENCY_LABELS[freq]}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="expense-field">
+                    <label htmlFor={`${formId}-income-date`}>
+                      {incomeDraft.frequency === 'once' ? 'Date' : 'Start Date'}
+                    </label>
+                    <div className="expense-input-icon-wrap">
+                      <Calendar size={16} className="expense-input-leading-icon" aria-hidden="true" />
+                      <input
+                        id={`${formId}-income-date`}
+                        type="date"
+                        required
+                        min="0001-01-01"
+                        max="9999-12-31"
+                        value={incomeDraft.startDate}
+                        onChange={event => changeIncomeField('startDate', event.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

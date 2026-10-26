@@ -69,10 +69,10 @@ export const DayDetails: React.FC<DayDetailsProps> = (props) => (
 
 const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpense, onEditExpense }) => {
   const { settings } = useSettings();
-  const { spendings, incomeEntries, deleteSpending } = useFinance();
+  const { spendings, incomes, deleteSpending } = useFinance();
   const daySpendings = getSpendingsForDate(date, spendings);
   const totalSpent = getTotalForDate(date, spendings);
-  const { totalIncome } = getMonthIncome(settings.income, incomeMonth(date), incomeEntries);
+  const { totalIncome } = getMonthIncome(incomeMonth(date), incomes);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

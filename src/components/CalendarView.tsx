@@ -81,7 +81,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onDateClick,
 }) => {
   const { settings } = useSettings();
-  const { spendings, incomeEntries, fetchWeeksSpendings } = useFinance();
+  const { spendings, incomes, fetchWeeksSpendings } = useFinance();
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const ignoreMonthSyncUntilRef = useRef<number>(0);
@@ -340,8 +340,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
   }, [activeMonthStr, currentDate]);
 
-  const { baseIncome, additionalIncome, totalIncome } = getMonthIncome(
-    settings.income, incomeMonth(activeDate), incomeEntries,
+  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
+    incomeMonth(activeDate), incomes,
   );
 
   const activeMonthStart = startOfMonth(activeDate);
@@ -668,10 +668,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
           <div className="calendar-stat-subtext">
             <span className="hide-mobile">
-              Recurring base {baseIncome.toLocaleString("vi-VN")} ₫ · Additional {additionalIncome.toLocaleString("vi-VN")} ₫
+              Recurring {recurringIncome.toLocaleString("vi-VN")} ₫ · One-time {oneTimeIncome.toLocaleString("vi-VN")} ₫
             </span>
             <span className="show-mobile">
-              Base {formatCompactSpending(baseIncome)} · Extra {formatCompactSpending(additionalIncome)}
+              Recur. {formatCompactSpending(recurringIncome)} · Once {formatCompactSpending(oneTimeIncome)}
             </span>
           </div>
         </div>

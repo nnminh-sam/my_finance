@@ -5,8 +5,8 @@ import { createPortal } from 'react-dom';
 import { format, parseISO } from 'date-fns';
 import { X } from 'lucide-react';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { MonthlyIncomeEntries } from './MonthlyIncomeEntries';
-import type { IncomeEditorState } from './MonthlyIncomeEntries';
+import { IncomeSources } from './IncomeSources';
+import type { IncomeEditorState } from './IncomeSources';
 import '../styles/UserProfile.css';
 import '../styles/MonthlyIncomeModal.css';
 
@@ -34,7 +34,7 @@ export function MonthlyIncomeModal({ month, onClose }: MonthlyIncomeModalProps) 
   useLayoutEffect(() => {
     const dialog = dialogRef.current!;
     dialog.showModal();
-    dialog.querySelector<HTMLInputElement>('input[inputmode="decimal"]')?.focus({ preventScroll: true });
+    dialog.querySelector<HTMLInputElement>('form input')?.focus({ preventScroll: true });
     return () => {
       if (dialog.open) dialog.close();
       // Native close restores focus; provide a fallback for a surviving trigger.
@@ -47,7 +47,7 @@ export function MonthlyIncomeModal({ month, onClose }: MonthlyIncomeModalProps) 
   const requestClose = () => {
     const { dirty, busy } = editorStateRef.current;
     if (busy) return;
-    if (dirty && !window.confirm('Discard unsaved additional income changes?')) return;
+    if (dirty && !window.confirm('Discard unsaved income changes?')) return;
     onClose();
   };
 
@@ -66,7 +66,7 @@ export function MonthlyIncomeModal({ month, onClose }: MonthlyIncomeModalProps) 
         </button>
       </div>
       <div className="user-profile monthly-income-modal-content">
-        <MonthlyIncomeEntries
+        <IncomeSources
           disabled={false}
           onEditorStateChange={onEditorStateChange}
           initialMonth={initial.month}

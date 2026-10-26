@@ -1,7 +1,7 @@
 import { authenticatedFetch } from './auth';
-import type { IncomeEntry, IncomeEntryInput, RepeatRule, RepeatRuleInput, Spending, UserSettings } from '../types';
+import type { Income, IncomeInput, RepeatRule, RepeatRuleInput, Spending, UserSettings } from '../types';
 
-export type FinanceSettings = Pick<UserSettings, 'income' | 'avatar' | 'categories'>;
+export type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'>;
 export type SpendingInput = Omit<Spending, 'id'>;
 type Fetcher = (path: string, init?: RequestInit) => Promise<Response>;
 
@@ -46,15 +46,15 @@ export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
       } while (cursor);
       return [...records.values()];
     },
-    async getIncomeEntries(): Promise<IncomeEntry[]> {
-      const records = new Map<string, IncomeEntry>();
+    async getIncomes(): Promise<Income[]> {
+      const records = new Map<string, Income>();
       const visited = new Set<string>();
       let cursor: string | null = null;
       do {
         const query = new URLSearchParams({ limit: '500' });
         if (cursor) query.set('cursor', cursor);
-        const page = await request<{ incomeEntries: IncomeEntry[]; nextCursor: string | null }>(`/income-entries?${query}`);
-        for (const entry of page.incomeEntries) records.set(entry.id, entry);
+        const page = await request<{ incomes: Income[]; nextCursor: string | null }>(`/incomes?${query}`);
+        for (const income of page.incomes) records.set(income.id, income);
         cursor = page.nextCursor;
         if (cursor) {
           if (visited.has(cursor)) throw new Error('The server returned a repeated income page. Please reload.');
@@ -63,14 +63,14 @@ export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
       } while (cursor);
       return [...records.values()];
     },
-    async createIncomeEntry(input: IncomeEntryInput): Promise<IncomeEntry> {
-      return (await request<{ incomeEntry: IncomeEntry }>('/income-entries', json('POST', input))).incomeEntry;
+    async createIncome(input: IncomeInput): Promise<Income> {
+      return (await request<{ income: Income }>('/incomes', json('POST', input))).income;
     },
-    async updateIncomeEntry(id: string, input: IncomeEntryInput): Promise<IncomeEntry> {
-      return (await request<{ incomeEntry: IncomeEntry }>(`/income-entries/${encodeURIComponent(id)}`, json('PUT', input))).incomeEntry;
+    async updateIncome(id: string, input: IncomeInput): Promise<Income> {
+      return (await request<{ income: Income }>(`/incomes/${encodeURIComponent(id)}`, json('PUT', input))).income;
     },
-    async deleteIncomeEntry(id: string): Promise<void> {
-      await request<void>(`/income-entries/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    async deleteIncome(id: string): Promise<void> {
+      await request<void>(`/incomes/${encodeURIComponent(id)}`, { method: 'DELETE' });
     },
     async createSpending(input: SpendingInput): Promise<Spending> {
       return (await request<{ spending: Spending }>('/spendings', json('POST', input))).spending;

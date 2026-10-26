@@ -114,7 +114,7 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
 }) => {
   const { user } = useAuth();
   const { settings } = useSettings();
-  const { spendings, incomeEntries, fetchWeeksSpendings } = useFinance();
+  const { spendings, incomes, fetchWeeksSpendings } = useFinance();
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const [config, setConfig] = useState<SalaryCycleConfig>(() =>
@@ -184,10 +184,9 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
   }, [cycle, fetchWeeksSpendings]);
 
   // Income for this salary cycle (uses the cycle's anchor month)
-  const { baseIncome, additionalIncome, totalIncome } = getMonthIncome(
-    settings.income,
+  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
     cycle.cycleMonth,
-    incomeEntries,
+    incomes,
   );
 
   // Compute cycle spending & category totals strictly across the salary cycle days
@@ -677,10 +676,10 @@ export const SalaryCycleView: React.FC<SalaryCycleViewProps> = ({
 
           <div className="calendar-stat-subtext">
             <span className="hide-mobile">
-              Recurring base {baseIncome.toLocaleString('vi-VN')} ₫ · Additional {additionalIncome.toLocaleString('vi-VN')} ₫
+              Recurring {recurringIncome.toLocaleString('vi-VN')} ₫ · One-time {oneTimeIncome.toLocaleString('vi-VN')} ₫
             </span>
             <span className="show-mobile">
-              Base {formatCompactSpending(baseIncome)} · Extra {formatCompactSpending(additionalIncome)}
+              Recur. {formatCompactSpending(recurringIncome)} · Once {formatCompactSpending(oneTimeIncome)}
             </span>{' '}
             ·{' '}
             <span>

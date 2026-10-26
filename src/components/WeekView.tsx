@@ -32,7 +32,7 @@ interface WeekViewProps {
 
 export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, onNavigateDate }) => {
   const { settings } = useSettings();
-  const { spendings, incomeEntries } = useFinance();
+  const { spendings, incomes } = useFinance();
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const mobileDayCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -60,8 +60,8 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
     }
   };
 
-  const { baseIncome, additionalIncome, totalIncome } = getMonthIncome(
-    settings.income, incomeMonth(currentDate), incomeEntries,
+  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
+    incomeMonth(currentDate), incomes,
   );
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -141,10 +141,10 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
 
           <div className="week-stat-subtext">
             <span className="hide-mobile">
-              Recurring base {baseIncome.toLocaleString('vi-VN')} ₫ · Additional {additionalIncome.toLocaleString('vi-VN')} ₫
+              Recurring {recurringIncome.toLocaleString('vi-VN')} ₫ · One-time {oneTimeIncome.toLocaleString('vi-VN')} ₫
             </span>
             <span className="show-mobile">
-              Base {formatCompactSpending(baseIncome)} · Extra {formatCompactSpending(additionalIncome)}
+              Recur. {formatCompactSpending(recurringIncome)} · Once {formatCompactSpending(oneTimeIncome)}
             </span>
           </div>
         </div>

@@ -1,21 +1,21 @@
 # Authentication
 
-Email/password authentication is implemented end-to-end in the React client and Express API. Users and sessions are persisted in Neon PostgreSQL. The client gates finance views behind login, provides registration and profile logout, restores sessions on reload, and refreshes access tokens automatically. Spending records and financial settings now use authenticated, user-scoped Neon persistence; see `FINANCE.md` for the finance API and migration.
+Email/password authentication is implemented end-to-end in the React client and the Next.js Route Handlers (`src/app/api/[...slug]/route.ts` → `src/server/application.ts`). Users and sessions are persisted in Neon PostgreSQL. The client gates finance views behind login, provides registration and profile logout, restores sessions on reload, and refreshes access tokens automatically. Spending records and financial settings now use authenticated, user-scoped Neon persistence; see `FINANCE.md` for the finance API and migration.
 
-Financial settings and categories are stored per account in Neon and load on each device after login. Legacy browser settings are left untouched but no longer read or imported. Light/dark appearance is available on both authentication and finance screens; it follows the system until explicitly chosen, then persists locally under `tracker_theme`.
+Financial settings and categories are stored per account in Neon and load on each device after login. Legacy browser settings are left untouched but no longer read or imported. Light/dark appearance is available on both authentication and finance screens; it follows the system until explicitly chosen, then persists locally under `tracker_theme`. The salary cycle configuration (`/cycle`) is also device-local (`tracker_salary_cycle_v1_<userId>`).
 
 ## Setup
 
 Requires Node.js 20+ and a Neon PostgreSQL database.
 
 1. Install dependencies from the repository root: `npm install`.
-2. Copy `.env.example` to root `.env`, supply a real Neon `DATABASE_URL`, and set `APP_ORIGIN` to the frontend's exact origin. Do not commit credentials.
-3. Run `npm run db:migrate --workspace=@my-finance/server`. This applies checked-in numbered migrations in order, including `001_auth.sql` and `002_finance.sql`, each in its own transaction. These initial schema migrations are rerunnable without deleting existing records; later schema changes need new migrations. The runtime never creates tables. Use a role with DDL permissions for migration and a restricted DML role for runtime where possible.
-4. Run `npm run dev:server` (port 4000 by default), or root `npm run dev` (client 5173, server 4000). Standalone Vite proxies `/api` to port 4000. To test Vercel services, run `vercel dev` from the repository root and set `APP_ORIGIN` to the actual browser origin, e.g. `http://localhost:3000`. With `VERCEL=1`, Vite disables its localhost proxy; the platform routes `/api/*` to Express. `VERCEL_ENV=development` is nonproduction unless `NODE_ENV=production` is explicitly set, allowing local HTTP origins and non-Secure cookies.
-5. On Vercel, use the repository root as the project Root Directory and the root `vercel.json` service configuration documented in `PAGES.md`. Clear legacy top-level/dashboard build and output overrides. The static Vite client serves all non-API paths; the public Express server service handles `/api/*` through `packages/server/src/app.ts`. `packages/shared` is empty and neither app imports it; it is not a shared library dependency or a service, and no shared-source inclusion setting is currently needed.
-6. Set shared deployment variables `DATABASE_URL` and `APP_ORIGIN=https://your-frontend-host`, with the exact frontend HTTPS origin for production and each preview deployment. Leave `PORT` unset; `NODE_ENV` is normally supplied automatically by Vercel. Production and preview deployments, or explicit `NODE_ENV=production`, enable Secure cookies and require HTTPS. There are no internal runtime service calls and no runtime bindings. Never expose credentials or runtime binding values via `VITE_*` variables; browser API calls stay same-origin.
+2. Copy `.env.example` to root `.env`, supply a real Neon `DATABASE_URL`, and set `APP_ORIGIN` to the browser origin (default `http://localhost:5173`). Do not commit credentials.
+3. Run `npm run db:migrate`. This applies checked-in numbered migrations in `migrations/` in order (`001_auth.sql` … `004_repeat_spendings.sql`), each in its own transaction. They are rerunnable without deleting existing records; later schema changes need new migrations. The runtime never creates tables. Use a role with DDL permissions for migration and a restricted DML role for runtime where possible.
+4. Run `npm run dev`. Next.js serves the pages and the `/api/v1/*` Route Handlers on the same origin, port 5173; no proxy is needed. With `vercel dev`, set `APP_ORIGIN` to the actual browser origin (e.g. `http://localhost:3000`). `VERCEL_ENV=development` is nonproduction unless `NODE_ENV=production` is explicitly set, allowing local HTTP origins and non-Secure cookies.
+5. On Vercel, use the repository root as the project Root Directory; `vercel.json` only sets `framework: "nextjs"`. Route Handlers run as serverless functions.
+6. Set deployment variables `DATABASE_URL` and `APP_ORIGIN=https://your-host` (the exact HTTPS origin of production and of each preview deployment). `NODE_ENV` is supplied automatically. Production and preview deployments, or explicit `NODE_ENV=production`, enable Secure cookies and require HTTPS. Never expose credentials via `NEXT_PUBLIC_*` variables; browser API calls stay same-origin.
 
-Configuration searches upward from both the working directory and module directory for the repository, supporting local `tsx`, compiled `dist`, and Vercel. It also supports a standalone server package `.env`. Precedence is existing process environment > root `.env` > server `.env`; dotenv never overrides an already-set value. `DATABASE_URL` and `APP_ORIGIN` are validated at startup, with no secrets in validation errors. The default local origin is `http://localhost:5173`.
+Configuration (`src/server/config.ts`) searches upward from the working directory and module directory for `package.json` roots and loads `.env` there (a legacy `packages/server/.env` is also still read). Precedence is existing process environment > root `.env`; dotenv never overrides an already-set value. `DATABASE_URL` and `APP_ORIGIN` are validated lazily on first use, with no secrets in validation errors.
 
 ## HTTP contract
 
@@ -50,13 +50,13 @@ Usernames are trimmed, 1–100 characters, without control characters. Emails ar
 
 ### Integrated client
 
-`packages/client/src/auth.ts` manages memory-only bearer tokens, single-flight refresh, and cross-tab session coordination. `AuthContext.tsx` exposes login/register/logout and session state. The profile displays Neon account details; account name/email editing is intentionally not implemented.
+`src/services/auth.ts` manages memory-only bearer tokens, single-flight refresh, and cross-tab session coordination. `AuthContext.tsx` exposes login/register/logout and session state. The profile displays Neon account details; account name/email editing is intentionally not implemented.
 
 Use a current browser with **Web Locks, BroadcastChannel, and writable localStorage**, over HTTPS or localhost. Authentication fails closed without these capabilities to avoid concurrent token replay. Only non-secret revision/login-generation metadata is persisted for coordination; tokens are exchanged between same-origin tabs through BroadcastChannel. Ordered revisions discard stale broadcasts, and protected-request retries cannot switch to a replacement account. Automatic refresh runs roughly one minute before access expiry and once on a protected API 401. A failed refresh is not blindly retried.
 
 Logout clears local authentication even when server revocation cannot be confirmed and shows a warning. Local logout metadata prevents automatic restoration on a later reload until an explicit login. The server may retain a session if revocation failed; this warning is not a guarantee of server-side revocation.
 
-The finance API client uses `authenticatedFetch()` from `src/auth.ts`. Calendar, week, day, and analytics views consume Neon-backed records, and the day view supports creating, editing, and deleting expenses.
+The finance API client (`src/services/finance.ts`) uses `authenticatedFetch()` from `src/services/auth.ts`. Calendar, pay cycle, week, day, and analytics views consume Neon-backed records, and the day view supports creating, editing, and deleting expenses.
 
 ### API client usage
 
@@ -90,7 +90,7 @@ On startup reload, refresh once to restore the in-memory token. **Serialize refr
 - Consumed refresh hashes remain in `auth_refresh_tokens` to detect replay and allow logout from stale cookies. Logout materializes cookie/bearer matches into stable session IDs within its database statement, then revokes by ID: a refresh that changes the access hash while logout waits on a row lock cannot remove an already-resolved bearer target. A bearer rotated before logout's statement snapshot no longer matches; use the refresh cookie to revoke that family. Every bearer request checks current hash, access/refresh expiry, and revocation in the database. A request authorized just before concurrent revocation may already be executing; middleware cannot undo it.
 - PostgreSQL-backed per-normalized-email rate limits reserve attempts atomically across serverless workers: 10 registration/login attempts per 15-minute fixed window, shared across both endpoints. Success does not reset it. Every expiry comparison and window assignment uses the same `statement_timestamp()`, so crossing an expiry boundary during evaluation cannot reset the window without resetting its counter. A statement that starts before expiry remains in the old window even if it waits on a row lock past expiry; the next post-expiry statement resets the window. Account-key hashes avoid storing emails in the limiter. This is **not** a complete anti-abuse system: arbitrary email addresses evade it and attackers can temporarily lock out an account. Add edge/WAF IP limits, resource budgets, and monitoring for production. No untrusted forwarded-IP header is used as an identity.
 - All user-supplied SQL values are parameters. Unexpected errors omit driver details, SQL, tokens, and database URLs from responses and logs. Auth responses use `Cache-Control: no-store`. The application does not log credentials.
-- Future APIs can compose with `requireAuth(store)` from `src/auth/http.ts` and read `res.locals.user`. Register such routes **before** the terminal 404/error handlers in `createApplication`. Authorization/data isolation must additionally constrain queries by the authenticated user ID; do not trust user IDs supplied by the client.
+- Future APIs can call `authenticateRequest(request, store)` from `src/server/auth/http.ts` to obtain the authenticated user. Route them inside `handleFetch` in `src/server/application.ts` **before** the final 404 response. Authorization/data isolation must additionally constrain queries by the authenticated user ID; do not trust user IDs supplied by the client.
 
 There is no email verification, password reset/change, MFA, account deletion, global device logout, in the authentication scope. Use HTTPS in production. Treat XSS as able to issue authenticated requests even though it cannot read the refresh cookie.
 
@@ -100,9 +100,8 @@ Schedule database cleanup outside request handlers. Expired or revoked sessions 
 
 ## Validation
 
-- `npm run build --workspace=@my-finance/server`
-- `npm test --workspace=@my-finance/server`
-- `npm test --workspace=@my-finance/client`
+- `npm run lint` (TypeScript, `tsc --noEmit`)
+- `npm test`
 - `npm run build`
 
 Tests use `node:test` with `tsx`: real password hashing, HTTP contracts, cookie flags, CSRF/origin checks, validation, generic errors, limiter behavior, rotation/replay, concurrency, expiry, logout with stale cookies/mismatched bearers, and safe service failures. HTTP tests use an injectable in-memory store; it is a test double only, never the production limiter or session store.
@@ -111,4 +110,4 @@ The Neon integration tests are skipped unless `AUTH_TEST_DATABASE_URL` is export
 
 Client tests mock browser coordination and cover restore single-flight, refresh locking, stale broadcasts, account-switch races, and failed logout. They do not replace real multi-tab browser testing.
 
-No CLI commands, npm installation, build, migration, or tests were executed for this documentation update: there was no terminal tool available. Editor diagnostics are the only available static check and cannot replace those commands. The Calendar category-icon prop mismatch was corrected while integrating the Neon-backed spending views.
+As of 2026-10-22, `npm test` passes (Neon integration suites skipped unless their database URLs are exported) and `npm run lint` reports no type errors.

@@ -7,7 +7,7 @@ import { useAuth } from './AuthContext';
 import { useFinance } from './FinanceContext';
 import { useTheme } from './ThemeContext';
 
-type FinanceSettings = Pick<UserSettings, 'income' | 'avatar' | 'categories'>;
+type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'>;
 
 interface SettingsContextType {
   settings: UserSettings;
@@ -35,8 +35,6 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   const updateSettings = async (updates: Partial<UserSettings>): Promise<void> => {
     if (updates.theme !== undefined) setTheme(updates.theme);
     const financial: Partial<FinanceSettings> = {};
-    if (updates.income !== undefined) financial.income = updates.income;
-
     if (updates.avatar !== undefined) financial.avatar = updates.avatar;
     if (updates.categories !== undefined) financial.categories = updates.categories;
     if (Object.keys(financial).length > 0) await finance.updateSettings(financial);
