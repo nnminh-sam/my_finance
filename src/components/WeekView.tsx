@@ -2,7 +2,7 @@
 
 import React, { useRef } from 'react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isToday, startOfMonth, endOfMonth, addWeeks, subWeeks } from 'date-fns';
-import { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, ChevronRight } from "lucide-react";
+import { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone } from "lucide-react";
 import { getSpendingsForDate, getTotalForDate, formatCompactSpending } from '../lib/spendings';
 import { useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -34,6 +34,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
   const { settings } = useSettings();
   const { spendings, incomeEntries } = useFinance();
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const mobileDayCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartRef.current = {
@@ -87,6 +88,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
   const leftOver = totalIncome - totalMonthSpending;
 
   const totalWeekSpending = days.reduce((sum, day) => sum + getTotalForDate(day, spendings), 0);
+  const weekRangeLabel = `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d')}`;
 
   return (
     <div
@@ -94,6 +96,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Desktop Overview & Top Categories */}
       <div className="week-overview-grid">
         {/* Card 1: Overview */}
         <div className="week-overview-card glass">
@@ -175,6 +178,58 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
         </div>
       </div>
 
+      {/* Mobile Week Header & Day Strip */}
+      <div className="week-mobile-summary">
+        <div className="week-mobile-title-row">
+          <h2 className="week-mobile-title">This Week</h2>
+          <span className="week-mobile-range">{weekRangeLabel}</span>
+        </div>
+
+        <div className="week-mobile-strip">
+          {days.map((day) => {
+            const dayKey = format(day, 'yyyy-MM-dd');
+            const isCurrentDay = isToday(day);
+            const dayTotal = getTotalForDate(day, spendings);
+            return (
+              <button
+                key={dayKey}
+                type="button"
+                className={cn('week-strip-day', isCurrentDay && 'is-today')}
+                onClick={() => {
+                  const targetEl = mobileDayCardRefs.current[dayKey];
+                  if (targetEl) {
+                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  } else {
+                    onDateClick(day);
+                  }
+                }}
+                aria-label={format(day, 'EEEE, MMMM d')}
+              >
+                <span className="week-strip-letter">{format(day, 'EEEEE')}</span>
+                <span className="week-strip-num">{format(day, 'd')}</span>
+                <span
+                  className={cn(
+                    'week-strip-dot',
+                    dayTotal > 0 ? 'has-spending' : 'no-spending',
+                  )}
+                  aria-hidden="true"
+                />
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="week-mobile-stats-bar">
+          <span className="week-mobile-stat">
+            Spent: <strong className="week-mobile-stat-spent">-{formatCompactSpending(totalWeekSpending)}</strong>
+          </span>
+          <span className="week-mobile-stat">
+            Income: <strong className="week-mobile-stat-income">+{formatCompactSpending(totalIncome)}</strong>
+          </span>
+        </div>
+      </div>
+
+      {/* Desktop 7-Column Grid */}
       <div className="week-days-grid">
         {days.map((day, idx) => {
           const total = getTotalForDate(day, spendings);
@@ -202,14 +257,6 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
                 <span className="week-day-total-desktop">
                   {total.toLocaleString('vi-VN')} ₫
                 </span>
-              </div>
-
-              {/* Mobile compact total & chevron */}
-              <div className="week-day-total-mobile">
-                <span className={cn("week-day-total-val", total === 0 && "week-day-total-zero")}>
-                  {total > 0 ? formatCompactSpending(total) : '0'}
-                </span>
-                <ChevronRight size={16} className="week-day-chevron" aria-hidden="true" />
               </div>
 
               {/* Desktop detailed spending list */}
@@ -240,6 +287,72 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
                   <div className="week-more-items">
                     + {daySpendings.length - 20} more items
                   </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Mobile Grouped Daily Transaction Cards */}
+      <div className="week-mobile-feed hide-scrollbar">
+        {days.map((day) => {
+          const dayKey = format(day, 'yyyy-MM-dd');
+          const daySpendings = getSpendingsForDate(day, spendings);
+          const isCurrentDay = isToday(day);
+
+          return (
+            <div
+              key={dayKey}
+              ref={(el) => { mobileDayCardRefs.current[dayKey] = el; }}
+              className={cn('week-feed-card glass', isCurrentDay && 'is-today')}
+              onClick={() => onDateClick(day)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onDateClick(day);
+                }
+              }}
+            >
+              <div className="week-feed-day-col">
+                <span className="week-feed-day-name">{format(day, 'EEE')}</span>
+                <span className="week-feed-day-num">{format(day, 'd')}</span>
+              </div>
+
+              <div className="week-feed-tx-col">
+                {daySpendings.length === 0 ? (
+                  <div className="week-feed-empty-row">
+                    <span>No spending</span>
+                    <span className="week-feed-empty-amount">0</span>
+                  </div>
+                ) : (
+                  daySpendings.map((s) => {
+                    const catData = settings.categories?.find((c) => c.id === s.category) || {
+                      name: s.category,
+                      icon: 'CircleDollarSign',
+                      color: 'var(--primary)',
+                    };
+                    return (
+                      <div key={s.id} className="week-feed-tx-row">
+                        <span
+                          className="week-feed-tx-badge"
+                          style={{
+                            backgroundColor: `color-mix(in srgb, ${catData.color} 20%, transparent)`,
+                            color: catData.color,
+                          }}
+                          aria-hidden="true"
+                        >
+                          <CategoryIcon iconName={catData.icon} size={15} />
+                        </span>
+                        <span className="week-feed-tx-desc">{s.description}</span>
+                        <span className="week-feed-tx-amount">
+                          -{formatCompactSpending(s.amount)}
+                        </span>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
