@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getSpendingsForDate, getTopSpendingsForDate, getTotalForDate, formatCompactSpending } from '../src/lib/spendings';
+import { getSpendingsForDate, getTopSpendingsForDate, getTotalForDate, formatCompactSpending, sanitizeMoneyInput, formatMoneyInputDisplay } from '../src/lib/spendings';
 import { computeMonthlyAnalytics, getSpendingsForMonth } from '../src/lib/analytics';
 import type { IncomeEntry, Spending } from '../src/types';
 
@@ -395,4 +395,18 @@ test('formatCompactSpending formats amounts into compact k representation for mo
   assert.equal(formatCompactSpending(1000000), '1.000k');
   assert.equal(formatCompactSpending(9370000), '9.370k');
   assert.equal(formatCompactSpending(13200000), '13.200k');
+});
+
+test('sanitizeMoneyInput and formatMoneyInputDisplay enforce numeric currency values and expand k shorthand', () => {
+  assert.equal(sanitizeMoneyInput(''), '');
+  assert.equal(sanitizeMoneyInput('abc!@#'), '');
+  assert.equal(sanitizeMoneyInput('99k'), '99000');
+  assert.equal(sanitizeMoneyInput('99K'), '99000');
+  assert.equal(sanitizeMoneyInput('99.000k'), '99000000');
+  assert.equal(sanitizeMoneyInput('99kkkk'), '99000');
+  assert.equal(sanitizeMoneyInput('12.500.000'), '12500000');
+  assert.equal(sanitizeMoneyInput('00050'), '50');
+  assert.equal(formatMoneyInputDisplay('99000'), '99.000');
+  assert.equal(formatMoneyInputDisplay('12500000'), '12.500.000');
+  assert.equal(formatMoneyInputDisplay(''), '');
 });

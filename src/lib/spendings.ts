@@ -28,3 +28,37 @@ export const formatCompactSpending = (amount: number): string => {
   return `${sign}${formatted}k`;
 };
 
+/**
+ * Sanitizes a user-typed money input string:
+ * - Strips all non-numeric characters except a single 'k' / 'K' multiplier
+ * - Expands a trailing 'k' / 'K' (e.g., "99k" -> "99000")
+ * - Clamps to at most 13 digits (max 1,000,000,000,000)
+ */
+export function sanitizeMoneyInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  const hasK = /[kK]$/.test(trimmed);
+  const digitsOnly = trimmed.replace(/\D/g, '');
+  if (!digitsOnly) return '';
+  const normalized = digitsOnly.replace(/^0+(?=\d)/, '');
+  if (normalized === '0') return '0';
+  const expanded = hasK ? `${normalized}000` : normalized;
+  if (Number(expanded) > 1_000_000_000_000) {
+    return expanded.slice(0, 12);
+  }
+  return expanded;
+}
+
+/**
+ * Formats a clean numeric string with Vietnamese thousand separators (e.g. "99000" -> "99.000").
+ */
+export function formatMoneyInputDisplay(cleanDigits: string): string {
+  if (!cleanDigits) return '';
+  const digits = cleanDigits.replace(/\D/g, '');
+  if (!digits) return '';
+  const num = Number(digits);
+  if (!Number.isFinite(num)) return digits;
+  return num.toLocaleString('vi-VN');
+}
+
+

@@ -386,6 +386,7 @@ function FinanceDocument({
             expense={expenseDialog.expense}
             onClose={() => setExpenseDialog(null)}
             onSaved={(input, count) => setExpenseNotice(count > 1 ? `${count} expenses added.` : `Expense ${expenseDialog.expense ? 'updated' : 'added'} for ${input.date} at ${input.time}.`)}
+            onIncomeSaved={(input) => setExpenseNotice(`Income “${input.description}” added for ${input.month}.`)}
           />
         )}
       </div>
