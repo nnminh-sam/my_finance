@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { authHref, pageHref, readPageDate, safeReturnPath } from '../src/lib/navigation';
 import type { FinancePage } from '../src/lib/pages';
@@ -141,3 +142,19 @@ test('auth links encode sanitized return paths exactly once for login and signup
     }
   }
 });
+
+test('mobile navigation splits top header and bottom tab bar at <= 768px', () => {
+  const rootDir = new URL('..', import.meta.url);
+  const layoutSource = readFileSync(new URL('src/app/(finance)/layout.tsx', rootDir), 'utf8');
+  const navCss = readFileSync(new URL('src/styles/navigation.css', rootDir), 'utf8');
+
+  assert.match(layoutSource, /aria-label="Mobile bottom navigation"/);
+  assert.match(layoutSource, /className="document-mobile-period"/);
+  assert.match(layoutSource, /className="document-action document-profile-btn"/);
+  assert.match(layoutSource, /className="document-bottom-add"/);
+
+  assert.match(navCss, /@media \(max-width: 768px\)/);
+  assert.match(navCss, /\.document-bottom-nav\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(navCss, /\.document-profile-btn\s*\{[\s\S]*?display:\s*inline-flex/);
+});
+

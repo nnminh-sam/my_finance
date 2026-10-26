@@ -198,6 +198,16 @@ function FinanceDocument({
     { page: 'profile', label: 'Profile', Icon: User },
   ] as const;
 
+  const bottomTabsLeft = [
+    { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
+    { page: 'cycle', label: 'Pay Cycle', Icon: CalendarClock },
+  ] as const;
+
+  const bottomTabsRight = [
+    { page: 'week', label: 'Week', Icon: List },
+    { page: 'analytics', label: 'Analytics', Icon: ChartColumn },
+  ] as const;
+
   const resetCalendarToCurrentMonth = useCallback(() => {
     if (page === 'calendar') {
       const now = new Date();
@@ -205,6 +215,61 @@ function FinanceDocument({
       setActiveDate(now);
     }
   }, [page]);
+
+  const periodLabel = page === 'profile' ? 'User Profile' : format(activeDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy');
+  const mobilePeriodLabel = page === 'profile' ? 'User Profile' : format(activeDate, page === 'day' ? 'MMM d, yyyy' : 'MMMM yyyy');
+
+  const renderPrevAction = (extraClass = '') => {
+    const className = `document-action${extraClass ? ` ${extraClass}` : ''}`;
+    if (!dateNavigation) return null;
+    if (page === 'calendar') {
+      return (
+        <button
+          type="button"
+          className={className}
+          title="Previous period"
+          aria-label="Previous period"
+          onClick={() => {
+            setCalendarDate(previousDate);
+            setActiveDate(previousDate);
+          }}
+        >
+          <ChevronLeft size={20} />
+        </button>
+      );
+    }
+    return (
+      <Link href={pageHref(page, previousDate)} className={className} title="Previous period" aria-label="Previous period">
+        <ChevronLeft size={20} />
+      </Link>
+    );
+  };
+
+  const renderNextAction = (extraClass = '') => {
+    const className = `document-action${extraClass ? ` ${extraClass}` : ''}`;
+    if (!dateNavigation) return null;
+    if (page === 'calendar') {
+      return (
+        <button
+          type="button"
+          className={className}
+          title="Next period"
+          aria-label="Next period"
+          onClick={() => {
+            setCalendarDate(nextDate);
+            setActiveDate(nextDate);
+          }}
+        >
+          <ChevronRight size={20} />
+        </button>
+      );
+    }
+    return (
+      <Link href={pageHref(page, nextDate)} className={className} title="Next period" aria-label="Next period">
+        <ChevronRight size={20} />
+      </Link>
+    );
+  };
 
   return (
     <FinanceShellContext.Provider value={shellValue}>
@@ -217,11 +282,20 @@ function FinanceDocument({
             aria-label="MyFinance calendar"
           >
             <span className="document-brand-icon"><img src="/favicon.svg" width={40} height={40} alt="" /></span>
-            <span>
+            <span className="document-brand-text">
               <span className="document-title">MyFinance</span>
-              <span className="document-subtitle">{page === 'profile' ? 'User Profile' : format(activeDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy')}</span>
+              <span className="document-subtitle">{periodLabel}</span>
             </span>
           </Link>
+
+          <div className="document-mobile-period">
+            {renderPrevAction('document-period-chevron')}
+            <span className="document-mobile-period-label" aria-live="polite">
+              {mobilePeriodLabel}
+            </span>
+            {renderNextAction('document-period-chevron')}
+          </div>
+
           <nav aria-label="Main navigation" className="document-nav">
             {navigation.map(item => (
               <Link
@@ -235,45 +309,22 @@ function FinanceDocument({
               </Link>
             ))}
           </nav>
+
           <div className="document-actions">
-            {dateNavigation && (
-              page === 'calendar' ? (
-                <>
-                  <button
-                    type="button"
-                    className="document-action"
-                    title="Previous period"
-                    aria-label="Previous period"
-                    onClick={() => {
-                      setCalendarDate(previousDate);
-                      setActiveDate(previousDate);
-                    }}
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <button
-                    type="button"
-                    className="document-action"
-                    title="Next period"
-                    aria-label="Next period"
-                    onClick={() => {
-                      setCalendarDate(nextDate);
-                      setActiveDate(nextDate);
-                    }}
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link href={pageHref(page, previousDate)} className="document-action" title="Previous period" aria-label="Previous period"><ChevronLeft size={20} /></Link>
-                  <Link href={pageHref(page, nextDate)} className="document-action" title="Next period" aria-label="Next period"><ChevronRight size={20} /></Link>
-                </>
-              )
-            )}
-            <button type="button" className="document-action document-add" title="Add expense" aria-label="Add expense" onClick={() => openExpense()}><Plus size={20} /></button>
-            <button className="document-action" title="Refresh records" aria-label="Refresh records" onClick={() => { void reload().catch(() => {}); }}><RefreshCw size={20} /></button>
-            <button className="document-action" title="Toggle theme" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>
+            {renderPrevAction('document-desktop-only')}
+            {renderNextAction('document-desktop-only')}
+            <button type="button" className="document-action document-add document-desktop-only" title="Add expense" aria-label="Add expense" onClick={() => openExpense()}><Plus size={20} /></button>
+            <button className="document-action document-desktop-only" title="Refresh records" aria-label="Refresh records" onClick={() => { void reload().catch(() => {}); }}><RefreshCw size={20} /></button>
+            <button className="document-action document-desktop-only" title="Toggle theme" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>
+            <Link
+              href={pages.profile.path}
+              className="document-action document-profile-btn"
+              title="Profile"
+              aria-label="Profile"
+              aria-current={page === 'profile' ? 'page' : undefined}
+            >
+              <User size={20} aria-hidden="true" />
+            </Link>
           </div>
         </header>
         {error && (
@@ -291,12 +342,51 @@ function FinanceDocument({
           {children}
         </main>
 
+        <nav aria-label="Mobile bottom navigation" className="document-bottom-nav glass">
+          {bottomTabsLeft.map(item => (
+            <Link
+              key={item.page}
+              href={item.page === 'calendar' ? pages.calendar.path : pageHref(item.page, activeDate)}
+              onClick={item.page === 'calendar' ? resetCalendarToCurrentMonth : undefined}
+              className="document-bottom-link"
+              aria-current={page === item.page ? 'page' : undefined}
+            >
+              <item.Icon size={20} aria-hidden="true" />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+          <button
+            type="button"
+            className="document-bottom-add"
+            title="Add transaction"
+            aria-label="Add transaction"
+            onClick={() => openExpense()}
+          >
+            <span className="document-bottom-add-circle">
+              <Plus size={24} aria-hidden="true" />
+            </span>
+            <span className="document-bottom-add-label">Add</span>
+          </button>
+          {bottomTabsRight.map(item => (
+            <Link
+              key={item.page}
+              href={pageHref(item.page, activeDate)}
+              className="document-bottom-link"
+              aria-current={page === item.page ? 'page' : undefined}
+            >
+              <item.Icon size={20} aria-hidden="true" />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+
         {incomeDialogMonth && <MonthlyIncomeModal month={incomeDialogMonth} onClose={() => setIncomeDialogMonth(null)} />}
         {expenseDialog && (
           <ExpenseModal
             expense={expenseDialog.expense}
             onClose={() => setExpenseDialog(null)}
             onSaved={(input, count) => setExpenseNotice(count > 1 ? `${count} expenses added.` : `Expense ${expenseDialog.expense ? 'updated' : 'added'} for ${input.date} at ${input.time}.`)}
+            onIncomeSaved={(input) => setExpenseNotice(`Income “${input.source}${input.name ? ` · ${input.name}` : ''}” added.`)}
           />
         )}
       </div>

@@ -1,38 +1,96 @@
 'use client';
 
-import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Repeat, Trash2, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Briefcase,
+  Calendar,
+  Car,
+  ChevronDown,
+  CircleDollarSign,
+  Clock,
+  Coffee,
+  Film,
+  Gift,
+  Heart,
+  Home,
+  Phone,
+  Plus,
+  Receipt,
+  Search,
+  ShoppingBag,
+  Trash2,
+  Utensils,
+} from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useFinance } from '../contexts/FinanceContext';
 import { createExpenseDraft, isExpenseDraftDirty, validateExpenseDraft, validateRepeatDraft } from '../lib/expenseDraft';
 import type { ExpenseDraft } from '../lib/expenseDraft';
 import { nextExpenseDraft, prepareExpenseBatch, saveExpenseBatch, stageExpenseDraft } from '../lib/expenseBatch';
 import type { PreparedExpense, QueuedExpense } from '../lib/expenseBatch';
-import type { Spending } from '../types';
+import { createIncomeDraft, isIncomeDraftDirty, validateIncomeDraft } from '../lib/incomeDraft';
+import type { IncomeDraft } from '../lib/incomeDraft';
+import { INCOME_FREQUENCY_LABELS, INCOME_SOURCE_SUGGESTIONS } from '../lib/income';
+import { formatMoneyInputDisplay, sanitizeMoneyInput } from '../lib/spendings';
+import type { IncomeFrequency, IncomeInput, Spending } from '../types';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import '../styles/ExpenseForm.css';
+
+const CATEGORY_ICONS = {
+  Utensils,
+  Car,
+  Film,
+  ShoppingBag,
+  Receipt,
+  CircleDollarSign,
+  Coffee,
+  Home,
+  Heart,
+  Briefcase,
+  Gift,
+  Phone,
+};
 
 export interface ExpenseModalProps {
   expense?: Spending;
   onClose: () => void;
   onSaved?: (input: Omit<Spending, 'id'>, count: number) => void;
+  onIncomeSaved?: (input: IncomeInput) => void;
 }
 
 // Mount only while open: each mount captures fresh local defaults and the opening trigger.
-export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
+export function ExpenseModal({ expense, onClose, onSaved, onIncomeSaved }: ExpenseModalProps) {
   const { settings } = useSettings();
-  const { createSpending, updateSpending, createRepeatRule } = useFinance();
-  const [initial] = useState(() => ({
-    draft: createExpenseDraft(settings.categories, expense),
-    trigger: document.activeElement,
-  }));
+  const { createSpending, updateSpending, createRepeatRule, createIncome } = useFinance();
+  const [initial] = useState(() => {
+    const expenseDraft = createExpenseDraft(settings.categories, expense);
+    return {
+      draft: expenseDraft,
+      incomeDraft: {
+        ...createIncomeDraft(expenseDraft.date),
+        source: 'Salary',
+      },
+      trigger: document.activeElement,
+    };
+  });
+
+  const editing = initial.draft.id !== undefined;
+  const [mode, setMode] = useState<'spending' | 'income'>('spending');
+
   const [draft, setDraft] = useState(initial.draft);
   const [baseline, setBaseline] = useState(initial.draft);
   const [queue, setQueue] = useState<QueuedExpense[]>([]);
   const [activeKey, setActiveKey] = useState<number | null>(null);
   const [savedCount, setSavedCount] = useState(0);
+
+  const [incomeDraft, setIncomeDraft] = useState(initial.incomeDraft);
+  const [incomeBaseline] = useState(initial.incomeDraft);
+
+  const [categoryQuery, setCategoryQuery] = useState('');
+  const [categoryOpen, setCategoryOpen] = useState(false);
+
   const nextKey = useRef(0);
   const confirmedCount = useRef(0);
   const newEditorDraft = useRef<ExpenseDraft | null>(null);
@@ -40,39 +98,26 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
+  const incomeAmountRef = useRef<HTMLInputElement>(null);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
   const saveLock = useRef(false);
   const mounted = useRef(false);
   const formId = useId();
-  const dirty = queue.length > 0 || isExpenseDraftDirty(draft, baseline);
-  const editing = initial.draft.id !== undefined;
+
+  const spendingDirty = queue.length > 0 || isExpenseDraftDirty(draft, baseline);
+  const incomeDirty = isIncomeDraftDirty(incomeDraft, incomeBaseline);
+  const dirty = spendingDirty || incomeDirty;
+
   const displayedQueue = queue.map(entry => entry.key === activeKey ? { ...entry, draft } : entry);
   const queuedTotal = displayedQueue.reduce((total, entry) => {
     const amount = Number(entry.draft.amount);
     return total + (Number.isFinite(amount) && amount > 0 ? amount : 0);
   }, 0);
 
-  const presets = [
-    { label: 'Breakfast', desc: 'Breakfast', category: 'Food', time: '08:00', icon: '🍳', freq: 'daily' as const },
-    { label: 'Lunch', desc: 'Lunch', category: 'Food', time: '12:30', icon: '🍱', freq: 'weekdays' as const },
-    { label: 'Coffee', desc: 'Coffee', category: 'Food', time: '09:00', icon: '☕', freq: 'daily' as const },
-    { label: 'Gas', desc: 'Gas', category: 'Transport', time: '08:30', icon: '⛽', freq: 'weekly' as const },
-    { label: 'Rent / Bills', desc: 'Bills', category: 'Bills', time: '09:00', icon: '📄', freq: 'monthly' as const },
-  ];
-
-  const applyPreset = (preset: typeof presets[number]) => {
-    if (saveLock.current) return;
-    const targetCategory = settings.categories.find(c => c.name.toLowerCase() === preset.category.toLowerCase() || c.id.toLowerCase() === preset.category.toLowerCase())?.id ?? settings.categories[0]?.id ?? '';
-    setDraft(curr => ({
-      ...curr,
-      description: preset.desc,
-      category: targetCategory,
-      time: preset.time,
-      isRepeat: true,
-      repeatFrequency: preset.freq,
-      repeatEndType: 'unlimited',
-    }));
-    amountRef.current?.focus({ preventScroll: true });
-  };
+  const selectedCategory = settings.categories.find(c => c.id === draft.category);
+  const filteredCategories = settings.categories.filter(c =>
+    c.name.toLowerCase().includes(categoryQuery.trim().toLowerCase()),
+  );
 
   useUnsavedChanges(dirty || busy);
 
@@ -91,18 +136,43 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
   }, [initial]);
 
   useLayoutEffect(() => {
-    if (!busy) amountRef.current?.focus({ preventScroll: true });
-  }, [busy]);
+    if (!busy) {
+      if (mode === 'income') {
+        incomeAmountRef.current?.focus({ preventScroll: true });
+      } else {
+        amountRef.current?.focus({ preventScroll: true });
+      }
+    }
+  }, [busy, mode]);
+
+  useEffect(() => {
+    if (!categoryOpen) return;
+    const handleMouseDown = (event: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setCategoryOpen(false);
+        setCategoryQuery('');
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [categoryOpen]);
 
   const requestClose = () => {
     if (saveLock.current) return;
-    if (dirty && !window.confirm('Discard your unsaved expense changes?')) return;
+    if (dirty && !window.confirm('Discard your unsaved transaction changes?')) return;
     onClose();
   };
 
   const changeField = (field: keyof Omit<ExpenseDraft, 'id'>, value: string) => {
     if (saveLock.current) return;
-    setDraft(current => ({ ...current, [field]: value }));
+    const nextValue = field === 'amount' ? sanitizeMoneyInput(value) : value;
+    setDraft(current => ({ ...current, [field]: nextValue }));
+  };
+
+  const changeIncomeField = <K extends keyof Omit<IncomeDraft, 'id'>>(field: K, value: IncomeDraft[K]) => {
+    if (saveLock.current) return;
+    const nextValue = field === 'amount' ? sanitizeMoneyInput(String(value)) : value;
+    setIncomeDraft(current => ({ ...current, [field]: nextValue }));
   };
 
   const resetEditor = (source: ExpenseDraft) => {
@@ -160,10 +230,36 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
     if (key === activeKey) resetEditor(draft);
   };
 
-  const saveExpense = async (event: FormEvent<HTMLFormElement>) => {
+  const saveTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (saveLock.current) return;
     setError(null);
+
+    if (!editing && mode === 'income') {
+      let incomeInput: IncomeInput;
+      try {
+        incomeInput = validateIncomeDraft(incomeDraft);
+      } catch (cause) {
+        setError(cause instanceof Error && cause.message ? cause.message : 'Check the income details and try again.');
+        return;
+      }
+      saveLock.current = true;
+      setBusy(true);
+      try {
+        await createIncome(incomeInput);
+        if (!mounted.current) return;
+        onIncomeSaved?.(incomeInput);
+        onClose();
+        return;
+      } catch (cause) {
+        saveLock.current = false;
+        if (mounted.current) {
+          setBusy(false);
+          setError(cause instanceof Error && cause.message ? cause.message : 'Unable to save income.');
+        }
+        return;
+      }
+    }
 
     if (!editing && draft.isRepeat) {
       let repeatInput;
@@ -248,246 +344,547 @@ export function ExpenseModal({ expense, onClose, onSaved }: ExpenseModalProps) {
   return createPortal(
     <dialog
       ref={dialogRef}
-      className={`expense-modal${editing ? '' : ' expense-modal-batch'}`}
+      className="expense-modal"
       aria-labelledby={`${formId}-title`}
       aria-describedby={error ? `${formId}-error` : undefined}
       aria-busy={busy}
-      onCancel={event => { event.preventDefault(); requestClose(); }}
+      onCancel={event => {
+        event.preventDefault();
+        if (error) {
+          setError(null);
+          return;
+        }
+        requestClose();
+      }}
     >
-      <form className="expense-form" onSubmit={saveExpense} noValidate>
+      <form className="expense-form" onSubmit={saveTransaction} noValidate>
+        <div className="expense-sheet-handle" aria-hidden="true" />
         <div className="expense-modal-header">
-          <h2 id={`${formId}-title`}>{editing ? 'Edit expense' : 'Add expense'}</h2>
-          <button type="button" className="expense-button" aria-label="Close expense dialog" disabled={busy} onClick={requestClose}>
-            <X size={20} aria-hidden="true" />
-          </button>
+          <h2 id={`${formId}-title`}>{editing ? 'Edit Transaction' : 'Add Transaction'}</h2>
         </div>
-        {error && <p id={`${formId}-error`} className="expense-error" role="alert">{error}</p>}
-        {savedCount > 0 && <p className="expense-notice" role="status">{savedCount} expense{savedCount === 1 ? '' : 's'} saved. The sidebar contains only unsaved expenses.</p>}
+
+        {!editing && (
+          <div className="expense-mode-tabs" role="tablist" aria-label="Transaction type">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'spending'}
+              className={`expense-mode-tab${mode === 'spending' ? ' is-active' : ''}`}
+              disabled={busy}
+              onClick={() => { setError(null); setMode('spending'); }}
+            >
+              Spending
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'income'}
+              className={`expense-mode-tab${mode === 'income' ? ' is-active' : ''}`}
+              disabled={busy}
+              onClick={() => { setError(null); setMode('income'); }}
+            >
+              Income
+            </button>
+          </div>
+        )}
+
+        {savedCount > 0 && <p className="expense-notice" role="status">{savedCount} expense{savedCount === 1 ? '' : 's'} saved.</p>}
+
         <fieldset disabled={busy}>
-          <legend className="expense-sr-only">Expense details</legend>
-          <div className={editing ? undefined : 'expense-batch-layout'}>
-          <div className="expense-editor">
-          {!editing && (
-            <div className="expense-presets-bar">
-              <span className="expense-presets-label">Quick repeat:</span>
-              <div className="expense-presets-list">
-                {presets.map(p => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    className="expense-preset-chip"
-                    disabled={busy || settings.categories.length === 0}
-                    onClick={() => applyPreset(p)}
+          <legend className="expense-sr-only">Transaction details</legend>
+
+          {!editing && mode === 'income' ? (
+            <div className="expense-editor">
+              <div className="expense-hero-amount">
+                <label htmlFor={`${formId}-income-amount`}>Amount</label>
+                <div className="expense-hero-amount-input-wrap">
+                  <span className="expense-hero-currency" aria-hidden="true">₫</span>
+                  <input
+                    ref={incomeAmountRef}
+                    id={`${formId}-income-amount`}
+                    type="text"
+                    inputMode="numeric"
+                    required
+                    placeholder="0"
+                    value={formatMoneyInputDisplay(incomeDraft.amount)}
+                    onChange={event => changeIncomeField('amount', event.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="expense-stack">
+                <div className="expense-field">
+                  <label htmlFor={`${formId}-income-source`}>Source</label>
+                  <select
+                    id={`${formId}-income-source`}
+                    value={incomeDraft.source}
+                    onChange={event => changeIncomeField('source', event.target.value)}
                   >
-                    <span aria-hidden="true">{p.icon}</span>
-                    <span>{p.label}</span>
-                  </button>
-                ))}
+                    {INCOME_SOURCE_SUGGESTIONS.map(source => (
+                      <option key={source} value={source}>{source}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="expense-field">
+                  <label htmlFor={`${formId}-income-desc`}>Description</label>
+                  <input
+                    id={`${formId}-income-desc`}
+                    type="text"
+                    maxLength={500}
+                    placeholder="e.g., Performance bonus, freelance"
+                    value={incomeDraft.name}
+                    onChange={event => changeIncomeField('name', event.target.value)}
+                  />
+                </div>
+
+                <div className="expense-grid">
+                  <div className="expense-field">
+                    <label htmlFor={`${formId}-income-frequency`}>Frequency</label>
+                    <select
+                      id={`${formId}-income-frequency`}
+                      value={incomeDraft.frequency}
+                      onChange={event => changeIncomeField('frequency', event.target.value as IncomeFrequency)}
+                    >
+                      {(Object.keys(INCOME_FREQUENCY_LABELS) as IncomeFrequency[]).map(freq => (
+                        <option key={freq} value={freq}>{INCOME_FREQUENCY_LABELS[freq]}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="expense-field">
+                    <label htmlFor={`${formId}-income-date`}>
+                      {incomeDraft.frequency === 'once' ? 'Date' : 'Start Date'}
+                    </label>
+                    <div className="expense-input-icon-wrap">
+                      <Calendar size={16} className="expense-input-leading-icon" aria-hidden="true" />
+                      <input
+                        id={`${formId}-income-date`}
+                        type="date"
+                        required
+                        min="0001-01-01"
+                        max="9999-12-31"
+                        value={incomeDraft.startDate}
+                        onChange={event => changeIncomeField('startDate', event.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-          {!editing && <p className="expense-editor-heading">{activeKey === null ? 'New expense' : `Editing queued expense ${queue.findIndex(entry => entry.key === activeKey) + 1}`}</p>}
-          <div className="expense-form-grid">
-            <div className="expense-field">
-              <label htmlFor={`${formId}-amount`}>Amount (₫)</label>
-              <input ref={amountRef} id={`${formId}-amount`} type="text" inputMode="decimal" required autoFocus value={draft.amount} onChange={event => changeField('amount', event.target.value)} aria-describedby={`${formId}-amount-help`} />
-              <small id={`${formId}-amount-help`}>Positive amount, maximum 1,000,000,000,000; up to 2 decimal places.</small>
-            </div>
-            <div className="expense-field">
-              <label htmlFor={`${formId}-category`}>Category</label>
-              <select id={`${formId}-category`} required value={settings.categories.some(category => category.id === draft.category) ? draft.category : ''} onChange={event => changeField('category', event.target.value)}>
-                <option value="" disabled>Choose a category</option>
-                {settings.categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
-              </select>
-              {settings.categories.length === 0 && <small>Add a category in settings before saving an expense.</small>}
-            </div>
-            <div className="expense-field expense-field-wide">
-              <label htmlFor={`${formId}-description`}>Description</label>
-              <textarea id={`${formId}-description`} required maxLength={500} rows={2} value={draft.description} onChange={event => changeField('description', event.target.value)} aria-describedby={`${formId}-description-help`} />
-              <small id={`${formId}-description-help`}>{draft.description.length}/500 characters</small>
-            </div>
-            <div className="expense-field">
-              <label htmlFor={`${formId}-date`}>Date</label>
-              <input id={`${formId}-date`} type="date" required min="0001-01-01" max="9999-12-31" value={draft.date} onChange={event => changeField('date', event.target.value)} />
-            </div>
-            <div className="expense-field">
-              <label htmlFor={`${formId}-time`}>Time (HH:mm)</label>
-              <input id={`${formId}-time`} type="time" required step={60} value={draft.time} onChange={event => changeField('time', event.target.value)} />
-            </div>
-          </div>
+          ) : (
+            <div className="expense-editor">
+              {!editing && activeKey !== null && (
+                <p className="expense-editor-heading">
+                  Editing queued expense {queue.findIndex(entry => entry.key === activeKey) + 1}
+                </p>
+              )}
 
-          {!editing && (
-            <div className="expense-repeat-section">
-              <label className="expense-repeat-toggle" htmlFor={`${formId}-is-repeat`}>
-                <input
-                  id={`${formId}-is-repeat`}
-                  type="checkbox"
-                  checked={Boolean(draft.isRepeat)}
-                  onChange={e => setDraft(curr => ({
-                    ...curr,
-                    isRepeat: e.target.checked,
-                    repeatFrequency: curr.repeatFrequency ?? 'daily',
-                    repeatInterval: curr.repeatInterval ?? 1,
-                    repeatDaysOfWeek: curr.repeatDaysOfWeek ?? [],
-                    repeatEndType: curr.repeatEndType ?? 'unlimited',
-                    repeatCount: curr.repeatCount ?? 10,
-                  }))}
-                />
-                <Repeat size={16} aria-hidden="true" />
-                <span>Repeat this spending</span>
-              </label>
+              <div className="expense-hero-amount">
+                <label htmlFor={`${formId}-amount`}>Amount</label>
+                <div className="expense-hero-amount-input-wrap">
+                  <span className="expense-hero-currency" aria-hidden="true">₫</span>
+                  <input
+                    ref={amountRef}
+                    id={`${formId}-amount`}
+                    type="text"
+                    inputMode="numeric"
+                    required
+                    autoFocus
+                    placeholder="0"
+                    value={formatMoneyInputDisplay(draft.amount)}
+                    onChange={event => changeField('amount', event.target.value)}
+                  />
+                </div>
+              </div>
 
-              {draft.isRepeat && (
-                <div className="expense-repeat-options glass">
-                  <div className="expense-form-grid">
-                    <div className="expense-field">
-                      <label htmlFor={`${formId}-repeat-freq`}>Frequency</label>
-                      <select
-                        id={`${formId}-repeat-freq`}
-                        value={draft.repeatFrequency ?? 'daily'}
-                        onChange={e => setDraft(curr => ({ ...curr, repeatFrequency: e.target.value as any }))}
+              <div className="expense-stack">
+                <div className="expense-field" ref={categoryDropdownRef}>
+                  <label htmlFor={`${formId}-category-search`}>Category</label>
+                  <div className="expense-category-combobox">
+                    <div
+                      className={`expense-category-control${categoryOpen ? ' is-open' : ''}`}
+                      onClick={() => setCategoryOpen(true)}
+                    >
+                      <Search size={16} className="expense-category-search-icon" aria-hidden="true" />
+                      <input
+                        id={`${formId}-category-search`}
+                        type="text"
+                        role="combobox"
+                        aria-expanded={categoryOpen}
+                        aria-controls={`${formId}-category-listbox`}
+                        aria-autocomplete="list"
+                        placeholder={selectedCategory ? selectedCategory.name : 'Search or select category'}
+                        value={categoryOpen ? categoryQuery : (selectedCategory?.name ?? '')}
+                        onFocus={() => {
+                          setCategoryOpen(true);
+                          setCategoryQuery('');
+                        }}
+                        onChange={event => {
+                          setCategoryOpen(true);
+                          setCategoryQuery(event.target.value);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        className="expense-category-chevron-btn"
+                        aria-label="Toggle categories"
+                        onClick={event => {
+                          event.stopPropagation();
+                          setCategoryOpen(open => !open);
+                          setCategoryQuery('');
+                        }}
                       >
-                        <option value="daily">Every day</option>
-                        <option value="weekdays">Weekdays (Mon–Fri)</option>
-                        <option value="weekly">Weekly (specific days)</option>
-                        <option value="monthly">Monthly</option>
-                      </select>
+                        <ChevronDown size={16} aria-hidden="true" />
+                      </button>
                     </div>
 
-                    {draft.repeatFrequency === 'daily' && (
-                      <div className="expense-field">
-                        <label htmlFor={`${formId}-repeat-interval`}>Every N days</label>
-                        <input
-                          id={`${formId}-repeat-interval`}
-                          type="number"
-                          min={1}
-                          max={365}
-                          value={draft.repeatInterval ?? 1}
-                          onChange={e => setDraft(curr => ({ ...curr, repeatInterval: Math.max(1, Math.min(365, Number(e.target.value))) }))}
-                        />
-                      </div>
-                    )}
-
-                    {draft.repeatFrequency === 'weekly' && (
-                      <div className="expense-field expense-field-wide">
-                        <label>Repeat on specific days</label>
-                        <div className="expense-weekday-picker">
-                          {[
-                            { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' }, { day: 3, label: 'Wed' },
-                            { day: 4, label: 'Thu' }, { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' }, { day: 0, label: 'Sun' },
-                          ].map(item => {
-                            const selected = (draft.repeatDaysOfWeek ?? []).includes(item.day);
+                    {categoryOpen && (
+                      <ul
+                        id={`${formId}-category-listbox`}
+                        role="listbox"
+                        className="expense-category-dropdown"
+                      >
+                        {filteredCategories.length === 0 ? (
+                          <li className="expense-category-empty">No matching categories</li>
+                        ) : (
+                          filteredCategories.map(category => {
+                            const IconComp = CATEGORY_ICONS[category.icon as keyof typeof CATEGORY_ICONS] || CircleDollarSign;
+                            const isSelected = category.id === draft.category;
                             return (
-                              <button
-                                key={item.day}
-                                type="button"
-                                className={`expense-weekday-btn${selected ? ' is-selected' : ''}`}
-                                onClick={() => {
-                                  const current = draft.repeatDaysOfWeek ?? [];
-                                  const next = selected ? current.filter(d => d !== item.day) : [...current, item.day];
-                                  setDraft(curr => ({ ...curr, repeatDaysOfWeek: next }));
-                                }}
-                              >
-                                {item.label}
-                              </button>
+                              <li key={category.id} role="option" aria-selected={isSelected}>
+                                <button
+                                  type="button"
+                                  className={`expense-category-option${isSelected ? ' is-selected' : ''}`}
+                                  onClick={() => {
+                                    changeField('category', category.id);
+                                    setCategoryOpen(false);
+                                    setCategoryQuery('');
+                                  }}
+                                >
+                                  <span
+                                    className="expense-category-option-dot"
+                                    style={{ color: category.color }}
+                                  >
+                                    <IconComp size={15} aria-hidden="true" />
+                                  </span>
+                                  <span>{category.name}</span>
+                                </button>
+                              </li>
                             );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="expense-field">
-                      <label htmlFor={`${formId}-repeat-end-type`}>Duration</label>
-                      <select
-                        id={`${formId}-repeat-end-type`}
-                        value={draft.repeatEndType ?? 'unlimited'}
-                        onChange={e => setDraft(curr => ({ ...curr, repeatEndType: e.target.value as any }))}
-                      >
-                        <option value="unlimited">Keep repeating (unlimited)</option>
-                        <option value="occurrences">Certain amount of times (cap 100)</option>
-                        <option value="until_date">Until specific date</option>
-                      </select>
-                    </div>
-
-                    {draft.repeatEndType === 'occurrences' && (
-                      <div className="expense-field">
-                        <label htmlFor={`${formId}-repeat-count`}>Number of repeats (1–100)</label>
-                        <input
-                          id={`${formId}-repeat-count`}
-                          type="number"
-                          min={1}
-                          max={100}
-                          value={draft.repeatCount ?? 10}
-                          onChange={e => setDraft(curr => ({ ...curr, repeatCount: Math.min(100, Math.max(1, Number(e.target.value))) }))}
-                        />
-                        <small>System cap is 100 repeats.</small>
-                      </div>
-                    )}
-
-                    {draft.repeatEndType === 'until_date' && (
-                      <div className="expense-field">
-                        <label htmlFor={`${formId}-repeat-end-date`}>End Date</label>
-                        <input
-                          id={`${formId}-repeat-end-date`}
-                          type="date"
-                          min={draft.date}
-                          max="9999-12-31"
-                          value={draft.repeatEndDate ?? ''}
-                          onChange={e => setDraft(curr => ({ ...curr, repeatEndDate: e.target.value }))}
-                        />
-                      </div>
+                          })
+                        )}
+                      </ul>
                     )}
                   </div>
-                  <p className="expense-repeat-hint">
-                    {draft.repeatEndType === 'unlimited'
-                      ? '⚡ Generates 100 entries initially. As time nears the repeat horizon, the system automatically applies the next batch of repeats without you needing to re-apply.'
-                      : 'Generates recurring entries up to the cap of 100.'}
-                  </p>
+                  {settings.categories.length === 0 && (
+                    <small>Add a category in settings before saving an expense.</small>
+                  )}
                 </div>
+
+                <div className="expense-field">
+                  <label htmlFor={`${formId}-description`}>Description</label>
+                  <input
+                    id={`${formId}-description`}
+                    type="text"
+                    required
+                    maxLength={500}
+                    placeholder="e.g., Grocery shopping"
+                    value={draft.description}
+                    onChange={event => changeField('description', event.target.value)}
+                  />
+                </div>
+
+                <div className="expense-datetime-row">
+                  <div className="expense-field">
+                    <label htmlFor={`${formId}-date`}>Date</label>
+                    <div className="expense-input-icon-wrap">
+                      <Calendar size={16} className="expense-input-leading-icon" aria-hidden="true" />
+                      <input
+                        id={`${formId}-date`}
+                        type="date"
+                        required
+                        min="0001-01-01"
+                        max="9999-12-31"
+                        value={draft.date}
+                        onChange={event => changeField('date', event.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="expense-field">
+                    <label htmlFor={`${formId}-time`}>Time</label>
+                    <div className="expense-input-icon-wrap">
+                      <Clock size={16} className="expense-input-leading-icon" aria-hidden="true" />
+                      <input
+                        id={`${formId}-time`}
+                        type="time"
+                        required
+                        step={60}
+                        value={draft.time}
+                        onChange={event => changeField('time', event.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {!editing && (
+                <div className="expense-repeat-section">
+                  <div className="expense-repeat-addmore-row">
+                    <label className="expense-repeat-toggle" htmlFor={`${formId}-is-repeat`}>
+                      <input
+                        id={`${formId}-is-repeat`}
+                        type="checkbox"
+                        checked={Boolean(draft.isRepeat)}
+                        onChange={e => setDraft(curr => ({
+                          ...curr,
+                          isRepeat: e.target.checked,
+                          repeatFrequency: curr.repeatFrequency ?? 'daily',
+                          repeatInterval: curr.repeatInterval ?? 1,
+                          repeatDaysOfWeek: curr.repeatDaysOfWeek ?? [],
+                          repeatEndType: curr.repeatEndType ?? 'unlimited',
+                          repeatCount: curr.repeatCount ?? 10,
+                        }))}
+                      />
+                      <span>Repeat this spending</span>
+                    </label>
+
+                    {!draft.isRepeat && (
+                      <button
+                        type="button"
+                        className="expense-add-more-link"
+                        disabled={busy || settings.categories.length === 0}
+                        onClick={addMore}
+                      >
+                        <Plus size={15} aria-hidden="true" />
+                        <span>Add more</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {draft.isRepeat && (
+                    <div className="expense-repeat-options glass">
+                      <div className="expense-form-grid">
+                        <div className="expense-field">
+                          <label htmlFor={`${formId}-repeat-freq`}>Frequency</label>
+                          <select
+                            id={`${formId}-repeat-freq`}
+                            value={draft.repeatFrequency ?? 'daily'}
+                            onChange={e => setDraft(curr => ({ ...curr, repeatFrequency: e.target.value as any }))}
+                          >
+                            <option value="daily">Every day</option>
+                            <option value="weekdays">Weekdays (Mon–Fri)</option>
+                            <option value="weekly">Weekly (specific days)</option>
+                            <option value="monthly">Monthly</option>
+                          </select>
+                        </div>
+
+                        {draft.repeatFrequency === 'daily' && (
+                          <div className="expense-field">
+                            <label htmlFor={`${formId}-repeat-interval`}>Every N days</label>
+                            <input
+                              id={`${formId}-repeat-interval`}
+                              type="number"
+                              min={1}
+                              max={365}
+                              value={draft.repeatInterval ?? 1}
+                              onChange={e => setDraft(curr => ({ ...curr, repeatInterval: Math.max(1, Math.min(365, Number(e.target.value))) }))}
+                            />
+                          </div>
+                        )}
+
+                        {draft.repeatFrequency === 'weekly' && (
+                          <div className="expense-field expense-field-wide">
+                            <label>Repeat on specific days</label>
+                            <div className="expense-weekday-picker">
+                              {[
+                                { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' }, { day: 3, label: 'Wed' },
+                                { day: 4, label: 'Thu' }, { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' }, { day: 0, label: 'Sun' },
+                              ].map(item => {
+                                const selected = (draft.repeatDaysOfWeek ?? []).includes(item.day);
+                                return (
+                                  <button
+                                    key={item.day}
+                                    type="button"
+                                    className={`expense-weekday-btn${selected ? ' is-selected' : ''}`}
+                                    onClick={() => {
+                                      const current = draft.repeatDaysOfWeek ?? [];
+                                      const next = selected ? current.filter(d => d !== item.day) : [...current, item.day];
+                                      setDraft(curr => ({ ...curr, repeatDaysOfWeek: next }));
+                                    }}
+                                  >
+                                    {item.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="expense-field">
+                          <label htmlFor={`${formId}-repeat-end-type`}>Duration</label>
+                          <select
+                            id={`${formId}-repeat-end-type`}
+                            value={draft.repeatEndType ?? 'unlimited'}
+                            onChange={e => setDraft(curr => ({ ...curr, repeatEndType: e.target.value as any }))}
+                          >
+                            <option value="unlimited">Keep repeating (unlimited)</option>
+                            <option value="occurrences">Certain amount of times (cap 100)</option>
+                            <option value="until_date">Until specific date</option>
+                          </select>
+                        </div>
+
+                        {draft.repeatEndType === 'occurrences' && (
+                          <div className="expense-field">
+                            <label htmlFor={`${formId}-repeat-count`}>Number of repeats (1–100)</label>
+                            <input
+                              id={`${formId}-repeat-count`}
+                              type="number"
+                              min={1}
+                              max={100}
+                              value={draft.repeatCount ?? 10}
+                              onChange={e => setDraft(curr => ({ ...curr, repeatCount: Math.min(100, Math.max(1, Number(e.target.value))) }))}
+                            />
+                            <small>System cap is 100 repeats.</small>
+                          </div>
+                        )}
+
+                        {draft.repeatEndType === 'until_date' && (
+                          <div className="expense-field">
+                            <label htmlFor={`${formId}-repeat-end-date`}>End Date</label>
+                            <input
+                              id={`${formId}-repeat-end-date`}
+                              type="date"
+                              min={draft.date}
+                              max="9999-12-31"
+                              value={draft.repeatEndDate ?? ''}
+                              onChange={e => setDraft(curr => ({ ...curr, repeatEndDate: e.target.value }))}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <p className="expense-repeat-hint">
+                        {draft.repeatEndType === 'unlimited'
+                          ? '⚡ Generates 100 entries initially. As time nears the repeat horizon, the system automatically applies the next batch of repeats.'
+                          : 'Generates recurring entries up to the cap of 100.'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!editing && !draft.isRepeat && (
+                <aside className="expense-queue-card" aria-labelledby={`${formId}-queue-title`}>
+                  <div className="expense-queue-card-title" id={`${formId}-queue-title`}>
+                    Queued expenses
+                  </div>
+                  <div className="expense-queue-card-stats">
+                    <span>Queued: <strong>{queue.length}</strong></span>
+                    <span>Total: <strong>{queuedTotal.toLocaleString('vi-VN')} ₫</strong></span>
+                  </div>
+                  {queue.length > 0 && (
+                    <ol className="expense-queue-list">
+                      {displayedQueue.map((entry, index) => (
+                        <li key={entry.key} className={`expense-queue-item${entry.key === activeKey ? ' is-active' : ''}`}>
+                          <button
+                            type="button"
+                            className="expense-queue-edit"
+                            disabled={busy}
+                            aria-label={`Edit queued expense ${index + 1}: ${entry.draft.description}`}
+                            aria-pressed={entry.key === activeKey}
+                            onClick={() => editQueued(entry.key)}
+                          >
+                            <span className="expense-queue-item-heading">
+                              <strong title={entry.draft.description}>{entry.draft.description || 'Untitled expense'}</strong>
+                              <span className="expense-queue-amount">
+                                {Number.isFinite(Number(entry.draft.amount)) ? Number(entry.draft.amount).toLocaleString('vi-VN') : '—'} ₫
+                              </span>
+                            </span>
+                            <span className="expense-queue-meta">
+                              {settings.categories.find(category => category.id === entry.draft.category)?.name ?? entry.draft.category} · {entry.draft.date} {entry.draft.time}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            className="expense-button expense-queue-remove"
+                            disabled={busy}
+                            aria-label={`Remove queued expense ${index + 1}: ${entry.draft.description}`}
+                            onClick={() => removeQueued(entry.key)}
+                          >
+                            <Trash2 size={15} aria-hidden="true" />
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </aside>
               )}
             </div>
           )}
 
-          {!editing && !draft.isRepeat && <div className="expense-editor-actions">
-            <button type="button" className="expense-button" disabled={busy || settings.categories.length === 0} onClick={addMore}><Plus size={16} aria-hidden="true" />Add more</button>
-            <p className="expense-batch-help">Queue this expense and start another. Nothing is saved until you press Add.</p>
-          </div>}
-          </div>
-
-          {!editing && !draft.isRepeat && <aside className="expense-queue" aria-labelledby={`${formId}-queue-title`}>
-            <div className="expense-queue-header">
-              <h3 id={`${formId}-queue-title`}>Queued expenses</h3>
-              <span aria-label={`${queue.length} queued expenses`}>{queue.length}</span>
-            </div>
-            {queue.length === 0 ? <p className="expense-queue-empty">Use Add more to build your list. You can edit or remove entries here before saving.</p> : <ol className="expense-queue-list">
-              {displayedQueue.map((entry, index) => (
-                <li key={entry.key} className={`expense-queue-item${entry.key === activeKey ? ' is-active' : ''}`}>
-                  <button type="button" className="expense-queue-edit" disabled={busy} aria-label={`Edit queued expense ${index + 1}: ${entry.draft.description}`} aria-pressed={entry.key === activeKey} onClick={() => editQueued(entry.key)}>
-                    <span className="expense-queue-item-heading">
-                      <strong title={entry.draft.description}>{entry.draft.description || 'Untitled expense'}</strong>
-                      <span className="expense-queue-amount">{Number.isFinite(Number(entry.draft.amount)) ? Number(entry.draft.amount).toLocaleString('vi-VN') : '—'} ₫</span>
-                    </span>
-                    <span className="expense-queue-meta">{settings.categories.find(category => category.id === entry.draft.category)?.name ?? entry.draft.category}</span>
-                    <span className="expense-queue-meta">{entry.draft.date} · {entry.draft.time}</span>
-                  </button>
-                  <button type="button" className="expense-button expense-queue-remove" disabled={busy} aria-label={`Remove queued expense ${index + 1}: ${entry.draft.description}`} onClick={() => removeQueued(entry.key)}><Trash2 size={16} aria-hidden="true" /></button>
-                </li>
-              ))}
-            </ol>}
-            <div className="expense-queue-total"><span>Queued total</span><strong>{queuedTotal.toLocaleString('vi-VN')} ₫</strong></div>
-          </aside>}
-          </div>
-          {!editing && !draft.isRepeat && <p className="expense-batch-help">Add saves all queued expenses and the current filled-in form. Click a queued expense to edit it; Add more returns you to a new entry.</p>}
-          <div className="expense-actions">
-            <button type="submit" className="expense-button expense-button-primary" disabled={busy || settings.categories.length === 0}>
-              {busy ? 'Saving…' : editing ? 'Save expense' : draft.isRepeat ? 'Set repeat spending' : 'Add'}
+          <div className="expense-modal-footer">
+            <button
+              type="submit"
+              className="expense-button expense-button-primary expense-submit-btn"
+              disabled={busy || (mode === 'spending' && settings.categories.length === 0)}
+            >
+              {busy
+                ? 'Saving…'
+                : editing
+                  ? 'Save'
+                  : mode === 'income'
+                    ? 'Add'
+                    : draft.isRepeat
+                      ? 'Set repeat'
+                      : 'Add'}
             </button>
-            <button type="button" className="expense-button" disabled={busy} onClick={requestClose}>Cancel</button>
+            <button
+              type="button"
+              className="expense-button expense-cancel-btn"
+              disabled={busy}
+              onClick={requestClose}
+            >
+              Cancel
+            </button>
           </div>
         </fieldset>
       </form>
+
+      {error && (
+        <div
+          className="expense-error-backdrop"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby={`${formId}-error-title`}
+          aria-describedby={`${formId}-error`}
+          onClick={() => setError(null)}
+        >
+          <div
+            className="expense-error-popup"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="expense-error-popup-icon" aria-hidden="true">
+              <AlertCircle size={26} />
+            </div>
+            <h3 id={`${formId}-error-title`} className="expense-error-popup-title">
+              Invalid Input
+            </h3>
+            <p id={`${formId}-error`} className="expense-error-popup-message">
+              {error}
+            </p>
+            <button
+              type="button"
+              className="expense-button expense-button-primary expense-error-popup-btn"
+              autoFocus
+              onClick={() => setError(null)}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </dialog>,
     document.body,
   );
 }
-
