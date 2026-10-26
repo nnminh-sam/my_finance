@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { User, Mail, Calendar, Tag, Plus, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat, Wallet, SlidersHorizontal, LogOut, Lock, Copy, Check, Camera, Pencil, CircleStop } from 'lucide-react';
+import { User, Mail, Calendar, Tag, Plus, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat, Wallet, SlidersHorizontal, LogOut, Lock, Copy, Check, Camera, Pencil, CircleStop, RefreshCw } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
@@ -98,8 +98,9 @@ export function UserProfile() {
   const { settings, updateSettings } = useSettings();
   const { user, logout } = useAuth();
   const { theme, preference, setTheme } = useTheme();
-  const { incomes, repeatRules, deleteRepeatRule } = useFinance();
+  const { incomes, repeatRules, deleteRepeatRule, reload } = useFinance();
   const [tab, setTab] = useState<TabId>('account');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement | null>>>({});
   const avatar = useSectionEditor<string>();
   const category = useSectionEditor<CategoryData & { isNew: boolean }>();
@@ -338,7 +339,28 @@ export function UserProfile() {
             </dl>
             <div className="profile-card profile-signout-card">
               <div><h3>Sign out</h3><p className="profile-hint">Ends your session on this device. Unsaved edits on this page are lost.</p></div>
-              {signOutButton('profile-button profile-button-danger')}
+              <div className="profile-actions">
+                <button
+                  type="button"
+                  className="profile-button"
+                  disabled={isRefreshing || isLoggingOut || pending}
+                  onClick={async () => {
+                    setIsRefreshing(true);
+                    setLogoutError(null);
+                    try {
+                      await reload();
+                    } catch (failure) {
+                      setLogoutError(errorMessage(failure));
+                    } finally {
+                      setIsRefreshing(false);
+                    }
+                  }}
+                >
+                  <RefreshCw size={16} aria-hidden="true" />
+                  <span>{isRefreshing ? 'Refreshing…' : 'Refresh records'}</span>
+                </button>
+                {signOutButton('profile-button profile-button-danger')}
+              </div>
             </div>
             {logoutError && <p role="alert" className="profile-error">{logoutError}</p>}
           </section>

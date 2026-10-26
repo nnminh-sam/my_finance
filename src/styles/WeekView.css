@@ -121,6 +121,12 @@
   padding: 8px 0;
 }
 
+/* Mobile-only elements hidden on desktop */
+.week-mobile-summary,
+.week-mobile-feed {
+  display: none;
+}
+
 /* Week Days Grid - Desktop */
 .week-days-grid {
   display: grid;
@@ -186,10 +192,6 @@
   text-align: center;
 }
 
-.week-day-total-mobile {
-  display: none;
-}
-
 .week-spending-list {
   display: flex;
   flex-direction: column;
@@ -241,209 +243,295 @@
   margin-top: 4px;
 }
 
-/* Mobile Responsive */
+/* ================================================================== */
+/* Mobile Week View Redesign (<= 768px)                               */
+/* ================================================================== */
 @media (max-width: 768px) {
   .week-container {
-    padding: 8px;
-    gap: 10px;
+    padding: 12px 14px;
+    gap: 12px;
   }
 
-  .week-overview-grid {
-    grid-template-columns: 1fr;
+  /* Hide desktop overview & 7-column grid on mobile */
+  .week-overview-grid,
+  .week-days-grid {
+    display: none !important;
+  }
+
+  /* Mobile Week Summary Header */
+  .week-mobile-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .week-mobile-title-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
     gap: 8px;
   }
 
-  .week-overview-card {
+  .week-mobile-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text-main);
+    margin: 0;
+  }
+
+  .week-mobile-range {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  /* 7-Day Horizontal Strip */
+  .week-mobile-strip {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    padding: 8px 10px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 6px;
-    align-items: stretch;
     text-align: center;
   }
 
-  .week-overview-stat {
+  .week-strip-day {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 6px 4px;
-    border-radius: var(--radius-sm);
-    min-width: 0;
-    gap: 2px;
+    gap: 4px;
+    padding: 4px 2px;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-main);
   }
 
-  .week-overview-income {
-    background: color-mix(in srgb, var(--success) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--success) 22%, transparent);
-  }
-
-  .week-overview-spending {
-    background: color-mix(in srgb, var(--danger) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
-  }
-
-  .week-overview-leftover {
-    background: color-mix(in srgb, var(--primary) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
-  }
-
-  .week-stat-label {
-    font-size: 0.7rem;
+  .week-strip-letter {
+    font-size: 0.72rem;
     font-weight: 600;
     color: var(--text-muted);
-    letter-spacing: 0.02em;
     text-transform: uppercase;
+  }
+
+  .week-strip-num {
+    width: 34px;
+    height: 34px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 3px;
-    white-space: nowrap;
+    border-radius: 50%;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
 
-  .week-stat-value {
-    font-size: clamp(0.85rem, 3.4vw, 1.05rem);
-    font-weight: 800;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-    letter-spacing: -0.01em;
+  .week-strip-day.is-today .week-strip-num {
+    background: color-mix(in srgb, var(--text-muted) 26%, var(--bg-card));
+    border: 1.5px solid var(--calendar-today-border);
+    color: var(--text-main);
   }
 
-  .week-stat-subtext {
-    grid-column: 1 / -1;
-    font-size: 0.68rem;
-    color: var(--text-muted);
-    text-align: center;
-    padding-top: 6px;
-    margin-top: 2px;
-    border-top: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
+  .week-strip-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
   }
 
-  /* Hide Top 5 Categories card on mobile */
-  .week-top-categories-card {
-    display: none !important;
+  .week-strip-dot.has-spending {
+    background-color: var(--danger);
   }
 
-  /* Week Days Grid: 7 stacked daily cards filling available height */
-  .week-days-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-auto-rows: 1fr;
-    gap: 6px;
-    height: 100%;
-    min-height: 0;
-    overflow-y: auto;
-    align-content: stretch;
+  .week-strip-dot.no-spending {
+    background-color: var(--success);
+    opacity: 0.55;
   }
 
-  .week-day-card {
-    height: 100%;
-    min-height: 52px;
-    padding: 8px 14px;
-    flex-direction: row;
+  /* Spent & Income Sub-bar */
+  .week-mobile-stats-bar {
+    display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    border-radius: var(--radius-md);
-    overflow: hidden;
+    padding: 8px 2px 10px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
+    font-size: 0.85rem;
+    color: var(--text-muted);
   }
 
-  .week-day-card:hover {
-    transform: none;
-    filter: brightness(1.1);
-  }
-
-  .week-day-header {
-    flex-direction: row;
+  .week-mobile-stat {
+    display: inline-flex;
     align-items: center;
-    border-bottom: none;
-    padding-bottom: 0;
+    gap: 4px;
+  }
+
+  .week-mobile-stat-spent {
+    color: var(--danger);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .week-mobile-stat-income {
+    color: var(--success);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Grouped Daily Feed */
+  .week-mobile-feed {
+    display: flex;
+    flex-direction: column;
     gap: 10px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .week-day-name {
-    font-size: 0.95rem;
-    font-weight: 800;
-    min-width: 40px;
-    text-align: left;
+  .week-feed-card {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: var(--bg-card);
+    border: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
   }
 
-  .week-day-date {
-    font-size: 0.82rem;
+  .week-feed-card:hover,
+  .week-feed-card:active {
+    background: var(--bg-card-hover);
+  }
+
+  .week-feed-card.is-today {
+    border-color: var(--calendar-today-border);
+    box-shadow: var(--calendar-today-glow);
+  }
+
+  .week-feed-day-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 2px;
+    line-height: 1.15;
+  }
+
+  .week-feed-day-name {
+    font-size: 0.72rem;
     font-weight: 600;
     color: var(--text-muted);
   }
 
-  .week-day-total-desktop {
-    display: none !important;
+  .week-feed-day-num {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-main);
   }
 
-  /* Detail spending list hidden on mobile */
-  .week-spending-list {
-    display: none !important;
+  .week-feed-card.is-today .week-feed-day-name,
+  .week-feed-card.is-today .week-feed-day-num {
+    color: var(--calendar-today-border);
   }
 
-  /* Mobile compact total */
-  .week-day-total-mobile {
+  .week-feed-tx-col {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .week-feed-tx-row {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    font-size: 0.95rem;
-    font-weight: 800;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
+    min-width: 0;
+  }
+
+  .week-feed-tx-row:first-child {
+    padding-top: 0;
+  }
+
+  .week-feed-tx-row:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .week-feed-tx-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .week-feed-tx-desc {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-main);
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .week-day-total-val {
+  .week-feed-tx-amount {
+    font-size: 0.92rem;
+    font-weight: 700;
     color: var(--danger);
-    font-weight: 800;
-  }
-
-  .week-day-total-zero {
-    color: var(--text-muted);
-    font-weight: 600;
-    font-size: 0.85rem;
-  }
-
-  .week-day-chevron {
-    color: var(--text-muted);
-    opacity: 0.6;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
     flex-shrink: 0;
+  }
+
+  .week-feed-empty-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 32px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .week-feed-empty-amount {
+    font-weight: 600;
+    opacity: 0.65;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 420px) {
   .week-container {
-    padding: 8px 6px;
+    padding: 10px 10px;
+    gap: 10px;
+  }
+
+  .week-mobile-title {
+    font-size: 1.35rem;
+  }
+
+  .week-strip-num {
+    width: 30px;
+    height: 30px;
+    font-size: 0.88rem;
+  }
+
+  .week-feed-card {
+    padding: 10px 12px;
+    grid-template-columns: 38px minmax(0, 1fr);
     gap: 8px;
   }
 
-  .week-overview-card {
-    padding: 6px 8px;
-  }
-
-  .week-days-grid {
-    gap: 5px;
-  }
-
-  .week-day-card {
-    padding: 6px 12px;
-    min-height: 46px;
-  }
-
-  .week-day-name {
-    font-size: 0.9rem;
-    min-width: 36px;
-  }
-
-  .week-day-date {
-    font-size: 0.78rem;
-  }
-
-  .week-day-total-mobile {
-    font-size: 0.9rem;
+  .week-feed-tx-badge {
+    width: 28px;
+    height: 28px;
   }
 }

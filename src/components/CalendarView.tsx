@@ -28,7 +28,6 @@ import {
   Briefcase,
   Gift,
   Phone,
-  Edit2,
 } from "lucide-react";
 import { getTotalForDate, getTopSpendingsForDate, getSpendingsForDate, formatCompactSpending } from "../lib/spendings";
 import {
@@ -73,14 +72,13 @@ interface CalendarViewProps {
   currentDate: Date;
   onActiveMonthChange?: (date: Date) => void;
   onDateClick: (date: Date) => void;
-  onEditIncome: (month?: string) => void;
+  onEditIncome?: (month?: string) => void;
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
   currentDate,
   onActiveMonthChange,
   onDateClick,
-  onEditIncome,
 }) => {
   const { settings } = useSettings();
   const { spendings, incomes, fetchWeeksSpendings } = useFinance();
@@ -630,18 +628,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               <span className="calendar-stat-label">
                 <span className="hide-mobile">Monthly </span>Income
               </span>
-              <button
-                type="button"
-                className="overview-income-edit"
-                onClick={() => onEditIncome(incomeMonth(activeDate))}
-                aria-label={`Manage income for ${format(activeDate, 'MMMM yyyy')}`}
-                aria-haspopup="dialog"
-              >
-                <Edit2 size={12} aria-hidden="true" /><span className="hide-mobile">Edit</span>
-              </button>
             </div>
             <span className="calendar-stat-value calendar-stat-income-value">
-              {totalIncome.toLocaleString("vi-VN")} ₫
+              <span className="hide-mobile">{totalIncome.toLocaleString("vi-VN")} ₫</span>
+              <span className="show-mobile">{formatCompactSpending(totalIncome)}</span>
             </span>
           </div>
 
@@ -650,7 +640,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               <span className="hide-mobile">Total </span>Spending
             </span>
             <span className="calendar-stat-value calendar-stat-spending-value">
-              {totalSpending.toLocaleString("vi-VN")} ₫
+              <span className="hide-mobile">{totalSpending.toLocaleString("vi-VN")} ₫</span>
+              <span className="show-mobile">{formatCompactSpending(totalSpending)}</span>
             </span>
           </div>
 
@@ -664,12 +655,24 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 color: totalIncome > 0 ? (leftOver >= 0 ? "var(--primary)" : "var(--danger)") : "var(--text-muted)",
               }}
             >
-              {totalIncome > 0 ? `${leftOver.toLocaleString("vi-VN")} ₫` : <><span className="hide-mobile">Income </span>Not set</>}
+              {totalIncome > 0 ? (
+                <>
+                  <span className="hide-mobile">{leftOver.toLocaleString("vi-VN")} ₫</span>
+                  <span className="show-mobile">{formatCompactSpending(leftOver)}</span>
+                </>
+              ) : (
+                <><span className="hide-mobile">Income </span>Not set</>
+              )}
             </span>
           </div>
 
           <div className="calendar-stat-subtext">
-            <span className="hide-mobile">Recurring </span><span className="show-mobile">Recur. </span>{recurringIncome.toLocaleString("vi-VN")} ₫ · <span className="hide-mobile">One-time </span><span className="show-mobile">Once </span>{oneTimeIncome.toLocaleString("vi-VN")} ₫
+            <span className="hide-mobile">
+              Recurring {recurringIncome.toLocaleString("vi-VN")} ₫ · One-time {oneTimeIncome.toLocaleString("vi-VN")} ₫
+            </span>
+            <span className="show-mobile">
+              Recur. {formatCompactSpending(recurringIncome)} · Once {formatCompactSpending(oneTimeIncome)}
+            </span>
           </div>
         </div>
 
