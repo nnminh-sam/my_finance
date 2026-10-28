@@ -571,10 +571,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           type: "boolean",
           description: "Include next month's payday as the final day of the cycle (default true).",
         },
-        startDayAfterPayday: {
-          type: "boolean",
-          description: "Start the cycle on the day after payday (default true).",
-        },
         delayDays: {
           type: "number",
           description: "Optional payday delay/early payout adjustment in days for this month (-7 to +14, default 0).",
@@ -957,7 +953,6 @@ export async function executeMcpTool(
           salaryDay: typeof args.salaryDay === "number" ? args.salaryDay : undefined,
           shiftWeekendToMonday: typeof args.shiftWeekendToMonday === "boolean" ? args.shiftWeekendToMonday : undefined,
           includeNextPaydayInCycle: typeof args.includeNextPaydayInCycle === "boolean" ? args.includeNextPaydayInCycle : undefined,
-          startDayAfterPayday: typeof args.startDayAfterPayday === "boolean" ? args.startDayAfterPayday : undefined,
           delayDays: typeof args.delayDays === "number" ? args.delayDays : undefined,
         });
         return toolSuccess(report);

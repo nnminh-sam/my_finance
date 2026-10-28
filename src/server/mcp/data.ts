@@ -181,7 +181,6 @@ export async function buildSalaryCycleReport(
     salaryDay?: number;
     shiftWeekendToMonday?: boolean;
     includeNextPaydayInCycle?: boolean;
-    startDayAfterPayday?: boolean;
     delayDays?: number;
   },
 ) {
@@ -190,7 +189,6 @@ export async function buildSalaryCycleReport(
     salaryDay: options?.salaryDay !== undefined ? clampSalaryDay(options.salaryDay) : 5,
     shiftWeekendToMonday: options?.shiftWeekendToMonday ?? true,
     includeNextPaydayInCycle: options?.includeNextPaydayInCycle ?? true,
-    startDayAfterPayday: options?.startDayAfterPayday ?? true,
     monthDelays: options?.delayDays
       ? { [cycleMonth]: clampDelayDays(options.delayDays) }
       : {},
@@ -260,12 +258,10 @@ export async function buildSalaryCycleReport(
       salaryDay: baseConfig.salaryDay,
       shiftWeekendToMonday: baseConfig.shiftWeekendToMonday,
       includeNextPaydayInCycle: baseConfig.includeNextPaydayInCycle,
-      startDayAfterPayday: baseConfig.startDayAfterPayday,
       delayDays: cycle.manualDelayDays,
     },
     dates: {
       nominalPayday: format(cycle.nominalStartDate, "yyyy-MM-dd"),
-      actualPayday: format(cycle.actualPayday, "yyyy-MM-dd"),
       startDate,
       endDate,
       nextPayday: format(cycle.nextStartDate, "yyyy-MM-dd"),
