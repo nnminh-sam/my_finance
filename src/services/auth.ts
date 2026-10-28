@@ -244,3 +244,50 @@ export async function authenticatedFetch(path: string, init: RequestInit = {}): 
   }
   return response;
 }
+
+export interface ApiKeyInfo {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scope: 'read' | 'write';
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export async function listApiKeys(): Promise<ApiKeyInfo[]> {
+  const response = await authenticatedFetch('/api/v1/auth/api-keys');
+  if (!response.ok) {
+    const data = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(data?.error ?? 'Unable to load personal access tokens.');
+  }
+  return ((await response.json()) as { apiKeys: ApiKeyInfo[] }).apiKeys;
+}
+
+export async function createApiKey(
+  name: string,
+  expiresInDays?: number | null,
+  scope: 'read' | 'write' = 'write',
+): Promise<{ apiKey: ApiKeyInfo; secret: string }> {
+  const response = await authenticatedFetch('/api/v1/auth/api-keys', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, expiresInDays: expiresInDays ?? null, scope }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(data?.error ?? 'Unable to create personal access token.');
+  }
+  return (await response.json()) as { apiKey: ApiKeyInfo; secret: string };
+}
+
+export async function revokeApiKey(id: string): Promise<void> {
+  const response = await authenticatedFetch(`/api/v1/auth/api-keys/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(data?.error ?? 'Unable to revoke personal access token.');
+  }
+}
+

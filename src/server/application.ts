@@ -5,6 +5,8 @@ import { handleAuthRequest, HttpError } from "./auth/http";
 import { serviceErrorDiagnostic } from "./service-error";
 import { handleFinanceRequest } from "./finance/http";
 import type { FinanceStore } from "./finance/store";
+import { handleMcpRequest } from "./mcp/http";
+import { JsonRpcErrorCode } from "./mcp/protocol";
 
 export interface Application {
   fetch(request: Request): Promise<Response>;
@@ -45,34 +47,42 @@ export function createApplication(config: Config, store: AuthStore, financeStore
   async function handleFetch(request: Request): Promise<Response> {
     const method = request.method.toUpperCase();
     const headOnly = method === "HEAD";
+    const url = new URL(request.url, "http://localhost");
+    const pathname = url.pathname.length > 1 && url.pathname.endsWith("/")
+      ? url.pathname.slice(0, -1)
+      : url.pathname;
+
+    const isMcpRoute = Boolean(
+      financeStore && (pathname === "/api/mcp" || pathname === "/api/v1/mcp"),
+    );
+
     const responseHeaders = new Headers({
       "Access-Control-Allow-Origin": config.appOrigin,
       "Access-Control-Allow-Credentials": "true",
       "Vary": "Origin",
     });
 
-    if (method === "OPTIONS") {
+    if (method === "OPTIONS" && !isMcpRoute) {
       responseHeaders.set("Access-Control-Allow-Methods", "GET,HEAD,POST,PUT,DELETE,OPTIONS");
       responseHeaders.set("Access-Control-Allow-Headers", "Content-Type,Authorization");
       return new Response(null, { status: 204, headers: responseHeaders });
     }
 
-    if (!["GET", "HEAD", "OPTIONS"].includes(method) && request.headers.get("origin") !== config.appOrigin) {
+    if (!isMcpRoute && !["GET", "HEAD", "OPTIONS"].includes(method) && request.headers.get("origin") !== config.appOrigin) {
       return sendJson(403, { error: "Origin not allowed" }, responseHeaders, headOnly);
     }
-
-    const url = new URL(request.url, "http://localhost");
-    const pathname = url.pathname.length > 1 && url.pathname.endsWith("/")
-      ? url.pathname.slice(0, -1)
-      : url.pathname;
 
     const isFinanceRoute = Boolean(
       financeStore && (pathname === "/api/v1/finance" || pathname.startsWith("/api/v1/finance/")),
     );
-    const limitBytes = isFinanceRoute ? 128 * 1024 : 16 * 1024;
+    const limitBytes = isFinanceRoute || isMcpRoute ? 128 * 1024 : 16 * 1024;
 
     try {
       const body = await parseJsonBody(request, limitBytes);
+
+      if (financeStore && isMcpRoute) {
+        return await handleMcpRequest(request, body, store, financeStore, responseHeaders);
+      }
 
       if ((method === "GET" || method === "HEAD") && (pathname === "/" || pathname === "/api" || pathname === "/api/v1/health")) {
         return sendJson(200, { status: "ok", timestamp: new Date().toISOString() }, responseHeaders, headOnly);
@@ -91,6 +101,21 @@ export function createApplication(config: Config, store: AuthStore, financeStore
       return sendJson(404, { error: "Not found" }, responseHeaders, headOnly);
     } catch (error: unknown) {
       if (error instanceof PayloadError) {
+        if (isMcpRoute) {
+          return sendJson(
+            error.status,
+            {
+              jsonrpc: "2.0",
+              id: null,
+              error: {
+                code: error.status === 413 ? JsonRpcErrorCode.INVALID_REQUEST : JsonRpcErrorCode.PARSE_ERROR,
+                message: error.status === 413 ? "Request payload too large" : "Parse error: invalid JSON request body",
+              },
+            },
+            responseHeaders,
+            headOnly,
+          );
+        }
         return sendJson(error.status, { error: "Invalid JSON request body" }, responseHeaders, headOnly);
       }
       if (error instanceof HttpError) {

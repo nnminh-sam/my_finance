@@ -32,6 +32,10 @@ export async function verifyPassword(password: string, encoded: string): Promise
 
 // Unknown accounts still perform the same KDF work as existing accounts.
 export const DUMMY_PASSWORD_HASH = `scrypt$32768$8$1$${"0".repeat(32)}$${"0".repeat(128)}`;
+export const API_KEY_PREFIX = "mf_pat_";
 export const newToken = (): string => randomBytes(32).toString("base64url");
+export const newApiKey = (): string => `${API_KEY_PREFIX}${newToken()}`;
 export const hashToken = (token: string): string => createHash("sha256").update(token).digest("hex");
 export const validToken = (token: unknown): token is string => typeof token === "string" && /^[A-Za-z0-9_-]{43}$/.test(token);
+export const validApiKey = (token: unknown): token is string => typeof token === "string" && /^mf_pat_[A-Za-z0-9_-]{43}$/.test(token);
+

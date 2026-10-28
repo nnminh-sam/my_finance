@@ -5,6 +5,23 @@ import { ACCESS_SECONDS, REFRESH_SECONDS } from "./crypto";
 export interface User { id: string; name: string; email: string; createdAt: string }
 export interface Account extends User { passwordHash: string }
 export interface TokenHashes { accessHash: string; refreshHash: string }
+export type ApiKeyScope = "read" | "write";
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scope: ApiKeyScope;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+export interface ApiKeyCreateInput {
+  name: string;
+  keyPrefix: string;
+  keyHash: string;
+  scope?: ApiKeyScope;
+  expiresAt: string | null;
+}
 export interface AuthStore {
   reserveAttempt(keyHash: string): Promise<boolean>;
   findAccount(email: string): Promise<Account | undefined>;
@@ -13,11 +30,26 @@ export interface AuthStore {
   rotate(oldHash: string, tokens: TokenHashes): Promise<User | undefined>;
   revoke(refreshHash?: string, accessHash?: string): Promise<void>;
   authenticate(accessHash: string): Promise<User | undefined>;
+  listApiKeys?(userId: string): Promise<ApiKeyRecord[]>;
+  createApiKey?(userId: string, input: ApiKeyCreateInput): Promise<ApiKeyRecord>;
+  revokeApiKey?(userId: string, keyId: string): Promise<boolean>;
+  authenticateApiKey?(keyHash: string): Promise<{ user: User; scope: ApiKeyScope } | undefined>;
 }
 
 type Row = Record<string, unknown>;
 function user(row: Row): User {
   return { id: String(row.id), name: String(row.name), email: String(row.email), createdAt: new Date(String(row.created_at)).toISOString() };
+}
+function apiKeyRecord(row: Row): ApiKeyRecord {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    keyPrefix: String(row.token_hint),
+    scope: (row.scope === "read" ? "read" : "write") as ApiKeyScope,
+    lastUsedAt: row.last_used_at ? new Date(String(row.last_used_at)).toISOString() : null,
+    expiresAt: row.expires_at ? new Date(String(row.expires_at)).toISOString() : null,
+    createdAt: new Date(String(row.created_at)).toISOString(),
+  };
 }
 
 export function createStore(databaseUrl: string): AuthStore {
@@ -93,6 +125,49 @@ export function createStore(databaseUrl: string): AuthStore {
         WHERE s.access_hash = $1 AND s.revoked_at IS NULL
           AND s.access_expires_at > now() AND s.refresh_expires_at > now()`, [accessHash]);
       return rows[0] ? user(rows[0]) : undefined;
+    },
+    async listApiKeys(userId) {
+      const rows = await query(
+        `SELECT id, name, token_hint, scope, last_used_at, expires_at, created_at
+         FROM auth_api_tokens
+         WHERE user_id = $1 AND revoked_at IS NULL
+         ORDER BY created_at DESC`,
+        [userId],
+      );
+      return rows.map(apiKeyRecord);
+    },
+    async createApiKey(userId, input) {
+      const rows = await query(
+        `INSERT INTO auth_api_tokens (id, user_id, name, token_hint, token_hash, scope, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, name, token_hint, scope, last_used_at, expires_at, created_at`,
+        [randomUUID(), userId, input.name, input.keyPrefix, input.keyHash, input.scope ?? "write", input.expiresAt],
+      );
+      return apiKeyRecord(rows[0]);
+    },
+    async revokeApiKey(userId, keyId) {
+      const rows = await query(
+        `UPDATE auth_api_tokens SET revoked_at = now()
+         WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+         RETURNING id`,
+        [keyId, userId],
+      );
+      return rows.length > 0;
+    },
+    async authenticateApiKey(keyHash) {
+      const rows = await query(
+        `WITH used AS (
+           UPDATE auth_api_tokens SET last_used_at = now()
+           WHERE token_hash = $1 AND revoked_at IS NULL
+             AND (expires_at IS NULL OR expires_at > now())
+           RETURNING user_id, scope
+         )
+         SELECT u.*, k.scope FROM auth_users u JOIN used k ON k.user_id = u.id`,
+        [keyHash],
+      );
+      return rows[0]
+        ? { user: user(rows[0]), scope: (rows[0].scope === "read" ? "read" : "write") as ApiKeyScope }
+        : undefined;
     },
   };
 }
