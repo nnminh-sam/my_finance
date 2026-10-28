@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { User, Mail, Calendar, Tag, Plus, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat, Wallet, SlidersHorizontal, LogOut, Lock, Copy, Check, Camera, Pencil, CircleStop, RefreshCw } from 'lucide-react';
+import { User, Mail, Calendar, Tag, Plus, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat, Wallet, SlidersHorizontal, LogOut, Lock, Copy, Check, Camera, Pencil, CircleStop, RefreshCw, Bot } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
@@ -17,6 +17,7 @@ import type { CategoryData } from '../types';
 import { EditorActions } from './ProfileSection';
 import { IncomeSources } from './IncomeSources';
 import type { IncomeEditorState } from './IncomeSources';
+import { McpAccessSection } from './McpAccessSection';
 import '../styles/UserProfile.css';
 
 const ICONS = { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone };
@@ -28,6 +29,7 @@ const TABS = [
   { id: 'income', label: 'Income', icon: Wallet },
   { id: 'categories', label: 'Categories', icon: Tag },
   { id: 'repeats', label: 'Repeat spendings', icon: Repeat },
+  { id: 'mcp', label: 'AI & MCP', icon: Bot },
   { id: 'preferences', label: 'Preferences', icon: SlidersHorizontal },
 ] as const;
 type TabId = typeof TABS[number]['id'];
@@ -115,14 +117,15 @@ export function UserProfile() {
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const [incomeEditor, setIncomeEditor] = useState<IncomeEditorState>({ dirty: false, busy: false });
+  const [mcpTokenCount, setMcpTokenCount] = useState<number | undefined>(undefined);
   const categoryDirty = category.state !== null && (category.state.draft.isNew || category.dirty);
-  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, repeats: false, preferences: false };
+  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, repeats: false, mcp: false, preferences: false };
   const dirty = Object.values(unsaved).some(Boolean);
   const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy || stoppingRepeatId);
   const initials = (user?.name || user?.email || '').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
   const monthIncome = getMonthIncome(incomeMonth(new Date()), incomes).totalIncome;
   const monthlyRepeats = repeatRules.reduce((sum, rule) => sum + monthlyRepeatCost(rule), 0);
-  const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: settings.categories.length, repeats: repeatRules.length };
+  const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: settings.categories.length, repeats: repeatRules.length, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
 
   useUnsavedChanges(!isLoggingOut && (dirty || pending));
 
@@ -501,6 +504,10 @@ export function UserProfile() {
               </>
             )}
           </section>
+
+          <div id="profile-panel-mcp" role="tabpanel" aria-labelledby="profile-tab-mcp" hidden={tab !== 'mcp'}>
+            <McpAccessSection disabled={isLoggingOut} onCountChange={setMcpTokenCount} />
+          </div>
 
           <section id="profile-panel-preferences" role="tabpanel" aria-labelledby="profile-tab-preferences" className="profile-panel" hidden={tab !== 'preferences'}>
             <div className="profile-panel-head"><div><h2>Preferences</h2><p>Changes apply right away and are saved on this device.</p></div></div>

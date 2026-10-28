@@ -1,12 +1,14 @@
 import type { Config } from "../config";
-import type { AuthStore, User } from "./store";
+import type { ApiKeyScope, AuthStore, User } from "./store";
 import {
   ACCESS_SECONDS,
   DUMMY_PASSWORD_HASH,
   REFRESH_SECONDS,
   hashPassword,
   hashToken,
+  newApiKey,
   newToken,
+  validApiKey,
   validPassword,
   validToken,
   verifyPassword,
@@ -26,6 +28,15 @@ export function bearerTokenFromHeader(authorization: string | null | undefined):
   return match?.[1];
 }
 
+export function apiKeyFromHeaders(request: Request): string | undefined {
+  const auth = request.headers.get("authorization") ?? "";
+  const bearerMatch = /^Bearer (mf_pat_[A-Za-z0-9_-]{43})$/i.exec(auth);
+  if (bearerMatch && validApiKey(bearerMatch[1])) return bearerMatch[1];
+  const headerKey = request.headers.get("x-api-key")?.trim();
+  if (headerKey && validApiKey(headerKey)) return headerKey;
+  return undefined;
+}
+
 function refreshCookiesFromHeader(cookieHeader: string | null | undefined): string[] {
   return (cookieHeader ?? "").split(";").flatMap(part => {
     const separator = part.indexOf("=");
@@ -35,12 +46,32 @@ function refreshCookiesFromHeader(cookieHeader: string | null | undefined): stri
   });
 }
 
-export async function authenticateRequest(request: Request, store: AuthStore): Promise<User> {
+export async function authenticateRequestWithScope(
+  request: Request,
+  store: AuthStore,
+): Promise<{ user: User; scope: ApiKeyScope }> {
+  const apiKey = apiKeyFromHeaders(request);
+  if (apiKey) {
+    const keyHash = hashToken(apiKey);
+    if (store.authenticateApiKey) {
+      const auth = await store.authenticateApiKey(keyHash);
+      if (!auth) throw new HttpError(401, "Authentication required");
+      return auth;
+    }
+    const account = await store.authenticate(keyHash);
+    if (!account) throw new HttpError(401, "Authentication required");
+    return { user: account, scope: "write" };
+  }
   const token = bearerTokenFromHeader(request.headers.get("authorization"));
   if (!token) throw new HttpError(401, "Authentication required");
   const account = await store.authenticate(hashToken(token));
   if (!account) throw new HttpError(401, "Authentication required");
-  return account;
+  return { user: account, scope: "write" };
+}
+
+export async function authenticateRequest(request: Request, store: AuthStore): Promise<User> {
+  const { user } = await authenticateRequestWithScope(request, store);
+  return user;
 }
 
 function emailFrom(body: unknown): string | undefined {
@@ -176,6 +207,69 @@ export async function handleAuthRequest(
       status: 200,
       headers: responseHeaders,
     });
+  }
+
+  if (subpath === "/api-keys") {
+    const user = await authenticateRequest(request, store);
+    if (method === "GET" || method === "HEAD") {
+      const apiKeys = store.listApiKeys ? await store.listApiKeys(user.id) : [];
+      responseHeaders.set("Content-Type", "application/json; charset=utf-8");
+      return new Response(method === "HEAD" ? null : JSON.stringify({ apiKeys }), {
+        status: 200,
+        headers: responseHeaders,
+      });
+    }
+    if (method === "POST") {
+      if (!store.createApiKey) throw new HttpError(501, "API key management not supported");
+      const rawName = typeof recordBody?.name === "string" ? recordBody.name.trim() : "";
+      if (!rawName || rawName.length > 100 || /[\u0000-\u001f\u007f]/.test(rawName)) {
+        throw new HttpError(400, "Provide a token name (1–100 characters)");
+      }
+      let expiresAt: string | null = null;
+      if (recordBody?.expiresInDays !== undefined && recordBody?.expiresInDays !== null) {
+        const days = recordBody.expiresInDays;
+        if (typeof days !== "number" || !Number.isInteger(days) || days < 1 || days > 3650) {
+          throw new HttpError(400, "Invalid expiresInDays (1–3650)");
+        }
+        expiresAt = new Date(Date.now() + days * 86_400_000).toISOString();
+      }
+      const existing = store.listApiKeys ? await store.listApiKeys(user.id) : [];
+      if (existing.length >= 25) {
+        throw new HttpError(400, "Maximum of 25 active personal access tokens reached");
+      }
+      const secret = newApiKey();
+      const keyPrefix = `${secret.slice(0, 11)}…${secret.slice(-4)}`;
+      const rawScope = recordBody?.scope;
+      if (rawScope !== undefined && rawScope !== "read" && rawScope !== "write") {
+        throw new HttpError(400, "Invalid scope (expected 'read' or 'write')");
+      }
+      const scope: ApiKeyScope = rawScope === "read" ? "read" : "write";
+      const apiKey = await store.createApiKey(user.id, {
+        name: rawName,
+        keyPrefix,
+        keyHash: hashToken(secret),
+        scope,
+        expiresAt,
+      });
+      responseHeaders.set("Content-Type", "application/json; charset=utf-8");
+      return new Response(JSON.stringify({ apiKey, secret }), {
+        status: 201,
+        headers: responseHeaders,
+      });
+    }
+  }
+
+  const apiKeyMatch = /^\/api-keys\/([^/]+)$/.exec(subpath);
+  if (apiKeyMatch && method === "DELETE") {
+    const user = await authenticateRequest(request, store);
+    if (!store.revokeApiKey) throw new HttpError(501, "API key management not supported");
+    const rawId = decodeURIComponent(apiKeyMatch[1]);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId)) {
+      throw new HttpError(404, "Personal access token not found");
+    }
+    const revoked = await store.revokeApiKey(user.id, rawId.toLowerCase());
+    if (!revoked) throw new HttpError(404, "Personal access token not found");
+    return new Response(null, { status: 204, headers: responseHeaders });
   }
 
   throw new HttpError(404, "Not found");
