@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { format, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
-import { ChevronLeft, ChevronRight, LayoutGrid, CalendarClock, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
 import { ExpenseModal } from '../../components/ExpenseModal';
 import { MonthlyIncomeModal } from '../../components/MonthlyIncomeModal';
 import type { Spending } from '../../types';
@@ -22,7 +22,6 @@ import '../../styles/AuthScreen.css';
 
 function resolveFinancePage(pathname: string): FinancePage {
   const clean = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
-  if (clean === '/cycle') return 'cycle';
   if (clean === '/week') return 'week';
   if (clean === '/day') return 'day';
   if (clean === '/analytics') return 'analytics';
@@ -152,7 +151,7 @@ function FinanceDocument({
       }
     } else {
       setActiveDate(urlDate);
-      if (page === 'cycle' || page === 'week' || page === 'day' || page === 'analytics') {
+      if (page === 'week' || page === 'day' || page === 'analytics') {
         const rangeStart = format(subMonths(urlDate, 1), 'yyyy-MM-01');
         const rangeEnd = format(addMonths(urlDate, 2), 'yyyy-MM-01');
         void fetchWeeksSpendings(rangeStart, rangeEnd).catch(() => []);
@@ -170,7 +169,7 @@ function FinanceDocument({
 
   const previousDate = page === 'week' ? subWeeks(activeDate, 1) : subMonths(activeDate, 1);
   const nextDate = page === 'week' ? addWeeks(activeDate, 1) : addMonths(activeDate, 1);
-  const dateNavigation = page === 'calendar' || page === 'cycle' || page === 'week' || page === 'analytics';
+  const dateNavigation = page === 'calendar' || page === 'week' || page === 'analytics';
 
   const openDate = useCallback((date: Date) => {
     router.push(pageHref('day', date));
@@ -192,7 +191,6 @@ function FinanceDocument({
 
   const navigation = [
     { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
-    { page: 'cycle', label: 'Pay Cycle', Icon: CalendarClock },
     { page: 'week', label: 'Week', Icon: List },
     { page: 'analytics', label: 'Analytics', Icon: ChartColumn },
     { page: 'profile', label: 'Profile', Icon: User },
@@ -200,7 +198,6 @@ function FinanceDocument({
 
   const bottomTabsLeft = [
     { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
-    { page: 'cycle', label: 'Pay Cycle', Icon: CalendarClock },
   ] as const;
 
   const bottomTabsRight = [

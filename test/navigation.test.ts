@@ -7,7 +7,6 @@ import type { FinancePage } from '../src/lib/pages';
 
 const financePaths: Record<FinancePage, string> = {
   calendar: '/calendar',
-  cycle: '/cycle',
   week: '/week',
   day: '/day',
   analytics: '/analytics',
@@ -31,7 +30,7 @@ test('navigation preserves local calendar dates on both sides of UTC', () => {
     import { pageHref, readPageDate } from ${JSON.stringify(navigationUrl)};
     for (const hour of [0, 23]) {
       const date = new Date(2024, 1, 29, hour, 30);
-      for (const page of ['calendar', 'cycle', 'week', 'day', 'analytics']) {
+      for (const page of ['calendar', 'week', 'day', 'analytics']) {
         assert.equal(pageHref(page, date), '/' + page + '?date=2024-02-29');
         const parsed = readPageDate(pageHref(page, date).split('?')[1]);
         assert.deepEqual(

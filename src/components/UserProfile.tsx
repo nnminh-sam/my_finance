@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { User, Mail, Calendar, Tag, Plus, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat, Wallet, SlidersHorizontal, LogOut, Lock, Copy, Check, Camera, Pencil, CircleStop, RefreshCw, Bot } from 'lucide-react';
+import { User, Mail, Calendar, Tag, Plus, ChevronLeft, ChevronRight, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat, Wallet, SlidersHorizontal, CalendarClock, LogOut, Lock, Copy, Check, Camera, Pencil, CircleStop, RefreshCw, Bot } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
@@ -11,7 +11,7 @@ import { errorMessage } from '../services/auth';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { getMonthIncome, incomeMonth } from '../lib/income';
 import { describeRepeatFrequency, monthlyRepeatCost, repeatProgress } from '../lib/repeatRules';
-import { clampSalaryDay, defaultSalaryCycleConfig, loadSalaryCycleConfig, saveSalaryCycleConfig } from '../lib/salaryCycle';
+import { clampDelayDays, clampSalaryDay, defaultSalaryCycleConfig, getPaydayForMonth, loadSalaryCycleConfig, saveSalaryCycleConfig } from '../lib/salaryCycle';
 import type { SalaryCycleConfig } from '../lib/salaryCycle';
 import type { CategoryData } from '../types';
 import { EditorActions } from './ProfileSection';
@@ -29,6 +29,7 @@ const TABS = [
   { id: 'income', label: 'Income', icon: Wallet },
   { id: 'categories', label: 'Categories', icon: Tag },
   { id: 'repeats', label: 'Repeat spendings', icon: Repeat },
+  { id: 'paycycle', label: 'Paycycle', icon: CalendarClock },
   { id: 'mcp', label: 'AI & MCP', icon: Bot },
   { id: 'preferences', label: 'Preferences', icon: SlidersHorizontal },
 ] as const;
@@ -111,6 +112,7 @@ export function UserProfile() {
   const [stoppingRepeatId, setStoppingRepeatId] = useState<string | null>(null);
   const [repeatError, setRepeatError] = useState<string | null>(null);
   const [cycle, setCycle] = useState<SalaryCycleConfig>(defaultSalaryCycleConfig);
+  const [adjustMonth, setAdjustMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const loggingOut = useRef(false);
@@ -119,7 +121,7 @@ export function UserProfile() {
   const [incomeEditor, setIncomeEditor] = useState<IncomeEditorState>({ dirty: false, busy: false });
   const [mcpTokenCount, setMcpTokenCount] = useState<number | undefined>(undefined);
   const categoryDirty = category.state !== null && (category.state.draft.isNew || category.dirty);
-  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, repeats: false, mcp: false, preferences: false };
+  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, repeats: false, paycycle: false, mcp: false, preferences: false };
   const dirty = Object.values(unsaved).some(Boolean);
   const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy || stoppingRepeatId);
   const initials = (user?.name || user?.email || '').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
@@ -227,6 +229,17 @@ export function UserProfile() {
     setCycle(next);
     saveSalaryCycleConfig(next, user?.id);
   };
+
+  const adjustKey = `${adjustMonth.getFullYear()}-${String(adjustMonth.getMonth() + 1).padStart(2, '0')}`;
+  const adjustPayday = getPaydayForMonth(adjustMonth, cycle);
+  const setMonthDelay = (delay: number) => {
+    const clamped = clampDelayDays(delay);
+    const monthDelays = { ...cycle.monthDelays };
+    if (clamped === 0) delete monthDelays[adjustKey]; else monthDelays[adjustKey] = clamped;
+    updateCycle({ monthDelays });
+  };
+  const shiftAdjustMonth = (by: number) => setAdjustMonth(current => new Date(current.getFullYear(), current.getMonth() + by, 1));
+  const delayLabel = (delay: number) => (delay === 0 ? 'On schedule' : `${delay > 0 ? '+' : '−'}${Math.abs(delay)}d`);
 
   const handleLogout = async () => {
     if (loggingOut.current || pending) return;
@@ -505,6 +518,42 @@ export function UserProfile() {
             )}
           </section>
 
+          <section id="profile-panel-paycycle" role="tabpanel" aria-labelledby="profile-tab-paycycle" className="profile-panel" hidden={tab !== 'paycycle'}>
+            <div className="profile-panel-head"><div><h2>Paycycle</h2><p>Changes apply right away and are saved on this device.</p></div></div>
+            <div className="profile-card profile-rows">
+              <div className="profile-pref">
+                <div><label htmlFor="profile-payday"><strong>Payday</strong></label><span className="profile-hint">The day of the month each salary cycle starts. </span></div>
+                <select id="profile-payday" value={cycle.salaryDay} onChange={event => updateCycle({ salaryDay: clampSalaryDay(Number(event.target.value)) })}>
+                  {Array.from({ length: 28 }, (_, index) => index + 1).map(day => <option key={day} value={day}>Day {day}</option>)}
+                </select>
+              </div>
+              <div className="profile-pref">
+                <div><label htmlFor="profile-weekend-shift"><strong>Move weekend paydays to Monday</strong></label><span className="profile-hint">When payday falls on a Saturday or Sunday, the cycle starts the following Monday.</span></div>
+                <input id="profile-weekend-shift" type="checkbox" role="switch" className="profile-switch" checked={cycle.shiftWeekendToMonday} onChange={event => updateCycle({ shiftWeekendToMonday: event.target.checked })} />
+              </div>
+              <div className="profile-pref">
+                <div><label htmlFor="profile-start-after"><strong>Start cycle the day after payday</strong></label><span className="profile-hint">Keeps cycles consecutive, so payday belongs to the cycle that just ended.</span></div>
+                <input id="profile-start-after" type="checkbox" role="switch" className="profile-switch" checked={cycle.startDayAfterPayday} onChange={event => updateCycle({ startDayAfterPayday: event.target.checked })} />
+              </div>
+              <div className="profile-pref">
+                <div><label htmlFor="profile-end-on-payday"><strong>End cycle on payday</strong></label><span className="profile-hint">Include the next payday as the final day of the cycle. Always on when the cycle starts the day after payday.</span></div>
+                <input id="profile-end-on-payday" type="checkbox" role="switch" className="profile-switch" checked={cycle.startDayAfterPayday ? true : cycle.includeNextPaydayInCycle} disabled={cycle.startDayAfterPayday} onChange={event => updateCycle({ includeNextPaydayInCycle: event.target.checked })} />
+              </div>
+              <div className="profile-pref">
+                <div><strong id="profile-month-payday-label">Adjust one month's payday</strong><span className="profile-hint">Pick the month, then move its payday earlier (up to 7 days) or later (up to 14 days). Only that month changes.</span></div>
+                <div className="profile-actions" role="group" aria-labelledby="profile-month-payday-label">
+                  <button type="button" className="profile-icon-button" aria-label="Previous month" onClick={() => shiftAdjustMonth(-1)}><ChevronLeft size={16} aria-hidden="true" /></button>
+                  <span>{adjustMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}: <strong>{adjustPayday.actualDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</strong></span>
+                  <button type="button" className="profile-icon-button" aria-label="Next month" onClick={() => shiftAdjustMonth(1)}><ChevronRight size={16} aria-hidden="true" /></button>
+                  <button type="button" className="profile-icon-button" aria-label="Pay one day earlier" disabled={adjustPayday.manualDelayDays <= -7} onClick={() => setMonthDelay(adjustPayday.manualDelayDays - 1)}>−</button>
+                  <span>{delayLabel(adjustPayday.manualDelayDays)}</span>
+                  <button type="button" className="profile-icon-button" aria-label="Pay one day later" disabled={adjustPayday.manualDelayDays >= 14} onClick={() => setMonthDelay(adjustPayday.manualDelayDays + 1)}>+</button>
+                  {adjustPayday.manualDelayDays !== 0 && <button type="button" className="profile-button" onClick={() => setMonthDelay(0)}>Reset</button>}
+                </div>
+              </div>
+            </div>
+          </section>
+
           <div id="profile-panel-mcp" role="tabpanel" aria-labelledby="profile-tab-mcp" hidden={tab !== 'mcp'}>
             <McpAccessSection disabled={isLoggingOut} onCountChange={setMcpTokenCount} />
           </div>
@@ -519,16 +568,6 @@ export function UserProfile() {
                   <button type="button" aria-pressed={preference === 'dark'} onClick={() => setTheme('dark')}><Moon size={15} aria-hidden="true" />Dark</button>
                   <button type="button" aria-pressed={preference === null} onClick={() => setTheme(null)}><Monitor size={15} aria-hidden="true" />System{preference === null ? ` (${theme})` : ''}</button>
                 </div>
-              </div>
-              <div className="profile-pref">
-                <div><label htmlFor="profile-payday"><strong>Payday</strong></label><span className="profile-hint">The day of the month each salary cycle starts. Adjust a single month from the Cycle view.</span></div>
-                <select id="profile-payday" value={cycle.salaryDay} onChange={event => updateCycle({ salaryDay: clampSalaryDay(Number(event.target.value)) })}>
-                  {Array.from({ length: 28 }, (_, index) => index + 1).map(day => <option key={day} value={day}>Day {day}</option>)}
-                </select>
-              </div>
-              <div className="profile-pref">
-                <div><label htmlFor="profile-weekend-shift"><strong>Move weekend paydays to Monday</strong></label><span className="profile-hint">When payday falls on a Saturday or Sunday, the cycle starts the following Monday.</span></div>
-                <input id="profile-weekend-shift" type="checkbox" role="switch" className="profile-switch" checked={cycle.shiftWeekendToMonday} onChange={event => updateCycle({ shiftWeekendToMonday: event.target.checked })} />
               </div>
             </div>
           </section>
