@@ -118,10 +118,6 @@
   color: white;
 }
 
-.document-profile-btn {
-  display: none;
-}
-
 .document-bottom-nav {
   display: none;
 }
@@ -220,29 +216,11 @@
     display: none !important;
   }
 
+  /* Keeps the period label centred now that Profile lives in the bottom nav. */
   .document-actions {
     margin-left: 0;
     gap: 4px;
-  }
-
-  .document-profile-btn {
-    display: inline-flex;
     width: 34px;
-    height: 34px;
-    padding: 0;
-    border: 1px solid var(--border-color);
-  }
-
-  .document-profile-btn svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  .document-profile-btn[aria-current="page"] {
-    color: white;
-    background: var(--primary);
-    border-color: var(--primary);
-    box-shadow: 0 0 12px var(--primary-glow);
   }
 
   /* Bottom Navigation Bar */
@@ -353,6 +331,10 @@
     border-radius: 8px;
   }
 
+  .document-actions {
+    width: 32px;
+  }
+
   .document-brand-icon img {
     width: 20px;
     height: 20px;
@@ -374,16 +356,6 @@
   .document-period-chevron svg {
     width: 15px;
     height: 15px;
-  }
-
-  .document-profile-btn {
-    width: 32px;
-    height: 32px;
-  }
-
-  .document-profile-btn svg {
-    width: 16px;
-    height: 16px;
   }
 
   .document-bottom-nav {

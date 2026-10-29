@@ -436,6 +436,30 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
   }, [currentDate, findMonthStartElement]);
 
+  // Rows are sized as a share of the container, so a height change (for example the overview card
+  // wrapping) would otherwise leave the old pixel scrollTop pointing at the wrong week.
+  const activeMonthRef = useRef(activeMonthStr);
+  useEffect(() => {
+    activeMonthRef.current = activeMonthStr;
+  }, [activeMonthStr]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    let lastHeight = container.clientHeight;
+    const observer = new ResizeObserver(() => {
+      if (container.clientHeight === lastHeight) return;
+      lastHeight = container.clientHeight;
+      const targetWeek = findMonthStartElement(container, parseISO(`${activeMonthRef.current}-01`));
+      if (!targetWeek) return;
+      ignoreMonthSyncUntilRef.current = Date.now() + 250;
+      container.scrollTop = targetWeek.offsetTop;
+      lastScrollTopRef.current = targetWeek.offsetTop;
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [findMonthStartElement]);
+
   // Smoothly scroll ONLY when the external currentDate prop itself changes to a new month
   useEffect(() => {
     if (!hasInitialScrolledRef.current) return;
