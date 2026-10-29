@@ -23,6 +23,8 @@ export interface SalaryCycleConfig {
   shiftWeekendToMonday: boolean;
   /** Include the next month's payday as the end of the cycle (instead of the day before) */
   includeNextPaydayInCycle: boolean;
+  /** Start the pay cycle on the day after payday (defaults to true) */
+  startDayAfterPayday: boolean;
   /** Month-specific extra delay in days (or negative for early payout), keyed by 'YYYY-MM' */
   monthDelays: Record<string, number>;
 }
@@ -32,6 +34,8 @@ export interface SalaryCycleRange {
   cycleMonth: string;
   /** The base configured payday before weekend/delay adjustments */
   nominalStartDate: Date;
+  /** Actual payday of this month (before startDayAfterPayday shift) */
+  actualPayday: Date;
   /** Actual start date of this salary cycle (inclusive) */
   startDate: Date;
   /** Actual end date of this salary cycle (inclusive) */
@@ -55,6 +59,7 @@ export function defaultSalaryCycleConfig(): SalaryCycleConfig {
     salaryDay: DEFAULT_SALARY_DAY,
     shiftWeekendToMonday: true,
     includeNextPaydayInCycle: true,
+    startDayAfterPayday: true,
     monthDelays: {},
   };
 }
@@ -80,6 +85,8 @@ export function loadSalaryCycleConfig(userId?: string): SalaryCycleConfig {
       typeof parsed.shiftWeekendToMonday === 'boolean' ? parsed.shiftWeekendToMonday : true;
     const includeNextPaydayInCycle =
       typeof parsed.includeNextPaydayInCycle === 'boolean' ? parsed.includeNextPaydayInCycle : true;
+    const startDayAfterPayday =
+      typeof parsed.startDayAfterPayday === 'boolean' ? parsed.startDayAfterPayday : true;
     const monthDelays: Record<string, number> = {};
     if (parsed.monthDelays && typeof parsed.monthDelays === 'object') {
       for (const [k, v] of Object.entries(parsed.monthDelays)) {
@@ -89,7 +96,13 @@ export function loadSalaryCycleConfig(userId?: string): SalaryCycleConfig {
         }
       }
     }
-    return { salaryDay, shiftWeekendToMonday, includeNextPaydayInCycle, monthDelays };
+    return {
+      salaryDay,
+      shiftWeekendToMonday,
+      includeNextPaydayInCycle,
+      startDayAfterPayday,
+      monthDelays,
+    };
   } catch {
     return defaultSalaryCycleConfig();
   }
@@ -159,8 +172,16 @@ export function getSalaryCycleForMonth(
   const currentPayday = getPaydayForMonth(currentMonthStart, config);
   const nextPayday = getPaydayForMonth(nextMonthStart, config);
 
-  const startDate = currentPayday.actualDate;
-  const includePaydayAsEnd = config.includeNextPaydayInCycle ?? true;
+  const startDayAfter = config.startDayAfterPayday ?? true;
+  const startDate = startDayAfter
+    ? addDays(currentPayday.actualDate, 1)
+    : currentPayday.actualDate;
+
+  // When cycle starts the day after payday, cycle end is always on next payday
+  const includePaydayAsEnd = startDayAfter
+    ? true
+    : (config.includeNextPaydayInCycle ?? true);
+
   // Ensure endDate is at least startDate even in extreme configuration cases
   const rawEndDate = includePaydayAsEnd
     ? nextPayday.actualDate
@@ -180,6 +201,7 @@ export function getSalaryCycleForMonth(
   return {
     cycleMonth,
     nominalStartDate: currentPayday.nominalDate,
+    actualPayday: currentPayday.actualDate,
     startDate,
     endDate,
     nextStartDate: nextPayday.actualDate,
@@ -217,9 +239,13 @@ export function resolveActiveCycleMonthDate(
 ): Date {
   const mStart = startOfMonth(referenceDate);
   const payday = getPaydayForMonth(mStart, config);
+  const startDayAfter = config.startDayAfterPayday ?? true;
+  const cycleStart = startDayAfter
+    ? addDays(payday.actualDate, 1)
+    : payday.actualDate;
   const refStr = format(referenceDate, 'yyyy-MM-dd');
-  const paydayStr = format(payday.actualDate, 'yyyy-MM-dd');
-  if (refStr < paydayStr) {
+  const startStr = format(cycleStart, 'yyyy-MM-dd');
+  if (refStr < startStr) {
     return startOfMonth(addMonths(mStart, -1));
   }
   return mStart;

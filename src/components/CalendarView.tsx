@@ -29,7 +29,7 @@ import {
   Gift,
   Phone,
 } from "lucide-react";
-import { getTotalForDate, getTopSpendingsForDate, getSpendingsForDate, formatCompactSpending } from "../lib/spendings";
+import { getTotalForDate, getTopSpendingsForDate, formatCompactSpending } from "../lib/spendings";
 import {
   FETCH_WEEKS_STEP,
   PRELOAD_MONTHS,
@@ -49,6 +49,9 @@ import { twMerge } from "tailwind-merge";
 import { useSettings } from "../contexts/SettingsContext";
 import { getHeatmapColor } from "../lib/heatmap";
 import { getMonthIncome, incomeMonth } from "../lib/income";
+import { defaultSalaryCycleConfig, getSalaryCycleForMonth, loadSalaryCycleConfig } from "../lib/salaryCycle";
+import type { SalaryCycleConfig } from "../lib/salaryCycle";
+import { useAuth } from "../contexts/AuthContext";
 import "../styles/CalendarView.css";
 
 function cn(...inputs: (string | undefined | null | false)[]) {
@@ -82,6 +85,26 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 }) => {
   const { settings } = useSettings();
   const { spendings, incomes, fetchWeeksSpendings } = useFinance();
+  const { user } = useAuth();
+  const [cycleConfig, setCycleConfig] = useState<SalaryCycleConfig>(() => defaultSalaryCycleConfig());
+
+  // Pay cycle preferences are edited in Profile; load them for the signed-in user.
+  useEffect(() => {
+    setCycleConfig(loadSalaryCycleConfig(user?.id));
+  }, [user?.id]);
+
+  // A day is a cycle boundary when it is the first or last day of a cycle anchored nearby.
+  const cycleBoundary = useCallback((day: Date) => {
+    const key = format(day, "yyyy-MM-dd");
+    let isStart = false;
+    let isEnd = false;
+    for (const offset of [-1, 0, 1]) {
+      const cycle = getSalaryCycleForMonth(new Date(day.getFullYear(), day.getMonth() + offset, 1), cycleConfig);
+      if (format(cycle.startDate, "yyyy-MM-dd") === key) isStart = true;
+      if (format(cycle.endDate, "yyyy-MM-dd") === key) isEnd = true;
+    }
+    return { isStart, isEnd };
+  }, [cycleConfig]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const ignoreMonthSyncUntilRef = useRef<number>(0);
@@ -340,26 +363,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
   }, [activeMonthStr, currentDate]);
 
-  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
-    incomeMonth(activeDate), incomes,
+  // Totals can follow the calendar month or the pay cycle that starts in the active month.
+  const [basis, setBasis] = useState<"month" | "cycle">("month");
+  const cycle = useMemo(() => getSalaryCycleForMonth(activeDate, cycleConfig), [activeDate, cycleConfig]);
+  const periodDays = useMemo(
+    () => (basis === "cycle" ? cycle.days : eachDayOfInterval({ start: startOfMonth(activeDate), end: endOfMonth(activeDate) })),
+    [basis, cycle, activeDate],
   );
 
-  const activeMonthStart = startOfMonth(activeDate);
-  const activeMonthEnd = endOfMonth(activeMonthStart);
-  const activeMonthDays = eachDayOfInterval({ start: activeMonthStart, end: activeMonthEnd });
+  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
+    basis === "cycle" ? cycle.cycleMonth : incomeMonth(activeDate), incomes,
+  );
 
-  const categoryTotals: Record<string, number> = Object.create(null);
-  activeMonthDays.forEach(day => {
-    getSpendingsForDate(day, spendings).forEach(s => {
-      categoryTotals[s.category] = (categoryTotals[s.category] || 0) + s.amount;
-    });
-  });
-
-  const totalSpending = Object.values(categoryTotals).reduce((sum, amount) => sum + amount, 0);
-  const topCategories = Object.entries(categoryTotals)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-
+  const totalSpending = periodDays.reduce((sum, day) => sum + getTotalForDate(day, spendings), 0);
   const leftOver = totalIncome - totalSpending;
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -626,7 +642,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           <div className="calendar-overview-stat calendar-overview-income">
             <div className="overview-income-heading">
               <span className="calendar-stat-label">
-                <span className="hide-mobile">Monthly </span>Income
+                <span className="hide-mobile">{basis === "cycle" ? "Cycle" : "Monthly"} </span>Income
               </span>
             </div>
             <span className="calendar-stat-value calendar-stat-income-value">
@@ -666,41 +682,22 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             </span>
           </div>
 
-          <div className="calendar-stat-subtext">
+          <div className="calendar-stat-subtext calendar-stat-subtext-row">
+            <span>
             <span className="hide-mobile">
               Recurring {recurringIncome.toLocaleString("vi-VN")} ₫ · One-time {oneTimeIncome.toLocaleString("vi-VN")} ₫
             </span>
             <span className="show-mobile">
               Recur. {formatCompactSpending(recurringIncome)} · Once {formatCompactSpending(oneTimeIncome)}
             </span>
-          </div>
-        </div>
-
-        {/* Card 2: Top Categories */}
-        <div className="glass animate-fade-in calendar-top-categories-card">
-          <div className="calendar-top-categories-title">
-            Top 5 Categories This Month
-          </div>
-          <div className="calendar-top-categories-list hide-scrollbar">
-            {topCategories.map(([categoryId, amount]) => {
-              const catData = settings.categories?.find(c => c.id === categoryId) || { name: categoryId, icon: 'CircleDollarSign' };
-              return (
-                <div key={categoryId} style={{ display: "flex", flexDirection: "column", minWidth: "120px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>
-                    <CategoryIcon iconName={catData.icon} size={14} />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{catData.name}</span>
-                  </div>
-                  <div style={{ fontSize: "1.125rem", fontWeight: 700, color: "var(--text-main)", marginTop: "4px" }}>
-                    {amount.toLocaleString("vi-VN")} ₫
-                  </div>
-                </div>
-              );
-            })}
-            {topCategories.length === 0 && (
-              <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", padding: "8px 0" }}>
-                No spending data for this month.
-              </div>
-            )}
+            <span className="calendar-basis-range">
+              {" · "}{basis === "cycle" ? `${format(cycle.startDate, "MMM d")} – ${format(cycle.endDate, "MMM d")}` : format(activeDate, "MMMM")}
+            </span>
+            </span>
+            <div className="calendar-basis-toggle" role="group" aria-label="Totals calculated for">
+              <button type="button" aria-pressed={basis === "month"} onClick={() => setBasis("month")}>Month</button>
+              <button type="button" aria-pressed={basis === "cycle"} onClick={() => setBasis("cycle")}>Pay cycle</button>
+            </div>
           </div>
         </div>
       </div>
@@ -739,6 +736,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 const isCurrentDay = isToday(day);
                 const isFirstOfMonth = day.getDate() === 1;
                 const isDifferentMonth = dayMonthStr !== activeMonthStr;
+                const { isStart: isCycleStart, isEnd: isCycleEnd } = cycleBoundary(day);
 
                 // Stage per individual day: 'dates' (immediate) -> 'totals' (left-to-right, top-to-bottom) -> 'details'
                 const dayStage: WeekRenderStage = dayStages[dayKey] || 'dates';
@@ -762,9 +760,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       isCurrentDay && "calendar-day-today",
                       isFirstOfMonth && "calendar-day-first-of-month",
                       isDifferentMonth && "calendar-day-other-month",
+                       isCycleStart && "calendar-day-cycle-start",
+                       isCycleEnd && "calendar-day-cycle-end",
                     )}
                     aria-current={isCurrentDay ? "date" : undefined}
-                    title={isCurrentDay ? "Today" : undefined}
+                    title={isCycleStart ? "Pay cycle starts" : isCycleEnd ? "Pay cycle ends" : isCurrentDay ? "Today" : undefined}
                     style={{
                       backgroundColor: heatmapBg || undefined,
                     }}

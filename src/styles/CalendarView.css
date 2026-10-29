@@ -9,7 +9,7 @@
 
 .calendar-overview-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -498,3 +498,56 @@
   }
 }
 
+
+/* Pay cycle boundaries: thin, pale edge markers on the first and last day of each cycle */
+.calendar-day-cell.calendar-day-cycle-start {
+  border-left: 1px solid color-mix(in srgb, var(--success) 40%, transparent) !important;
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--success) 35%, transparent);
+}
+
+.calendar-day-cell.calendar-day-cycle-end {
+  border-right: 1px solid color-mix(in srgb, var(--warning) 40%, transparent) !important;
+  box-shadow: inset -2px 0 0 color-mix(in srgb, var(--warning) 35%, transparent);
+}
+
+.calendar-day-cell.calendar-day-cycle-start.calendar-day-cycle-end {
+  box-shadow:
+    inset 2px 0 0 color-mix(in srgb, var(--success) 35%, transparent),
+    inset -2px 0 0 color-mix(in srgb, var(--warning) 35%, transparent);
+}
+
+/* Month / pay cycle basis for the overview totals */
+.calendar-basis-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.calendar-basis-toggle button {
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.calendar-basis-toggle button[aria-pressed="true"] {
+  background: var(--bg-card);
+  color: var(--text-main);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+}
+
+.calendar-stat-subtext-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+@media (max-width: 768px) {
+  .calendar-stat-subtext-row { justify-content: center; }
+}

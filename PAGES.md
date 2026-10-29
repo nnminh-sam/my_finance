@@ -12,7 +12,6 @@ Tracker uses a unified **Next.js App Router** architecture at the repository roo
 | `login`     | `/login`     | `src/app/(auth)/login/page.tsx`         | `(auth)`    | No        |
 | `signup`    | `/signup`    | `src/app/(auth)/signup/page.tsx`        | `(auth)`    | No        |
 | `calendar`  | `/calendar`  | `src/app/(finance)/calendar/page.tsx`   | `(finance)` | Yes       |
-| `cycle`     | `/cycle`     | `src/app/(finance)/cycle/page.tsx`      | `(finance)` | Yes       |
 | `week`      | `/week`      | `src/app/(finance)/week/page.tsx`       | `(finance)` | Yes       |
 | `day`       | `/day`       | `src/app/(finance)/day/page.tsx`        | `(finance)` | Yes       |
 | `analytics` | `/analytics` | `src/app/(finance)/analytics/page.tsx`  | `(finance)` | Yes       |
@@ -26,13 +25,13 @@ Tracker uses a unified **Next.js App Router** architecture at the repository roo
 2. **Auth Route Group (`src/app/(auth)/layout.tsx`)**:
    - Wraps `/login` and `/signup`. Redirects already-authenticated users to their requested `?next=` destination (validated via `safeReturnPath`) or `/calendar`.
 3. **Finance Persistent Shell (`src/app/(finance)/layout.tsx`)**:
-   - Wraps `/calendar`, `/cycle`, `/week`, `/day`, `/analytics`, and `/profile`; the header navigation shows Calendar, Pay Cycle, Week, Analytics, and Profile.
+   - Wraps `/calendar`, `/week`, `/day`, `/analytics`, and `/profile`; the header navigation shows Calendar, Week, Analytics, and Profile.
    - Redirects unauthenticated visitors to `/login?next=...`.
    - Keeps `FinanceProvider`, `SettingsProvider`, the top navigation bar, and the shared `ExpenseModal` / `MonthlyIncomeModal` mounted across client-side page transitions (`next/link`), avoiding redundant Neon API re-fetches when switching tabs.
 
 ## Navigation, date links, and unsaved-changes guards
 
-Date-specific links carry the date as a query parameter, for example `/day?date=2026-10-11`, `/week?date=2026-10-11`, or `/cycle?date=2026-10-11`. `readPageDate` in `src/lib/navigation.ts` parses and validates the query string. `/calendar` is the exception: it always opens on the current month, removes any `?date=` from the URL, and moves between months in memory.
+Date-specific links carry the date as a query parameter, for example `/day?date=2026-10-11`, `/week?date=2026-10-11`. `readPageDate` in `src/lib/navigation.ts` parses and validates the query string. `/calendar` is the exception: it always opens on the current month, removes any `?date=` from the URL, and moves between months in memory.
 
 Expense drafts, income forms and the month income dialog, and changed profile/settings forms register both a browser `beforeunload` warning and an in-app client-navigation confirmation guard via `useUnsavedChanges` (`src/hooks/useUnsavedChanges.ts`). Successful saves and explicit logout remove their relevant guards. Documents restored from the browser's back/forward cache (`pageshow` with `event.persisted`) reload to revalidate authentication and data.
 
