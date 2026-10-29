@@ -198,11 +198,12 @@ function FinanceDocument({
 
   const bottomTabsLeft = [
     { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
+    { page: 'week', label: 'Week', Icon: List },
   ] as const;
 
   const bottomTabsRight = [
-    { page: 'week', label: 'Week', Icon: List },
     { page: 'analytics', label: 'Analytics', Icon: ChartColumn },
+    { page: 'profile', label: 'Profile', Icon: User },
   ] as const;
 
   const resetCalendarToCurrentMonth = useCallback(() => {
@@ -313,15 +314,6 @@ function FinanceDocument({
             <button type="button" className="document-action document-add document-desktop-only" title="Add expense" aria-label="Add expense" onClick={() => openExpense()}><Plus size={20} /></button>
             <button className="document-action document-desktop-only" title="Refresh records" aria-label="Refresh records" onClick={() => { void reload().catch(() => {}); }}><RefreshCw size={20} /></button>
             <button className="document-action document-desktop-only" title="Toggle theme" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>
-            <Link
-              href={pages.profile.path}
-              className="document-action document-profile-btn"
-              title="Profile"
-              aria-label="Profile"
-              aria-current={page === 'profile' ? 'page' : undefined}
-            >
-              <User size={20} aria-hidden="true" />
-            </Link>
           </div>
         </header>
         {error && (
