@@ -240,6 +240,21 @@ export async function handleAuthRequest(
     });
   }
 
+  if (method === "DELETE" && subpath === "/account") {
+    // Re-authenticate: a stolen access token alone must not be able to destroy the account.
+    const user = await authenticateRequest(request, store);
+    await limit(user.email);
+    const password = recordBody?.password;
+    if (!validPassword(password)) throw new HttpError(401, "Invalid password");
+    const account = await store.findAccount(user.email);
+    const valid = await verifyPassword(password, account?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!account || account.id !== user.id || !valid) throw new HttpError(401, "Invalid password");
+    // One DELETE; sessions, refresh history, API tokens and finance data cascade.
+    if (!await store.deleteAccount(user.id)) throw new HttpError(401, "Authentication required");
+    clearRefreshCookie();
+    return new Response(null, { status: 204, headers: responseHeaders });
+  }
+
   if (subpath === "/api-keys") {
     const user = await authenticateRequest(request, store);
     if (method === "GET" || method === "HEAD") {

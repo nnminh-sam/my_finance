@@ -185,7 +185,7 @@ async function fixture(t: TestContext) {
   const authStore: AuthStore = {
     async authenticate(hash) { return users[hashes.indexOf(hash)]; },
     async reserveAttempt() { return true; }, async findAccount() { return undefined; },
-    async register() { return undefined; }, async createSession() {}, async rotate() { return undefined; }, async revoke() {},
+    async register() { return undefined; }, async createSession() {}, async rotate() { return undefined; }, async revoke() {}, async deleteAccount() { return false; },
   };
   const store = new MemoryFinanceStore();
   const app = createApplication({ databaseUrl: "unused", appOrigin: origin, production: false }, authStore, store);
