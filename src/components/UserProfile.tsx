@@ -103,6 +103,8 @@ export function UserProfile() {
   const { theme, preference, setTheme } = useTheme();
   const { incomes, repeatRules, deleteRepeatRule, reload } = useFinance();
   const [tab, setTab] = useState<TabId>('account');
+  // Phones show a grouped list first; choosing a row pushes that section (null = the list).
+  const [mobileSection, setMobileSection] = useState<TabId | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement | null>>>({});
   const avatar = useSectionEditor<string>();
@@ -135,7 +137,7 @@ export function UserProfile() {
   useEffect(() => {
     const fromHash = () => {
       const hash = window.location.hash.slice(1);
-      if (isTab(hash)) setTab(hash);
+      if (isTab(hash)) { setTab(hash); setMobileSection(hash); } else setMobileSection(null);
     };
     fromHash();
     window.addEventListener('hashchange', fromHash);
@@ -265,8 +267,73 @@ export function UserProfile() {
 
   const editing = category.state?.draft;
 
+  const openMobileSection = (next: TabId) => {
+    selectTab(next);
+    setMobileSection(next);
+    document.querySelector('.user-profile')?.scrollTo({ top: 0 });
+  };
+  const closeMobileSection = () => {
+    if (mobileSection && unsaved[mobileSection] && !window.confirm('Discard unsaved changes in this section?')) return;
+    if (mobileSection === 'categories' && category.state) category.cancel();
+    if (mobileSection === 'account' && avatar.state) avatar.cancel();
+    setMobileSection(null);
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  };
+  const themeLabel = preference === null ? `System (${theme})` : preference === 'dark' ? 'Dark' : 'Light';
+  const mobileGroups: { title: string; rows: { id: TabId; label: string; value?: string | number }[] }[] = [
+    { title: 'Account', rows: [{ id: 'account', label: 'Personal info' }] },
+    { title: 'Money', rows: [
+      { id: 'income', label: 'Income sources', value: incomes.length },
+      { id: 'categories', label: 'Categories', value: settings.categories.length },
+      { id: 'repeats', label: 'Repeating expenses', value: repeatRules.length },
+      { id: 'paycycle', label: 'Pay cycle', value: `Day ${cycle.salaryDay}` },
+    ] },
+    { title: 'App', rows: [
+      { id: 'preferences', label: 'Appearance', value: themeLabel },
+      { id: 'mcp', label: 'AI assistants (MCP)', value: mcpTokenCount },
+    ] },
+  ];
+
   return (
-    <div className="user-profile hide-scrollbar animate-fade-in">
+    <div className={`user-profile hide-scrollbar animate-fade-in ${mobileSection ? 'is-m-detail' : 'is-m-list'}`}>
+      <div className="profile-m-home">
+        <h1 className="profile-m-title">Profile</h1>
+        <div className="profile-m-who">
+          <div className="profile-avatar">
+            {settings.avatar && failedAvatar !== settings.avatar ? (
+              <img src={settings.avatar} alt="" onError={() => setFailedAvatar(settings.avatar)} referrerPolicy="no-referrer" />
+            ) : <span aria-hidden="true">{initials || <User size={24} aria-hidden="true" />}</span>}
+          </div>
+          <div>
+            <b>{user?.name}</b>
+            <div className="profile-m-muted">{user?.email}</div>
+          </div>
+        </div>
+        {mobileGroups.map(group => (
+          <div key={group.title}>
+            <h2 className="profile-m-gtitle">{group.title}</h2>
+            <div className="profile-m-group">
+              {group.rows.map(row => (
+                <button key={row.id} type="button" onClick={() => openMobileSection(row.id)}>
+                  <span>{row.label}{unsaved[row.id] && <span className="profile-unsaved-dot" title="Unsaved changes"><span className="sr-only">, unsaved changes</span></span>}</span>
+                  <span className="profile-m-muted">{row.value ?? ''} <ChevronRight size={16} aria-hidden="true" /></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="profile-m-group profile-m-signout">
+          <button type="button" disabled={isLoggingOut || pending} onClick={() => { void handleLogout(); }}>
+            <span>{isLoggingOut ? 'Signing out…' : 'Sign out'}</span><LogOut size={16} aria-hidden="true" />
+          </button>
+        </div>
+        {logoutError && <p role="alert" className="profile-error">{logoutError}</p>}
+      </div>
+      {mobileSection && (
+        <button type="button" className="profile-m-back" onClick={closeMobileSection}>
+          <ChevronLeft size={18} aria-hidden="true" />Profile
+        </button>
+      )}
       <header className="profile-identity profile-card" aria-label="Your account">
         <div className="profile-avatar">
           {settings.avatar && failedAvatar !== settings.avatar ? (

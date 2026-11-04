@@ -153,3 +153,65 @@ test("Neon: limiter uses one statement time when a lock wait crosses window expi
     await query("DELETE FROM auth_login_limits WHERE key_hash = $1", [key]);
   }
 });
+
+test("Neon: deleteAccount removes the user and cascades to every user-owned table", { skip: !databaseUrl, timeout: 30000 }, async () => {
+  // Opt in only against an isolated database with migrations 001–006 applied.
+  const store = createStore(databaseUrl!);
+  const sql = neon(databaseUrl!);
+  const tokens = { accessHash: hashToken(newToken()), refreshHash: hashToken(newToken()) };
+  const keep = randomUUID();
+  let userId: string | undefined;
+  try {
+    // Every foreign key into auth_users must cascade, so a new table cannot silently block or orphan deletion.
+    const foreignKeys = await sql.query(`SELECT c.conrelid::regclass::text AS table_name, c.confdeltype
+      FROM pg_constraint c WHERE c.contype = 'f' AND c.confrelid = 'auth_users'::regclass`);
+    assert.ok(foreignKeys.length > 0);
+    for (const fk of foreignKeys) assert.equal(fk.confdeltype, "c", `${fk.table_name} must reference auth_users ON DELETE CASCADE`);
+
+    const user = await store.register("Delete test", `delete-${randomUUID()}@example.com`, "unused-test-password-hash", tokens);
+    assert.ok(user);
+    userId = user.id;
+    await sql.query("INSERT INTO auth_users (id, name, email, password_hash) VALUES ($1, 'Bystander', $2, 'unused')", [keep, `keep-${keep}@example.test`]);
+    const ruleId = randomUUID();
+    for (const owner of [userId, keep]) {
+      const rule = owner === userId ? ruleId : randomUUID();
+      await sql.query("INSERT INTO finance_settings (user_id, categories) VALUES ($1, '[]')", [owner]);
+      await sql.query(`INSERT INTO finance_repeat_rules (id, user_id, amount, description, category, start_date, time, frequency, end_type)
+        VALUES ($1, $2, 1, '', 'Food', '2026-11-01', '08:00', 'daily', 'unlimited')`, [rule, owner]);
+      await sql.query(`INSERT INTO finance_spendings (id, user_id, amount, description, category, date, time, repeat_rule_id)
+        VALUES ($1, $2, 1, '', 'Food', '2026-11-03', '08:00', $3)`, [randomUUID(), owner, rule]);
+      await sql.query(`INSERT INTO finance_incomes (id, user_id, source, amount, frequency, start_date)
+        VALUES ($1, $2, 'Salary', 1, 'monthly', '2026-11-01')`, [randomUUID(), owner]);
+      await sql.query("INSERT INTO finance_income_migrations (user_id) VALUES ($1) ON CONFLICT DO NOTHING", [owner]);
+      await sql.query(`INSERT INTO finance_income_entries (id, user_id, month, amount, description)
+        VALUES ($1, $2, '2026-11-01', 1, 'Legacy')`, [randomUUID(), owner]);
+    }
+    const apiKeyHash = hashToken(newToken());
+    await store.createApiKey!(userId, { name: "Agent", keyPrefix: "mf_pat_…", keyHash: apiKeyHash, expiresAt: null });
+    assert.ok(await store.authenticateApiKey!(apiKeyHash));
+
+    const tables = foreignKeys.map(fk => String(fk.table_name));
+    const ownedRows = async (owner: string) => {
+      const counts: Record<string, number> = {};
+      for (const table of tables) {
+        counts[table] = Number((await sql.query(`SELECT count(*) AS n FROM ${table} WHERE user_id = $1`, [owner]))[0].n);
+      }
+      counts.auth_refresh_tokens = Number((await sql.query(
+        "SELECT count(*) AS n FROM auth_refresh_tokens r JOIN auth_sessions s ON s.id = r.session_id WHERE s.user_id = $1", [owner]))[0].n);
+      return counts;
+    };
+    const before = await ownedRows(userId);
+    for (const [table, count] of Object.entries(before)) assert.ok(count > 0, `fixture has rows in ${table}`);
+    const bystanderBefore = await ownedRows(keep);
+
+    assert.equal(await store.deleteAccount(userId), true);
+    assert.equal(await store.deleteAccount(userId), false);
+    assert.deepEqual((await sql.query("SELECT id FROM auth_users WHERE id = $1", [userId])), []);
+    for (const [table, count] of Object.entries(await ownedRows(userId))) assert.equal(count, 0, `${table} still has rows`);
+    assert.equal(await store.authenticate(tokens.accessHash), undefined);
+    assert.equal(await store.authenticateApiKey!(apiKeyHash), undefined);
+    assert.deepEqual(await ownedRows(keep), bystanderBefore, "other users are untouched");
+  } finally {
+    for (const id of [userId, keep]) if (id) await sql.query("DELETE FROM auth_users WHERE id = $1", [id]);
+  }
+});

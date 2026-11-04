@@ -185,7 +185,7 @@ async function fixture(t: TestContext) {
   const authStore: AuthStore = {
     async authenticate(hash) { return users[hashes.indexOf(hash)]; },
     async reserveAttempt() { return true; }, async findAccount() { return undefined; },
-    async register() { return undefined; }, async createSession() {}, async rotate() { return undefined; }, async revoke() {},
+    async register() { return undefined; }, async createSession() {}, async rotate() { return undefined; }, async revoke() {}, async deleteAccount() { return false; },
   };
   const store = new MemoryFinanceStore();
   const app = createApplication({ databaseUrl: "unused", appOrigin: origin, production: false }, authStore, store);
@@ -232,8 +232,12 @@ test("finance routes require opaque bearer authentication; origin guard and CORS
     const path = method === "PUT" ? "/settings" : `/spendings/${randomUUID()}`;
     assert.equal((await request(path, method, method === "PUT" ? {} : undefined, 0, { Origin: "https://evil.example" })).status, 403);
   }
+  // No Origin and no cookie is a native client: the guard lets it through to bearer auth.
   const missingOrigin = await fetch(`${url}/settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: "{}" });
-  assert.equal(missingOrigin.status, 403);
+  assert.equal(missingOrigin.status, 401);
+  // No Origin with a cookie could be a forged browser request: rejected before auth.
+  const missingOriginWithCookie = await fetch(`${url}/settings`, { method: "PUT", headers: { "Content-Type": "application/json", Cookie: `mf_refresh=${newToken()}` }, body: "{}" });
+  assert.equal(missingOriginWithCookie.status, 403);
   const preflight = await fetch(`${url}/settings`, { method: "OPTIONS", headers: { Origin: origin, "Access-Control-Request-Method": "PUT" } });
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
@@ -514,7 +518,10 @@ test("income writes use the existing origin guard and CORS", async t => {
       assert.equal((await request(path, method, method === "DELETE" ? undefined : incomeInput, 0, { Origin })).status, 403);
     }
     const missingOrigin = await fetch(`${url}${path}`, { method, headers: { Authorization: `Bearer ${tokens[0]}`, "Content-Type": "application/json" }, body: method === "DELETE" ? undefined : JSON.stringify(incomeInput) });
-    assert.equal(missingOrigin.status, 403);
+    assert.notEqual(missingOrigin.status, 403);
+    assert.ok(missingOrigin.status < 500);
+    const missingOriginWithCookie = await fetch(`${url}${path}`, { method, headers: { Authorization: `Bearer ${tokens[0]}`, Cookie: "session=1", "Content-Type": "application/json" }, body: method === "DELETE" ? undefined : JSON.stringify(incomeInput) });
+    assert.equal(missingOriginWithCookie.status, 403);
     const preflight = await fetch(`${url}${path}`, { method: "OPTIONS", headers: { Origin: origin, "Access-Control-Request-Method": method } });
     assert.equal(preflight.status, 204);
     assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
@@ -548,7 +555,10 @@ test("repeat rule routes require opaque bearer auth and origin guard", async t =
     const path = method === "POST" ? "/repeat-rules" : `/repeat-rules/${randomUUID()}`;
     assert.equal((await request(path, method, method === "DELETE" ? undefined : repeatInput, 0, { Origin: "https://evil.example" })).status, 403);
     const missingOrigin = await fetch(`${url}${path}`, { method, headers: { Authorization: `Bearer ${tokens[0]}`, "Content-Type": "application/json" }, body: method === "DELETE" ? undefined : JSON.stringify(repeatInput) });
-    assert.equal(missingOrigin.status, 403);
+    assert.notEqual(missingOrigin.status, 403);
+    assert.ok(missingOrigin.status < 500);
+    const missingOriginWithCookie = await fetch(`${url}${path}`, { method, headers: { Authorization: `Bearer ${tokens[0]}`, Cookie: "session=1", "Content-Type": "application/json" }, body: method === "DELETE" ? undefined : JSON.stringify(repeatInput) });
+    assert.equal(missingOriginWithCookie.status, 403);
   }
 });
 

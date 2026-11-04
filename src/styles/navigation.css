@@ -382,3 +382,14 @@
     font-size: 0.64rem;
   }
 }
+
+/* Direction F: each phone screen draws its own large title, so the desktop header steps aside. */
+@media (max-width: 768px) {
+  .finance-document > .document-header {
+    display: none;
+  }
+
+  .document-bottom-add-circle {
+    box-shadow: 0 6px 16px var(--primary-glow), 0 0 0 4px var(--bg-main);
+  }
+}

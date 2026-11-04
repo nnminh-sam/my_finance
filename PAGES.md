@@ -27,7 +27,7 @@ Tracker uses a unified **Next.js App Router** architecture at the repository roo
 3. **Finance Persistent Shell (`src/app/(finance)/layout.tsx`)**:
    - Wraps `/calendar`, `/week`, `/day`, `/analytics`, and `/profile`; the header navigation shows Calendar, Week, Analytics, and Profile.
    - Redirects unauthenticated visitors to `/login?next=...`.
-   - Keeps `FinanceProvider`, `SettingsProvider`, the top navigation bar, and the shared `ExpenseModal` / `MonthlyIncomeModal` mounted across client-side page transitions (`next/link`), avoiding redundant Neon API re-fetches when switching tabs.
+   - Keeps `FinanceProvider`, `SettingsProvider`, the top navigation bar, and the shared `QuickEntryDialog` / `MonthlyIncomeModal` mounted across client-side page transitions (`next/link`), avoiding redundant Neon API re-fetches when switching tabs.
 
 ## Navigation, date links, and unsaved-changes guards
 

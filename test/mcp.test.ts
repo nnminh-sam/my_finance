@@ -23,6 +23,8 @@ class MemoryAuthStore implements AuthStore {
   attempts = new Map<string, number>();
   sessions: Array<TokenHashes & { userId: string; revoked: boolean; expired: boolean; history: Set<string> }> = [];
   apiKeys = new Map<string, ApiKeyRecord & { userId: string; keyHash: string; revokedAt: string | null }>();
+  /** Stands in for the ON DELETE CASCADE foreign keys from finance tables to auth_users. */
+  onDeleteAccount: (userId: string) => void = () => {};
 
   async reserveAttempt(key: string) {
     const count = (this.attempts.get(key) ?? 0) + 1;
@@ -62,6 +64,15 @@ class MemoryAuthStore implements AuthStore {
   async authenticate(hash: string) {
     const session = this.sessions.find(s => s.accessHash === hash && !s.revoked && !s.expired);
     return session ? this.publicUser(session.userId) : undefined;
+  }
+  async deleteAccount(userId: string) {
+    const account = [...this.accounts.values()].find(acc => acc.id === userId);
+    if (!account) return false;
+    this.accounts.delete(account.email);
+    this.sessions = this.sessions.filter(s => s.userId !== userId);
+    for (const [id, key] of this.apiKeys) if (key.userId === userId) this.apiKeys.delete(id);
+    this.onDeleteAccount(userId);
+    return true;
   }
   async listApiKeys(userId: string): Promise<ApiKeyRecord[]> {
     return [...this.apiKeys.values()]
@@ -268,6 +279,12 @@ const origin = "http://localhost:5173";
 async function createTestFixture(t: TestContext) {
   const authStore = new MemoryAuthStore();
   const financeStore = new MemoryFinanceStore();
+  authStore.onDeleteAccount = userId => {
+    financeStore.settings.delete(userId);
+    financeStore.spendings.delete(userId);
+    financeStore.incomes.delete(userId);
+    financeStore.repeatRules.delete(userId);
+  };
   const app = createApplication({ databaseUrl: "unused", appOrigin: origin, production: false }, authStore, financeStore);
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => server.once("listening", resolve));
@@ -666,5 +683,33 @@ test("MCP Tools, Resources, and Prompts end-to-end finance workflows", async t =
     const body = (await res.json()) as { result: { messages: Array<{ role: string; content: { text: string } }> } };
     assert.equal(body.result.messages.length, 1);
     assert.ok(body.result.messages[0].content.text.length > 20);
+  }
+});
+
+test("account deletion requires the password and removes API keys and finance data", async t => {
+  const { baseUrl, financeStore, user, accessToken, mcpCall } = await createTestFixture(t);
+  const createRes = await fetch(`${baseUrl}/api/v1/auth/api-keys`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: origin, Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ name: "Agent" }),
+  });
+  const { secret } = (await createRes.json()) as { secret: string };
+  assert.ok(await financeStore.createSpending(user.id, { amount: 1000, description: "Coffee", category: "Food", date: "2026-11-03", time: "08:00" }));
+  await financeStore.createIncome(user.id, { source: "Salary", name: "", amount: 100, frequency: "monthly", startDate: "2026-11-01", endDate: null });
+  const profile = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_profile_and_settings", arguments: {} } };
+  const deleteAccount = (password: unknown) => fetch(`${baseUrl}/api/v1/auth/account`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", Origin: origin, Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ password }),
+  });
+
+  assert.equal((await deleteAccount("wrong password, long enough")).status, 401);
+  assert.equal((await mcpCall(profile, secret)).status, 200);
+  assert.equal(financeStore.spendings.get(user.id)?.size, 1);
+
+  assert.equal((await deleteAccount("correct horse battery staple")).status, 204);
+  assert.equal((await mcpCall(profile, secret)).status, 401, "API keys no longer authenticate");
+  for (const table of [financeStore.settings, financeStore.spendings, financeStore.incomes, financeStore.repeatRules]) {
+    assert.equal(table.has(user.id), false);
   }
 });

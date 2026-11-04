@@ -13,6 +13,7 @@ Welcome to the architecture documentation suite for **MyFinance**, a full-stack 
 | **[05. Project Structure](./05-project-structure.md)** | Complete repository directory tree, App Router segment mapping, Next.js page manifest, and file-by-file module catalog. | App Router Segment Mapping Diagram, Project Directory Architecture |
 | **[06. System Use Case Diagrams](./06-use-case-diagrams.md)** | Actor definitions and functional use case diagrams covering authentication, expense tracking, recurring rules, monthly income, salary (pay) cycles, and analytics. | Overall System Use Case Diagram, Auth & Session Use Cases, Expense & Recurrence Use Cases, Income & Analytics Use Cases, Salary Cycle Use Cases |
 | **[07. Sequence Diagrams](./07-sequence-diagrams.md)** | End-to-end runtime interaction sequences across browser tabs, React contexts, Next.js Route Handlers, and PostgreSQL transactions. | Login & Cross-Tab Sync, Single-Flight Token Rotation & Replay Detection, Protected Page Load & Date-Range Spending Fetch, Expense & Repeat Rule Creation with Row Lock, Logout Revocation, Salary Cycle View |
+| **[08. Mobile Port Analysis](./08-mobile-port-analysis.md)** | Deep analysis of porting the web app to Expo (React Native): auth blockers (Origin gate, cookie-only refresh token, session persistence, browser-only auth client, account deletion), token rotation on flaky networks, and screen-by-screen UI/UX redesign (calendar, charts, expense entry, analytics, navigation, profile), plus a reuse map and migration sequence. | Current Web Architecture, Refresh Replay on Lost Response, Proposed Mobile Auth Flow, Migration Sequence |
 
 ---
 
@@ -21,7 +22,7 @@ Welcome to the architecture documentation suite for **MyFinance**, a full-stack 
 1. **Unified Next.js 15 App Router Architecture**:
    - The application combines the React 19 frontend UI and backend API routes in a single unified project root, eliminating monorepo cross-package linking complexity.
    - Route groups separate concerns cleanly: `src/app/(auth)` handles guest authentication views (`/login`, `/signup`), while `src/app/(finance)` wraps financial views (`/calendar`, `/cycle`, `/week`, `/day`, `/analytics`, `/profile`) inside a **persistent layout shell** (`src/app/(finance)/layout.tsx`).
-   - The persistent finance shell keeps `FinanceProvider`, `SettingsProvider`, header navigation, and global modals (`ExpenseModal`, `MonthlyIncomeModal`) mounted across client transitions via `next/link`, preventing redundant data re-fetching and preserving UI state.
+   - The persistent finance shell keeps `FinanceProvider`, `SettingsProvider`, header navigation, and global modals (`QuickEntryDialog`, `MonthlyIncomeModal`) mounted across client transitions via `next/link`, preventing redundant data re-fetching and preserving UI state.
    - Synchronous inline theme initialization prevents light/dark mode flash, and bfcache (`pageshow`) guards revalidate stale authentication state on browser history navigation.
 
 2. **Web Standard API Route Handlers**:

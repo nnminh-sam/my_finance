@@ -30,6 +30,12 @@ export interface AuthStore {
   rotate(oldHash: string, tokens: TokenHashes): Promise<User | undefined>;
   revoke(refreshHash?: string, accessHash?: string): Promise<void>;
   authenticate(accessHash: string): Promise<User | undefined>;
+  /**
+   * Permanently deletes the account. Every user-owned table references
+   * `auth_users(id) ON DELETE CASCADE`, so sessions, refresh history, API tokens
+   * and all finance data go with it in one statement. Returns false if no row matched.
+   */
+  deleteAccount(userId: string): Promise<boolean>;
   listApiKeys?(userId: string): Promise<ApiKeyRecord[]>;
   createApiKey?(userId: string, input: ApiKeyCreateInput): Promise<ApiKeyRecord>;
   revokeApiKey?(userId: string, keyId: string): Promise<boolean>;
@@ -125,6 +131,10 @@ export function createStore(databaseUrl: string): AuthStore {
         WHERE s.access_hash = $1 AND s.revoked_at IS NULL
           AND s.access_expires_at > now() AND s.refresh_expires_at > now()`, [accessHash]);
       return rows[0] ? user(rows[0]) : undefined;
+    },
+    async deleteAccount(userId) {
+      const rows = await query("DELETE FROM auth_users WHERE id = $1 RETURNING id", [userId]);
+      return rows.length > 0;
     },
     async listApiKeys(userId) {
       const rows = await query(

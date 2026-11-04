@@ -5,8 +5,9 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { format, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
-import { ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
-import { ExpenseModal } from '../../components/ExpenseModal';
+import { CalendarDays, ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
+import { QuickEntryDialog } from '../../components/quickEntry/QuickEntryDialog';
+import type { SaveResult } from '../../components/quickEntry/useQuickEntry';
 import { MonthlyIncomeModal } from '../../components/MonthlyIncomeModal';
 import type { Spending } from '../../types';
 import { SettingsProvider } from '../../contexts/SettingsContext';
@@ -14,6 +15,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { FinanceProvider, useFinance } from '../../contexts/FinanceContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FinanceShellContext } from '../../contexts/FinanceShellContext';
+import type { ExpenseDefaults } from '../../contexts/FinanceShellContext';
 import { errorMessage } from '../../services/auth';
 import { pages } from '../../lib/pages';
 import type { FinancePage } from '../../lib/pages';
@@ -123,13 +125,15 @@ function FinanceDocument({
   const { error, reload, fetchWeeksSpendings } = useFinance();
   const router = useRouter();
 
-  const [expenseDialog, setExpenseDialog] = useState<{ expense?: Spending } | null>(null);
-  const [expenseNotice, setExpenseNotice] = useState('');
+  const [expenseDialog, setExpenseDialog] = useState<{ expense?: Spending; defaults?: ExpenseDefaults } | null>(null);
+  const [keypadOpen, setKeypadOpen] = useState(true);
+  const [keypadPulse, setKeypadPulse] = useState(0);
+  const [expenseNotice, setExpenseNotice] = useState<SaveResult | null>(null);
   const [incomeDialogMonth, setIncomeDialogMonth] = useState<string | null>(null);
 
-  const openExpense = useCallback((expense?: Spending) => {
-    setExpenseNotice('');
-    setExpenseDialog({ expense });
+  const openExpense = useCallback((expense?: Spending, defaults?: ExpenseDefaults) => {
+    setExpenseNotice(null);
+    setExpenseDialog({ expense, defaults });
   }, []);
 
   const openIncomeModal = useCallback((month: string) => {
@@ -179,6 +183,13 @@ function FinanceDocument({
     router.push(pages.calendar.path);
   }, [router]);
 
+  // Mobile + tab: open Week with the keypad docked (for the day already selected there, or today).
+  const openQuickAdd = useCallback(() => {
+    setKeypadOpen(true);
+    setKeypadPulse(count => count + 1);
+    if (page !== 'week') router.push(pageHref('week', new Date()));
+  }, [page, router]);
+
   const shellValue = useMemo(() => ({
     currentDate,
     activeDate,
@@ -187,7 +198,10 @@ function FinanceDocument({
     openBackToCalendar,
     openExpense,
     openIncomeModal,
-  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal]);
+    keypadOpen,
+    setKeypadOpen,
+    keypadPulse,
+  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, keypadOpen, keypadPulse]);
 
   const navigation = [
     { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
@@ -197,7 +211,7 @@ function FinanceDocument({
   ] as const;
 
   const bottomTabsLeft = [
-    { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
+    { page: 'calendar', label: 'Month', Icon: CalendarDays },
     { page: 'week', label: 'Week', Icon: List },
   ] as const;
 
@@ -323,8 +337,12 @@ function FinanceDocument({
           </div>
         )}
         {expenseNotice && (
-          <p role="status" className="expense-notice" style={{ padding: '12px 24px', backgroundColor: 'var(--bg-card)' }}>
-            {expenseNotice}
+          <p role="status" className="expense-notice" style={{ padding: '12px 24px', backgroundColor: 'var(--bg-card)', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span style={{ flex: 1 }}>{expenseNotice.message}</span>
+            {expenseNotice.undo && (
+              <button type="button" style={{ color: 'var(--primary)', fontWeight: 700 }} onClick={() => { const undo = expenseNotice.undo!; setExpenseNotice(null); void undo().catch(cause => setExpenseNotice({ message: `Could not undo: ${errorMessage(cause)}` })); }}>Undo</button>
+            )}
+            <button type="button" aria-label="Dismiss" onClick={() => setExpenseNotice(null)}>×</button>
           </p>
         )}
         <main className="document-content">
@@ -347,9 +365,9 @@ function FinanceDocument({
           <button
             type="button"
             className="document-bottom-add"
-            title="Add transaction"
-            aria-label="Add transaction"
-            onClick={() => openExpense()}
+            title="Add expense"
+            aria-label="Add expense"
+            onClick={openQuickAdd}
           >
             <span className="document-bottom-add-circle">
               <Plus size={24} aria-hidden="true" />
@@ -371,11 +389,11 @@ function FinanceDocument({
 
         {incomeDialogMonth && <MonthlyIncomeModal month={incomeDialogMonth} onClose={() => setIncomeDialogMonth(null)} />}
         {expenseDialog && (
-          <ExpenseModal
+          <QuickEntryDialog
             expense={expenseDialog.expense}
+            defaults={expenseDialog.defaults}
             onClose={() => setExpenseDialog(null)}
-            onSaved={(input, count) => setExpenseNotice(count > 1 ? `${count} expenses added.` : `Expense ${expenseDialog.expense ? 'updated' : 'added'} for ${input.date} at ${input.time}.`)}
-            onIncomeSaved={(input) => setExpenseNotice(`Income “${input.source}${input.name ? ` · ${input.name}` : ''}” added.`)}
+            onSaved={setExpenseNotice}
           />
         )}
       </div>
