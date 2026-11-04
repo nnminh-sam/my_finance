@@ -5,6 +5,7 @@ import { WeekView } from './WeekView';
 import { DayDetails } from './DayDetails';
 import { AnalyticsView } from './AnalyticsView';
 import { UserProfile } from './UserProfile';
+import { PlansPage } from './PlansPage';
 import { MobileMonth } from './mobile/MobileMonth';
 import { MobileWeek } from './mobile/MobileWeek';
 import { MobileAnalytics } from './mobile/MobileAnalytics';
@@ -59,6 +60,10 @@ export function AnalyticsPageView() {
   const { currentDate } = useFinanceShell();
   if (useIsMobile()) return <MobileAnalytics />;
   return <AnalyticsView currentDate={currentDate} />;
+}
+
+export function PlansPageView() {
+  return <PlansPage />;
 }
 
 export function ProfilePageView() {

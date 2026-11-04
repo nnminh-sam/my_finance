@@ -17,6 +17,7 @@ import {
 } from "../src/server/finance/model";
 import { formatDateUtc, generateOccurrences, isRuleDueForSync } from "../src/server/finance/recurrence";
 import type { FinanceStore } from "../src/server/finance/store";
+import { MemoryPlans } from "./support/memoryPlans";
 
 class MemoryAuthStore implements AuthStore {
   accounts = new Map<string, Account>();
@@ -112,6 +113,16 @@ class MemoryAuthStore implements AuthStore {
 }
 
 class MemoryFinanceStore implements FinanceStore {
+  planStore = new MemoryPlans(this);
+  listPlans = this.planStore.listPlans.bind(this.planStore);
+  createPlan = this.planStore.createPlan.bind(this.planStore);
+  updatePlan = this.planStore.updatePlan.bind(this.planStore);
+  splitPlan = this.planStore.splitPlan.bind(this.planStore);
+  deletePlan = this.planStore.deletePlan.bind(this.planStore);
+  setPlanException = this.planStore.setPlanException.bind(this.planStore);
+  deletePlanException = this.planStore.deletePlanException.bind(this.planStore);
+  materializePlans = this.planStore.materializePlans.bind(this.planStore);
+  completePlanOccurrence = this.planStore.completePlanOccurrence.bind(this.planStore);
   settings = new Map<string, FinanceSettings>();
   spendings = new Map<string, Map<string, Spending>>();
   incomes = new Map<string, Map<string, Income>>();
@@ -139,6 +150,7 @@ class MemoryFinanceStore implements FinanceStore {
     return structuredClone(next);
   }
   async listSpendings(userId: string, limit: number, cursor?: string, startDate?: string, endDate?: string) {
+    await this.materializePlans(userId);
     const rows = [...this.rows(userId).values()]
       .filter(r => (!cursor || r.id > cursor) && (!startDate || r.date >= startDate) && (!endDate || r.date <= endDate))
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -616,17 +628,19 @@ test("MCP Tools, Resources, and Prompts end-to-end finance workflows", async t =
   assert.equal(incomesList.isError, false);
   assert.equal(incomesList.structuredContent.monthlyTotal, 30000000);
 
-  // 6. Create and list repeat rule
-  const repeatCreated = await callTool("create_repeat_rule", {
+  // 6. A monthly commitment (plan) plus this month's real payment
+  const planCreated = await callTool("create_plan", {
     amount: 200000,
     description: "Gym membership",
     category: "Other",
     startDate: "2026-10-01",
     time: "09:00",
     frequency: "monthly",
-    endType: "unlimited",
+    sure: true,
   });
-  assert.equal(repeatCreated.isError, false);
+  assert.equal(planCreated.isError, false);
+  const gymPaid = await callTool("create_spending", { amount: 200000, description: "Gym membership", category: "Other", date: "2026-10-01", time: "09:00" });
+  assert.equal(gymPaid.isError, false);
 
   // 7. Analytics & summary tools
   const rangeSummary = await callTool("get_date_range_summary", {
@@ -712,4 +726,69 @@ test("account deletion requires the password and removes API keys and finance da
   for (const table of [financeStore.settings, financeStore.spendings, financeStore.incomes, financeStore.repeatRules]) {
     assert.equal(table.has(user.id), false);
   }
+});
+
+test("MCP plan tools create, forecast, adjust single days, split and delete plans", async t => {
+  const { accessToken, mcpCall, financeStore } = await createTestFixture(t);
+  // 05:00 UTC = 12:00 in Asia/Ho_Chi_Minh, Wednesday 2026-11-04.
+  financeStore.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+  async function callTool(name: string, args: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call", params: { name, arguments: args } }, accessToken);
+    assert.equal(res.status, 200);
+    return ((await res.json()) as { result: { structuredContent: Record<string, any>; isError: boolean } }).result;
+  }
+
+  const created = await callTool("create_plan", { amount: 35000, description: "Lunch", category: "Food", time: "12:30", startDate: "2026-11-02", frequency: "weekdays" });
+  assert.equal(created.isError, false);
+  const plan = created.structuredContent.plan;
+  assert.equal(plan.schedule, "Every weekday");
+  assert.equal((await callTool("create_plan", { amount: 1, category: "Nope", startDate: "2026-11-02", frequency: "daily" })).isError, true);
+
+  const skipped = await callTool("update_plan_occurrence", { id: plan.id, date: "2026-11-05", action: "skip" });
+  assert.equal(skipped.isError, false);
+  await callTool("update_plan_occurrence", { id: plan.id, date: "2026-11-06", action: "override", amount: 50000 });
+  assert.equal((await callTool("update_plan_occurrence", { id: plan.id, date: "2026-11-07", action: "skip" })).isError, true);
+
+  // Wed (12:30 still ahead), Thu skipped, Fri 50k, Mon–Fri next week.
+  const forecast = await callTool("get_spending_forecast", { startDate: "2026-11-01", endDate: "2026-11-13" });
+  assert.equal(forecast.isError, false);
+  assert.equal(forecast.structuredContent.spent, 0);
+  assert.equal(forecast.structuredContent.planned, 35000 + 50000 + 5 * 35000);
+  assert.equal(forecast.structuredContent.byCategory.Food.planned, 260000);
+
+  const listed = await callTool("list_plans");
+  assert.equal(listed.structuredContent.today, "2026-11-04");
+  assert.equal(listed.structuredContent.plans[0].nextOccurrences[0].date, "2026-11-04");
+  assert.equal(listed.structuredContent.plans[0].nextOccurrences[1].date, "2026-11-06");
+
+  const updated = await callTool("update_plan", { id: plan.id, amount: 38000 });
+  assert.equal(updated.structuredContent.plan.amount, 38000);
+  assert.equal(updated.structuredContent.plan.description, "Lunch");
+  const split = await callTool("update_plan", { id: plan.id, amount: 40000, effectiveFrom: "2026-11-16" });
+  assert.equal(split.structuredContent.ended.endDate, "2026-11-15");
+  assert.equal(split.structuredContent.created.amount, 40000);
+
+  const deleted = await callTool("delete_plan", { id: plan.id });
+  assert.equal(deleted.structuredContent.deleted, true);
+  assert.equal((await callTool("delete_plan", { id: plan.id })).isError, true);
+});
+
+test("MCP plan tools record commitments and mark an occurrence done; repeat tools are gone", async t => {
+  const { accessToken, mcpCall, financeStore } = await createTestFixture(t);
+  financeStore.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+  async function call(method: string, params: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method, params }, accessToken);
+    return ((await res.json()) as { result: any }).result;
+  }
+  const names = (await call("tools/list")).tools.map((tool: { name: string }) => tool.name);
+  assert.equal(names.some((name: string) => name.includes("repeat_rule")), false);
+  const rent = (await call("tools/call", { name: "create_plan", arguments: { amount: 4000000, description: "Rent", category: "Bills", startDate: "2026-11-05", frequency: "monthly", sure: true } })).structuredContent.plan;
+  assert.equal(rent.sure, true);
+  const done = await call("tools/call", { name: "update_plan_occurrence", arguments: { id: rent.id, date: "2026-11-05", action: "done" } });
+  assert.equal(done.isError, false);
+  assert.equal(done.structuredContent.spending.planDate, "2026-11-05");
+  const again = await call("tools/call", { name: "update_plan_occurrence", arguments: { id: rent.id, date: "2026-11-05", action: "done" } });
+  assert.equal(again.isError, true);
+  const flipped = await call("tools/call", { name: "update_plan", arguments: { id: rent.id, sure: false } });
+  assert.equal(flipped.structuredContent.plan.sure, false);
 });

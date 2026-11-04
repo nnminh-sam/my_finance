@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { User, Mail, Calendar, Tag, Plus, ChevronLeft, ChevronRight, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat, Wallet, SlidersHorizontal, CalendarClock, LogOut, Lock, Copy, Check, Camera, Pencil, CircleStop, RefreshCw, Bot } from 'lucide-react';
+import { User, Mail, Calendar, Tag, Plus, ChevronLeft, ChevronRight, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Wallet, SlidersHorizontal, CalendarClock, LogOut, Lock, Copy, Check, Camera, Pencil, RefreshCw, Bot } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
@@ -10,7 +10,6 @@ import { useTheme } from '../contexts/ThemeContext';
 import { errorMessage } from '../services/auth';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { getMonthIncome, incomeMonth } from '../lib/income';
-import { describeRepeatFrequency, monthlyRepeatCost, repeatProgress } from '../lib/repeatRules';
 import { clampDelayDays, clampSalaryDay, defaultSalaryCycleConfig, getPaydayForMonth, loadSalaryCycleConfig, saveSalaryCycleConfig } from '../lib/salaryCycle';
 import type { SalaryCycleConfig } from '../lib/salaryCycle';
 import type { CategoryData } from '../types';
@@ -28,7 +27,6 @@ const TABS = [
   { id: 'account', label: 'Account', icon: User },
   { id: 'income', label: 'Income', icon: Wallet },
   { id: 'categories', label: 'Categories', icon: Tag },
-  { id: 'repeats', label: 'Repeat spendings', icon: Repeat },
   { id: 'paycycle', label: 'Paycycle', icon: CalendarClock },
   { id: 'mcp', label: 'AI & MCP', icon: Bot },
   { id: 'preferences', label: 'Preferences', icon: SlidersHorizontal },
@@ -101,7 +99,7 @@ export function UserProfile() {
   const { settings, updateSettings } = useSettings();
   const { user, logout } = useAuth();
   const { theme, preference, setTheme } = useTheme();
-  const { incomes, repeatRules, deleteRepeatRule, reload } = useFinance();
+  const { incomes, plans, reload } = useFinance();
   const [tab, setTab] = useState<TabId>('account');
   // Phones show a grouped list first; choosing a row pushes that section (null = the list).
   const [mobileSection, setMobileSection] = useState<TabId | null>(null);
@@ -110,9 +108,6 @@ export function UserProfile() {
   const avatar = useSectionEditor<string>();
   const category = useSectionEditor<CategoryData & { isNew: boolean }>();
   const [confirmRemoveCategory, setConfirmRemoveCategory] = useState(false);
-  const [confirmStopId, setConfirmStopId] = useState<string | null>(null);
-  const [stoppingRepeatId, setStoppingRepeatId] = useState<string | null>(null);
-  const [repeatError, setRepeatError] = useState<string | null>(null);
   const [cycle, setCycle] = useState<SalaryCycleConfig>(defaultSalaryCycleConfig);
   const [adjustMonth, setAdjustMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [copied, setCopied] = useState(false);
@@ -123,13 +118,12 @@ export function UserProfile() {
   const [incomeEditor, setIncomeEditor] = useState<IncomeEditorState>({ dirty: false, busy: false });
   const [mcpTokenCount, setMcpTokenCount] = useState<number | undefined>(undefined);
   const categoryDirty = category.state !== null && (category.state.draft.isNew || category.dirty);
-  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, repeats: false, paycycle: false, mcp: false, preferences: false };
+  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, paycycle: false, mcp: false, preferences: false };
   const dirty = Object.values(unsaved).some(Boolean);
-  const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy || stoppingRepeatId);
+  const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy);
   const initials = (user?.name || user?.email || '').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
   const monthIncome = getMonthIncome(incomeMonth(new Date()), incomes).totalIncome;
-  const monthlyRepeats = repeatRules.reduce((sum, rule) => sum + monthlyRepeatCost(rule), 0);
-  const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: settings.categories.length, repeats: repeatRules.length, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
+  const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: settings.categories.length, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
 
   useUnsavedChanges(!isLoggingOut && (dirty || pending));
 
@@ -213,19 +207,6 @@ export function UserProfile() {
     setConfirmRemoveCategory(false);
   });
 
-  const stopRepeat = async (id: string) => {
-    setStoppingRepeatId(id);
-    setRepeatError(null);
-    try {
-      await deleteRepeatRule(id, true);
-      setConfirmStopId(null);
-    } catch (failure) {
-      setRepeatError(`Could not stop the repeat: ${errorMessage(failure)}`);
-    } finally {
-      setStoppingRepeatId(null);
-    }
-  };
-
   const updateCycle = (patch: Partial<SalaryCycleConfig>) => {
     const next = { ...cycle, ...patch };
     setCycle(next);
@@ -285,7 +266,6 @@ export function UserProfile() {
     { title: 'Money', rows: [
       { id: 'income', label: 'Income sources', value: incomes.length },
       { id: 'categories', label: 'Categories', value: settings.categories.length },
-      { id: 'repeats', label: 'Repeating expenses', value: repeatRules.length },
       { id: 'paycycle', label: 'Pay cycle', value: `Day ${cycle.salaryDay}` },
     ] },
     { title: 'App', rows: [
@@ -350,7 +330,7 @@ export function UserProfile() {
         </div>
         <dl className="profile-stats">
           <div><dt>Income this month</dt><dd>{money(monthIncome)}</dd></div>
-          <div><dt>Repeats per month</dt><dd>≈ {money(monthlyRepeats)}</dd></div>
+          <div><dt>Plans</dt><dd>{plans.length}</dd></div>
         </dl>
       </header>
 
@@ -523,66 +503,6 @@ export function UserProfile() {
                 </form>
               )}
             </div>
-          </section>
-
-          <section id="profile-panel-repeats" role="tabpanel" aria-labelledby="profile-tab-repeats" className="profile-panel" hidden={tab !== 'repeats'}>
-            <div className="profile-panel-head"><div><h2>Repeat spendings</h2><p>Created when you turn on “Repeat this spending” while adding a spending. Up to 100 entries are added at a time. Stopping a repeat removes its entries from today onward.</p></div></div>
-            {repeatRules.length === 0 ? (
-              <p className="profile-card profile-empty">No repeat spendings yet. Turn on “Repeat this spending” when you add breakfast, gas, rent and other regular costs.</p>
-            ) : (
-              <>
-                <dl className="profile-card profile-summary">
-                  <div><dt>Estimated per month</dt><dd>≈ {money(monthlyRepeats)}</dd></div>
-                  <div><dt>Active repeats</dt><dd>{repeatRules.length}</dd></div>
-                  <div><dt>Entries created</dt><dd>{repeatRules.reduce((sum, rule) => sum + rule.occurrencesCreated, 0)}</dd></div>
-                </dl>
-                <ul className="profile-card profile-list" aria-label="Repeat spendings">
-                  {repeatRules.map(rule => {
-                    const ruleCategory = settings.categories.find(item => item.id === rule.category);
-                    const progress = repeatProgress(rule);
-                    return (
-                      <li key={rule.id} className="profile-list-item">
-                        <CategoryGlyph category={ruleCategory ?? { color: '#64748b', icon: 'CircleDollarSign' }} />
-                        <div className="profile-list-main">
-                          <strong>{rule.description}</strong>
-                          <span className="profile-meta">
-                            <span className="profile-pill">{describeRepeatFrequency(rule)}</span>
-                            <span>{rule.time}</span>
-                            <span>{ruleCategory?.name ?? rule.category}</span>
-                            {rule.endType === 'until_date' && <span>Until {rule.endDate}</span>}
-                            {rule.endType === 'unlimited' && <span>No end date</span>}
-                          </span>
-                          {progress && (
-                            <span className="profile-progress" role="progressbar" aria-label={`${rule.description} repeats`} aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}>
-                              <span style={{ width: `${(progress.done / progress.total) * 100}%` }} />
-                            </span>
-                          )}
-                        </div>
-                        <div className="profile-amount">
-                          {money(rule.amount)}
-                          <small>{progress ? `${progress.done} / ${progress.total} times` : `≈ ${money(monthlyRepeatCost(rule))} / month`}</small>
-                        </div>
-                        <div className="profile-row-actions">
-                          {confirmStopId === rule.id ? (
-                            <>
-                              <button type="button" className="profile-button" disabled={stoppingRepeatId === rule.id} onClick={() => setConfirmStopId(null)}>Keep</button>
-                              <button type="button" className="profile-button profile-button-danger" disabled={stoppingRepeatId === rule.id || isLoggingOut} onClick={() => { void stopRepeat(rule.id); }}>
-                                {stoppingRepeatId === rule.id ? 'Stopping…' : 'Stop from today'}
-                              </button>
-                            </>
-                          ) : (
-                            <button type="button" className="profile-button profile-button-ghost profile-button-danger" disabled={pending || isLoggingOut} aria-label={`Stop repeating ${rule.description}`} onClick={() => { setRepeatError(null); setConfirmStopId(rule.id); }}>
-                              <CircleStop size={16} aria-hidden="true" />Stop
-                            </button>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {repeatError && <p role="alert" className="profile-error">{repeatError}</p>}
-              </>
-            )}
           </section>
 
           <section id="profile-panel-paycycle" role="tabpanel" aria-labelledby="profile-tab-paycycle" className="profile-panel" hidden={tab !== 'paycycle'}>

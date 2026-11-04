@@ -12,10 +12,12 @@ import { useFinanceShell } from '../../contexts/FinanceShellContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { pageHref } from '../../lib/navigation';
+import { pages } from '../../lib/pages';
 import { getSpendingsForDate } from '../../lib/spendings';
 import { fmtVND } from '../../lib/analytics';
 import { errorMessage } from '../../services/auth';
 import type { Spending } from '../../types';
+import type { PlanOccurrence } from '../../lib/plans';
 import { CategoryIcon, MobileAlert, Toast, categoryMeta, haptic, useToast } from './MobileUi';
 import { QuickEntryDock } from '../quickEntry/QuickEntryDock';
 import { useQuickEntry } from '../quickEntry/useQuickEntry';
@@ -39,7 +41,7 @@ function weekTitle(offset: number) {
 /** F · Week: B's ledger — seven-bar chart, day strip, that day's expenses and a closable keypad. */
 export function MobileWeek() {
   const { currentDate, keypadOpen, setKeypadOpen, keypadPulse } = useFinanceShell();
-  const { spendings, createSpending, deleteSpending } = useFinance();
+  const { spendings, plans, createSpending, deleteSpending, projectedBetween, setPlanException, clearPlanException, completePlanOccurrence } = useFinance();
   const { settings } = useSettings();
   const router = useRouter();
   const today = startOfDay(new Date());
@@ -51,11 +53,21 @@ export function MobileWeek() {
   const weekStart = startOfWeek(selected, WEEK);
   const days = useMemo(() => eachDayOfInterval({ start: weekStart, end: endOfWeek(weekStart, WEEK) }), [weekStart.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
   const totals = days.map(day => getSpendingsForDate(day, spendings).reduce((sum, s) => sum + s.amount, 0));
-  const max = Math.max(1, ...totals);
+  const weekPlanned = projectedBetween(format(days[0], 'yyyy-MM-dd'), format(days[6], 'yyyy-MM-dd'));
+  const plannedTotals = days.map(day => {
+    const key = format(day, 'yyyy-MM-dd');
+    return weekPlanned.filter(item => item.date === key).reduce((sum, item) => sum + item.amount, 0);
+  });
+  const max = Math.max(1, ...totals, ...plannedTotals);
   const weekTotal = totals.reduce((a, b) => a + b, 0);
+  const weekPlannedTotal = plannedTotals.reduce((a, b) => a + b, 0);
   const offset = differenceInCalendarWeeks(weekStart, today, WEEK);
   const daySpendings = getSpendingsForDate(selected, spendings);
   const dayTotal = daySpendings.reduce((sum, s) => sum + s.amount, 0);
+  const selectedKey = format(selected, 'yyyy-MM-dd');
+  const dayPlanned = weekPlanned.filter(item => item.date === selectedKey);
+  const daySkipped = plans.filter(plan => plan.exceptions.some(item => item.date === selectedKey && item.kind === 'skip')
+    && `${selectedKey}T${plan.time}` > plan.materializedThrough);
   const selectedLabel = dayLabel(selected, today);
 
   const { toast, show: showToast, hide: hideToast } = useToast();
@@ -142,6 +154,47 @@ export function MobileWeek() {
 
   const select = (day: Date) => { haptic(5); setSelected(day); };
 
+  // ----- planned rows: skip, change the amount, or undo for just this day -----
+  const planAction = async (action: () => Promise<void>, done: string) => {
+    try {
+      await action();
+      haptic(10);
+      showToast(done);
+    } catch (cause) {
+      showToast(`Could not update plan: ${errorMessage(cause)}`);
+    }
+  };
+  const openPlanned = (occurrence: PlanOccurrence) => {
+    const label = occurrence.description || categoryMeta(settings.categories, occurrence.category).name;
+    const buttons: AlertButton[] = [
+      {
+        label: 'Done now', onPress: () => {
+          setAlert(null);
+          void planAction(async () => { await completePlanOccurrence(occurrence.planId, selectedKey); }, `${label} recorded as spent`);
+        },
+      },
+      {
+        label: 'Change amount', onPress: () => {
+          setAlert(null);
+          const typed = window.prompt(`Amount for ${label} on ${format(selected, 'EEE d MMM')}`, String(occurrence.amount));
+          if (typed === null) return;
+          const amount = Number(typed.replace(/[\s,._]/g, ''));
+          if (!Number.isFinite(amount) || amount <= 0 || amount > 1e12) { showToast('Enter an amount above 0 ₫'); return; }
+          const plan = plans.find(item => item.id === occurrence.planId);
+          const description = plan && occurrence.description !== plan.description ? occurrence.description : null;
+          void planAction(() => setPlanException(occurrence.planId, selectedKey, { kind: 'override', amount, description }), `${label} · ${fmtVND(amount)} on this day`);
+        },
+      },
+    ];
+    if (occurrence.overridden) {
+      buttons.push({ label: 'Use usual amount', onPress: () => { setAlert(null); void planAction(() => clearPlanException(occurrence.planId, selectedKey), `${label} back to its usual amount`); } });
+    }
+    buttons.push({ label: 'Skip this day', destructive: true, onPress: () => { setAlert(null); void planAction(() => setPlanException(occurrence.planId, selectedKey, { kind: 'skip', amount: null, description: null }), `${label} skipped`); } });
+    buttons.push({ label: 'Edit series', onPress: () => { setAlert(null); router.push(`${pages.plans.path}?edit=${encodeURIComponent(occurrence.planId)}&from=${selectedKey}`); } });
+    buttons.push({ label: 'Cancel', onPress: () => setAlert(null) });
+    setAlert({ title: `Planned ${label}`, message: `${occurrence.sure ? '' : '~'}${fmtVND(occurrence.amount)} at ${occurrence.time} · ${occurrence.sure ? 'sure' : 'estimate'}. It becomes a real expense once that time passes. “Done now” records it right away so it's never counted twice.`, buttons });
+  };
+
   // ----- rows -----
   const remove = async (spending: Spending) => {
     haptic(20);
@@ -161,7 +214,10 @@ export function MobileWeek() {
     <div className="m-screen m-week">
       <header className="m-nav m-nav-tight">
         <div>
-          <div className="m-sub">{format(weekStart, 'd MMM')} – {format(endOfWeek(weekStart, WEEK), 'd MMM')} · {fmtVND(weekTotal)}</div>
+          <div className="m-sub">
+            {format(weekStart, 'd MMM')} – {format(endOfWeek(weekStart, WEEK), 'd MMM')} · {fmtVND(weekTotal)}
+            {weekPlannedTotal > 0 && <span className="m-planned-text"> · ~{fmtVND(weekPlannedTotal)} planned</span>}
+          </div>
           <h1>{weekTitle(offset)}</h1>
         </div>
         <div className="m-wnav">
@@ -176,9 +232,9 @@ export function MobileWeek() {
             <div key={day.toISOString()}>
               <button
                 type="button"
-                className={`${isSameDay(day, selected) ? 'is-sel' : ''}${isSameDay(day, today) ? ' is-today' : ''}${isAfter(day, today) ? ' is-future' : ''}`}
-                style={{ height: `${totals[i] ? Math.max(10, (100 * totals[i]) / max) : 10}%` }}
-                aria-label={`${format(day, 'EEE d MMM')}, ${fmtVND(totals[i])}`}
+                className={`${isSameDay(day, selected) ? 'is-sel' : ''}${isSameDay(day, today) ? ' is-today' : ''}${isAfter(day, today) ? ' is-future' : ''}${!totals[i] && plannedTotals[i] ? ' is-planned' : ''}`}
+                style={{ height: `${(totals[i] || plannedTotals[i]) ? Math.max(10, (100 * (totals[i] || plannedTotals[i])) / max) : 10}%` }}
+                aria-label={`${format(day, 'EEE d MMM')}, ${fmtVND(totals[i])}${plannedTotals[i] ? `, ${fmtVND(plannedTotals[i])} planned` : ''}`}
                 onClick={() => select(day)}
               />
             </div>
@@ -211,7 +267,7 @@ export function MobileWeek() {
           <b>{fmtVND(dayTotal)}</b>
         </div>
         {daySpendings.length === 0 ? (
-          <p className="m-empty">No expenses yet.</p>
+          dayPlanned.length === 0 && <p className="m-empty">No expenses yet.</p>
         ) : (
           <div className="m-list">
             {daySpendings.map(spending => (
@@ -226,6 +282,45 @@ export function MobileWeek() {
           </div>
         )}
         {daySpendings.length > 0 && <p className="m-hint">Swipe left to delete · tap to edit</p>}
+        {(dayPlanned.length > 0 || daySkipped.length > 0) && (
+          <>
+            <div className="m-ledger-h m-planned-h">
+              <span className="m-muted">Planned</span>
+              <b className="m-planned-text">~{fmtVND(dayPlanned.reduce((sum, item) => sum + item.amount, 0))}</b>
+            </div>
+            <div className="m-list">
+              {dayPlanned.map(occurrence => {
+                const meta = categoryMeta(settings.categories, occurrence.category);
+                return (
+                  <button key={occurrence.planId} type="button" className={`m-row m-row-planned${occurrence.sure ? ' is-sure' : ''}`} aria-label={`Planned ${occurrence.description || meta.name} at ${occurrence.time}, ${fmtVND(occurrence.amount)}. Opens options.`} onClick={() => openPlanned(occurrence)}>
+                    <span className="m-ic" style={{ ['--c' as string]: meta.color }}><CategoryIcon icon={meta.icon} size={16} /></span>
+                    <span className="m-rt">
+                      <b>{occurrence.description || meta.name}</b>
+                      <small>{occurrence.overridden ? 'Planned · changed' : 'Planned'} · {occurrence.time}</small>
+                    </span>
+                    <span className="m-amt">~{fmtVND(occurrence.amount)}</span>
+                  </button>
+                );
+              })}
+              {daySkipped.map(plan => {
+                const meta = categoryMeta(settings.categories, plan.category);
+                const label = plan.description || meta.name;
+                return (
+                  <button key={`skip-${plan.id}`} type="button" className="m-row m-row-planned is-skipped" aria-label={`${label} skipped this day. Undo skip.`}
+                    onClick={() => { void planAction(() => clearPlanException(plan.id, selectedKey), `${label} planned again`); }}>
+                    <span className="m-ic" style={{ ['--c' as string]: meta.color }}><CategoryIcon icon={meta.icon} size={16} /></span>
+                    <span className="m-rt">
+                      <b>{label}</b>
+                      <small>Skipped · tap to undo</small>
+                    </span>
+                    <span className="m-amt">{fmtVND(plan.amount)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="m-hint">Planned items become real expenses once their time passes · tap to skip or change</p>
+          </>
+        )}
         {!keypadOpen && (
           <button type="button" className="m-btn m-btn-ghost" onClick={() => setKeypadOpen(true)}>+ Add expense</button>
         )}
@@ -244,7 +339,7 @@ export function MobileWeek() {
       )}
 
       <Toast toast={toast} onHide={hideToast} top={keypadOpen} />
-      {alert && <MobileAlert title={alert.title} message={alert.message} buttons={alert.buttons} onDismiss={() => setAlert(null)} />}
+      {alert && <MobileAlert title={alert.title} message={alert.message} buttons={alert.buttons} vertical={alert.buttons.length > 2} onDismiss={() => setAlert(null)} />}
     </div>
   );
 }

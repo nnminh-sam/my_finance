@@ -1,3 +1,5 @@
+import type { PlanException, PlanFrequency } from './lib/plans';
+
 export type Category = string;
 
 export interface CategoryData {
@@ -15,7 +17,32 @@ export interface Spending {
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   repeatRuleId?: string | null;
+  planId?: string | null; // set when this spending was materialized from a plan
+  planDate?: string | null; // the plan occurrence date it came from
 }
+
+/** A forecast spending. Future occurrences are projected, never stored, until their time passes. */
+export interface PlanInput {
+  amount: number;
+  description: string;
+  category: string;
+  time: string; // HH:mm
+  startDate: string; // YYYY-MM-DD
+  frequency: PlanFrequency;
+  interval: number;
+  daysOfWeek: number[]; // weekly only, 0=Sun..6=Sat
+  endDate: string | null; // inclusive, null = forever
+  sure: boolean; // commitment (fixed amount and date) vs estimate
+}
+
+export interface Plan extends PlanInput {
+  id: string;
+  materializedThrough: string; // local YYYY-MM-DDTHH:mm
+  createdAt: string;
+  exceptions: PlanException[];
+}
+
+export type PlanExceptionInput = Omit<PlanException, 'date'>;
 
 export type RepeatFrequency = 'daily' | 'weekdays' | 'weekly' | 'monthly';
 export type RepeatEndType = 'unlimited' | 'occurrences' | 'until_date';

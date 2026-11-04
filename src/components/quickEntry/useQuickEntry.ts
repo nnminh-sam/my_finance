@@ -5,7 +5,7 @@ import { useFinance } from '../../contexts/FinanceContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { errorMessage } from '../../services/auth';
 import {
-  createQuickEntry, entryAmount, entryFromSpending, formatVnd, nextQuickEntry, prepareEntries, prepareEntry, pressKey, saveEntries,
+  createQuickEntry, entryAmount, entryFromSpending, formatVnd, isoDate, nextQuickEntry, nowStamp, prepareEntries, prepareEntry, pressKey, saveEntries,
 } from '../../lib/quickEntry';
 import type { IncomeEntry, PreparedEntry, QuickEntry, RepeatDraft } from '../../lib/quickEntry';
 import type { Spending } from '../../types';
@@ -25,7 +25,7 @@ function weekday(date: string) {
  */
 export function useQuickEntry(date: string) {
   const { settings } = useSettings();
-  const { createSpending, createRepeatRule, createIncome, updateSpending, deleteSpending } = useFinance();
+  const { createSpending, createPlan, createIncome, updateSpending, deleteSpending } = useFinance();
   const categories = settings.categories;
   const [entry, setEntry] = useState<QuickEntry>(() => createQuickEntry(categories, date));
   const [queue, setQueue] = useState<QueuedEntry[]>([]);
@@ -72,7 +72,18 @@ export function useQuickEntry(date: string) {
     if (fields.startDate !== undefined) setDateTouched(true);
     update(current => ({ ...current, income: { ...current.income, ...fields } }));
   }, [update]);
-  const setMode = useCallback((mode: QuickEntry['mode']) => { setPanel(null); update(current => ({ ...current, mode })); }, [update]);
+  /** Spending, Income, or Plan (a spending that is always saved as a plan). */
+  const setMode = useCallback((mode: QuickEntry['mode'] | 'plan') => {
+    setPanel(null);
+    if (mode !== 'plan') { update(current => ({ ...current, mode, plan: false })); return; }
+    // A plan needs a moment ahead: if the entry's time has passed (and it doesn't repeat), move it to tomorrow.
+    setDateTouched(true);
+    update(current => {
+      if (current.repeat.on || `${current.date}T${current.time}` > nowStamp()) return { ...current, mode: 'spending', plan: true };
+      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+      return { ...current, mode: 'spending', plan: true, date: isoDate(tomorrow), time: '12:00' };
+    });
+  }, [update]);
   const togglePanel = useCallback((next: QuickPanel | null) => setPanel(current => (next === null || current === next ? null : next)), []);
 
   const fail = useCallback((cause: unknown) => {
@@ -138,7 +149,7 @@ export function useQuickEntry(date: string) {
     if (editing) {
       let prepared: PreparedEntry;
       try {
-        prepared = prepareEntry({ ...entry, mode: 'spending', repeat: { ...entry.repeat, on: false } }, categories);
+        prepared = prepareEntry({ ...entry, mode: 'spending', plan: false, repeat: { ...entry.repeat, on: false } }, categories, new Date(), true);
       } catch (cause) { fail(cause); return null; }
       saving.current = true;
       setBusy(true);
@@ -164,7 +175,7 @@ export function useQuickEntry(date: string) {
     try {
       const result = await saveEntries(items.map((item, i) => ({ ...item, prepared: prepared[i] })), {
         spending: async input => { created.push(await createSpending(input)); },
-        repeat: input => createRepeatRule(input),
+        plan: input => createPlan(input),
         income: input => createIncome(input),
       });
       if (result.remaining.length > 0) {
@@ -180,14 +191,14 @@ export function useQuickEntry(date: string) {
       const first = prepared[0];
       if (prepared.length > 1) return { message: `Saved ${prepared.length} entries${spent ? ` · ${formatVnd(spent)} spent` : ''}` };
       if (first.kind === 'income') return { message: `Income added · +${formatVnd(first.input.amount)} ${first.input.source}` };
-      if (first.kind === 'repeat') return { message: `Repeat added · ${formatVnd(first.input.amount)} ${first.input.description}` };
+      if (first.kind === 'plan') return { message: `Planned ${first.input.description} · ${first.input.sure ? '' : '~'}${formatVnd(first.input.amount)}. It becomes real when its time passes.` };
       const saved = created[0];
       return {
         message: `Added ${formatVnd(first.input.amount)} · ${first.input.description}`,
         undo: saved ? () => deleteSpending(saved.id) : undefined,
       };
     } catch (cause) { fail(cause); return null; } finally { saving.current = false; setBusy(false); }
-  }, [editing, entry, queue, amount, categories, date, fail, updateSpending, createSpending, createRepeatRule, createIncome, deleteSpending]);
+  }, [editing, entry, queue, amount, categories, date, fail, updateSpending, createSpending, createPlan, createIncome, deleteSpending]);
 
   const removeEditing = useCallback(async (): Promise<SaveResult | null> => {
     if (!editing || saving.current) return null;

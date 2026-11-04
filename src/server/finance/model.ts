@@ -1,10 +1,18 @@
+import type { PlanException, PlanFrequency } from "../../lib/plans";
+
 export interface Category { id: string; name: string; color: string; icon: string }
+
 export interface FinanceSettings {
   avatar: string;
   categories: Category[];
+  timezone: string; // IANA zone used to decide when planned spendings become real
 }
 export interface SpendingInput { amount: number; description: string; category: string; date: string; time: string; repeatRuleId?: string | null }
-export interface Spending extends SpendingInput { id: string }
+export interface Spending extends SpendingInput {
+  id: string;
+  planId?: string | null; // set when materialized from a plan
+  planDate?: string | null; // the plan occurrence date it came from
+}
 export interface SpendingPage { spendings: Spending[]; nextCursor: string | null }
 export const INCOME_FREQUENCIES = ["once", "daily", "weekly", "monthly", "yearly"] as const;
 export type IncomeFrequency = typeof INCOME_FREQUENCIES[number];
@@ -44,6 +52,28 @@ export interface RepeatRule extends RepeatRuleInput {
   createdAt: string;
 }
 
+export interface PlanInput {
+  amount: number;
+  description: string;
+  category: string;
+  time: string; // HH:mm
+  startDate: string; // YYYY-MM-DD
+  frequency: PlanFrequency;
+  interval: number;
+  daysOfWeek: number[];
+  endDate: string | null;
+  sure: boolean; // commitment (fixed amount and date) vs estimate
+}
+
+export interface Plan extends PlanInput {
+  id: string;
+  materializedThrough: string; // local YYYY-MM-DDTHH:mm; occurrences at or before it are real
+  createdAt: string;
+  exceptions: PlanException[]; // only occurrences not yet materialized
+}
+
+export type PlanExceptionInput = Omit<PlanException, "date">;
+
 export const CATEGORY_ICONS = new Set([
   "Utensils", "Car", "Film", "ShoppingBag", "Receipt", "CircleDollarSign",
   "Coffee", "Home", "Heart", "Briefcase", "Gift", "Phone",
@@ -52,6 +82,7 @@ export const CATEGORY_ICONS = new Set([
 export function defaultFinanceSettings(): FinanceSettings {
   return {
     avatar: "",
+    timezone: "Asia/Ho_Chi_Minh",
     categories: [
       { id: "Food", name: "Food", color: "#10b981", icon: "Utensils" },
       { id: "Transport", name: "Transport", color: "#3b82f6", icon: "Car" },

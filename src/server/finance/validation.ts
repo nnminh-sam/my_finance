@@ -1,5 +1,6 @@
 import { HttpError } from "../auth/http";
-import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category, type FinanceSettings, type IncomeFrequency, type IncomeInput, type SpendingInput } from "./model";
+import { isValidTimeZone, PLAN_FREQUENCIES, type PlanFrequency } from "../../lib/plans";
+import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category, type FinanceSettings, type IncomeFrequency, type IncomeInput, type PlanExceptionInput, type PlanInput, type SpendingInput } from "./model";
 
 function invalid(field: string): never { throw new HttpError(400, `Invalid ${field}`); }
 function object(value: unknown, allowed: readonly string[]): Record<string, unknown> {
@@ -33,7 +34,7 @@ function categories(value: unknown): Category[] {
   });
 }
 export function settingsPatch(value: unknown): Partial<FinanceSettings> {
-  const body = object(value, ["avatar", "categories"]);
+  const body = object(value, ["avatar", "categories", "timezone"]);
   const patch: Partial<FinanceSettings> = {};
   if (Object.hasOwn(body, "avatar")) {
     const avatar = text(body.avatar, "avatar", 2048, true);
@@ -46,6 +47,11 @@ export function settingsPatch(value: unknown): Partial<FinanceSettings> {
     patch.avatar = avatar;
   }
   if (Object.hasOwn(body, "categories")) patch.categories = categories(body.categories);
+  if (Object.hasOwn(body, "timezone")) {
+    const timezone = text(body.timezone, "timezone", 64);
+    if (!isValidTimeZone(timezone)) return invalid("timezone");
+    patch.timezone = timezone;
+  }
   return patch;
 }
 function validDate(value: unknown, field: string): string {
@@ -128,6 +134,57 @@ export function repeatRuleInput(value: unknown): import("./model").RepeatRuleInp
     amount, description, category, startDate, time,
     frequency, interval, daysOfWeek, endType, totalOccurrences, endDate,
   };
+}
+function clockTime(value: unknown): string {
+  const time = text(value, "time", 5);
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return invalid("time");
+  return time;
+}
+export function planInput(value: unknown): PlanInput {
+  const body = object(value, ["amount", "description", "category", "time", "startDate", "frequency", "interval", "daysOfWeek", "endDate", "sure"]);
+  const amount = money(body.amount, "amount", true);
+  const description = text(body.description ?? "", "description", 1000, true);
+  const category = text(body.category, "category", 100);
+  const time = clockTime(body.time);
+  const startDate = validDate(body.startDate, "startDate");
+  if (typeof body.frequency !== "string" || !(PLAN_FREQUENCIES as readonly string[]).includes(body.frequency)) return invalid("frequency");
+  const frequency = body.frequency as PlanFrequency;
+  let interval = 1;
+  if (body.interval !== undefined && body.interval !== null) {
+    if (typeof body.interval !== "number" || !Number.isInteger(body.interval) || body.interval < 1 || body.interval > 365) return invalid("interval (1–365)");
+    if (frequency === "daily" || frequency === "weekly" || frequency === "monthly") interval = body.interval;
+  }
+  let daysOfWeek: number[] = [];
+  if (body.daysOfWeek !== undefined && body.daysOfWeek !== null) {
+    if (!Array.isArray(body.daysOfWeek) || body.daysOfWeek.length > 7 ||
+        body.daysOfWeek.some(day => typeof day !== "number" || !Number.isInteger(day) || day < 0 || day > 6)) return invalid("daysOfWeek");
+    if (frequency === "weekly") daysOfWeek = [...new Set(body.daysOfWeek as number[])].sort((a, b) => a - b);
+  }
+  let endDate: string | null = null;
+  if (body.endDate !== undefined && body.endDate !== null) {
+    if (frequency === "once") return invalid("endDate (not allowed for a one-time plan)");
+    endDate = validDate(body.endDate, "endDate");
+    if (endDate < startDate) return invalid("endDate cannot be before startDate");
+  }
+  if (body.sure !== undefined && typeof body.sure !== "boolean") return invalid("sure");
+  const sure = body.sure === true;
+  return { amount, description, category, time, startDate, frequency, interval, daysOfWeek, endDate, sure };
+}
+export function planExceptionInput(value: unknown): PlanExceptionInput {
+  const body = object(value, ["kind", "amount", "description"]);
+  if (body.kind === "skip") {
+    if (body.amount !== undefined && body.amount !== null) return invalid("amount (not allowed when skipping)");
+    if (body.description !== undefined && body.description !== null) return invalid("description (not allowed when skipping)");
+    return { kind: "skip", amount: null, description: null };
+  }
+  if (body.kind !== "override") return invalid("kind");
+  const amount = money(body.amount, "amount", true);
+  const description = body.description === undefined || body.description === null
+    ? null : text(body.description, "description", 1000, true);
+  return { kind: "override", amount, description };
+}
+export function planDate(value: unknown): string {
+  return validDate(value, "date");
 }
 export function incomeInput(value: unknown): IncomeInput {
   const body = object(value, ["source", "name", "amount", "frequency", "startDate", "endDate"]);

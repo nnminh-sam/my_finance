@@ -21,7 +21,7 @@ test("Neon finance: defaults, cross-worker partial settings, scoped CRUD, histor
     const [initial, sameInitial] = await Promise.all([store.getSettings(users[0]), otherWorker.getSettings(users[0])]);
     assert.deepEqual(initial, defaultFinanceSettings());
     assert.deepEqual(sameInitial, initial);
-    assert.deepEqual(Object.keys(initial).sort(), ["avatar", "categories"]);
+    assert.deepEqual(Object.keys(initial).sort(), ["avatar", "categories", "timezone"]);
     const legacyColumns = "SELECT base_daily_spending, max_daily_spending FROM finance_settings WHERE user_id = $1";
     const legacyDefaults = await sql.query(legacyColumns, [users[0]]);
     assert.equal(Number(legacyDefaults[0].base_daily_spending), 0);
@@ -32,7 +32,7 @@ test("Neon finance: defaults, cross-worker partial settings, scoped CRUD, histor
     assert.deepEqual(await store.listSpendings(users[0], 500), { spendings: [], nextCursor: null });
     const avatar = "https://example.test/avatar.png";
     const updates = await Promise.all([store.updateSettings(users[0], { categories: initial.categories }), otherWorker.updateSettings(users[0], { avatar })]);
-    for (const updated of updates) assert.deepEqual(Object.keys(updated).sort(), ["avatar", "categories"]);
+    for (const updated of updates) assert.deepEqual(Object.keys(updated).sort(), ["avatar", "categories", "timezone"]);
     const updated = { ...initial, avatar };
     assert.deepEqual(await otherWorker.getSettings(users[0]), updated);
     assert.deepEqual(await store.updateSettings(users[0], {}), updated);
@@ -267,5 +267,101 @@ test("Neon incomes: CRUD does not wait for the settings lock", { skip: !database
   } finally {
     await holding;
     await sql.query("DELETE FROM auth_users WHERE id = $1", [userId]);
+  }
+});
+
+test("Neon finance: plans materialize once per occurrence, honour exceptions, and survive concurrent workers", { skip: !databaseUrl, timeout: 30000 }, async () => {
+  // Requires migrations through 007_plans.sql.
+  const sql = neon(databaseUrl!);
+  const store = createFinanceStore(databaseUrl!);
+  const otherWorker = createFinanceStore(databaseUrl!);
+  const users = [randomUUID(), randomUUID()];
+  const lunch = {
+    amount: 35000.5, description: "Lunch", category: "Food", time: "12:30",
+    startDate: "2026-11-02", frequency: "weekdays" as const, interval: 1, daysOfWeek: [], endDate: null, sure: false,
+  };
+  try {
+    for (const id of users) await sql.query("INSERT INTO auth_users (id, name, email, password_hash) VALUES ($1, 'Plan test', $2, 'unused')", [id, `plan-${id}@example.test`]);
+    assert.equal((await store.getSettings(users[0])).timezone, "Asia/Ho_Chi_Minh");
+    assert.equal(await store.createPlan(users[0], { ...lunch, category: "Nope" }), "invalid-category");
+    const plan = await store.createPlan(users[0], lunch);
+    assert.ok(typeof plan === "object");
+    assert.equal(plan.amount, 35000.5);
+    assert.match(plan.materializedThrough, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    // Pin the watermark so the test does not depend on the real clock.
+    await sql.query("UPDATE finance_plans SET materialized_through = '2026-11-04 12:00' WHERE id = $1", [plan.id]);
+
+    const skipped = await store.setPlanException(users[0], plan.id, "2026-11-05", { kind: "skip", amount: null, description: null });
+    assert.ok(typeof skipped === "object");
+    await store.setPlanException(users[0], plan.id, "2026-11-06", { kind: "override", amount: 50000, description: "Team lunch" });
+    assert.equal(await store.setPlanException(users[0], plan.id, "2026-11-07", { kind: "skip", amount: null, description: null }), "invalid-date");
+    assert.equal(await store.setPlanException(users[1], plan.id, "2026-11-06", { kind: "skip", amount: null, description: null }), "not-found");
+
+    // 06:00 UTC Monday 2026-11-09 = 13:00 local; two workers race to materialize.
+    const at = new Date("2026-11-09T06:00:00Z");
+    const counts = await Promise.all([store.materializePlans(users[0], at), otherWorker.materializePlans(users[0], at)]);
+    assert.equal(counts[0] + counts[1], 3);
+    const rows = await sql.query(`SELECT to_char(date, 'YYYY-MM-DD') AS date, amount, description, plan_id::text AS plan_id
+      FROM finance_spendings WHERE user_id = $1 ORDER BY date`, [users[0]]);
+    assert.deepEqual(rows.map(row => [row.date, Number(row.amount), row.description, row.plan_id]), [
+      ["2026-11-04", 35000.5, "Lunch", plan.id],
+      ["2026-11-06", 50000, "Team lunch", plan.id],
+      ["2026-11-09", 35000.5, "Lunch", plan.id],
+    ]);
+    const [listed] = await store.listPlans(users[0]);
+    assert.equal(listed.materializedThrough >= "2026-11-09T13:00", true);
+    assert.equal(listed.exceptions.every(item => item.date >= "2026-11-09"), true);
+    // A deleted occurrence is never recreated, even by a worker replaying the same instant.
+    const fri = (await store.listSpendings(users[0], 500, undefined, "2026-11-06", "2026-11-06")).spendings[0];
+    assert.equal(fri.planId, plan.id);
+    assert.equal(fri.planDate, "2026-11-06");
+    assert.equal(await store.deleteSpending(users[0], fri.id), true);
+    assert.equal(await otherWorker.materializePlans(users[0], at), 0);
+
+    const split = await store.splitPlan(users[0], plan.id, { ...lunch, amount: 40000, startDate: "2026-11-16" });
+    assert.ok(typeof split === "object");
+    assert.equal(split.ended.endDate, "2026-11-15");
+    assert.equal(split.created.materializedThrough, listed.materializedThrough);
+    assert.equal(await store.splitPlan(users[0], plan.id, { ...lunch, startDate: "2026-11-01" }), "invalid-date");
+    const updated = await store.updatePlan(users[0], split.created.id, { ...lunch, startDate: "2026-11-16", amount: 41000 });
+    assert.ok(typeof updated === "object" && updated.amount === 41000);
+    assert.equal(await store.updatePlan(users[1], split.created.id, lunch), "not-found");
+
+    // Deleting a plan keeps its history as ordinary spendings.
+    assert.equal(await store.deletePlan(users[1], plan.id), false);
+    assert.equal(await store.deletePlan(users[0], plan.id), true);
+    const kept = await sql.query("SELECT plan_id FROM finance_spendings WHERE user_id = $1", [users[0]]);
+    assert.equal(kept.length, 2);
+    assert.equal(kept.every(row => row.plan_id === null), true);
+    assert.equal((await store.updateSettings(users[0], { timezone: "UTC" })).timezone, "UTC");
+  } finally {
+    for (const id of users) await sql.query("DELETE FROM auth_users WHERE id = $1", [id]);
+  }
+});
+
+test("Neon finance: 008 turns repeat rules into sure plans, keeps the past, drops pre-written future rows", { skip: !databaseUrl, timeout: 30000 }, async () => {
+  const sql = neon(databaseUrl!);
+  const store = createFinanceStore(databaseUrl!);
+  const user = randomUUID(), rule = randomUUID();
+  try {
+    await sql.query("INSERT INTO auth_users (id, name, email, password_hash) VALUES ($1, 'Migration test', $2, 'unused')", [user, `mig-${user}@example.test`]);
+    await store.getSettings(user);
+    await sql.query(`INSERT INTO finance_repeat_rules (id, user_id, amount, description, category, start_date, time, frequency, interval, days_of_week, end_type, occurrences_created, last_generated_date)
+      VALUES ($1, $2, 99000, 'Gym', 'Other', '2020-01-01', '08:00', 'monthly', 1, '[]', 'unlimited', 2, '2099-01-01')`, [rule, user]);
+    await sql.query(`INSERT INTO finance_spendings (id, user_id, amount, description, category, date, time, repeat_rule_id)
+      VALUES ($1, $3, 99000, 'Gym', 'Other', '2020-01-01', '08:00', $2), ($4, $3, 99000, 'Gym', 'Other', '2099-01-01', '08:00', $2)`, [randomUUID(), rule, user, randomUUID()]);
+    const migration = await readFile(new URL("../migrations/008_plan_commitments.sql", import.meta.url), "utf8");
+    const run = () => sql.transaction(migration.split(";").map(s => s.trim()).filter(Boolean).map(s => sql.query(s)));
+    await run();
+    await run(); // rerunnable
+    const [plan] = await store.listPlans(user);
+    assert.equal(plan.id, rule);
+    assert.equal(plan.sure, true);
+    assert.equal(plan.frequency, "monthly");
+    const rows = await sql.query("SELECT to_char(date, 'YYYY-MM-DD') AS date, plan_id::text AS plan_id FROM finance_spendings WHERE user_id = $1", [user]);
+    assert.deepEqual(rows, [{ date: "2020-01-01", plan_id: rule }]);
+    assert.deepEqual(await store.listRepeatRules(user), []);
+  } finally {
+    await sql.query("DELETE FROM auth_users WHERE id = $1", [user]);
   }
 });

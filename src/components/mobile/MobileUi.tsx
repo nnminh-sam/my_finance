@@ -58,7 +58,7 @@ export function Toast({ toast, onHide, top = false }: { toast: ToastState | null
 export interface AlertButton { label: string; destructive?: boolean; onPress: () => void }
 
 /** A native-style alert: title, message and a row of buttons. */
-export function MobileAlert({ title, message, buttons, onDismiss }: { title: string; message?: ReactNode; buttons: AlertButton[]; onDismiss: () => void }) {
+export function MobileAlert({ title, message, buttons, onDismiss, vertical = false }: { title: string; message?: ReactNode; buttons: AlertButton[]; onDismiss: () => void; vertical?: boolean }) {
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     first.current?.focus();
@@ -73,7 +73,7 @@ export function MobileAlert({ title, message, buttons, onDismiss }: { title: str
           <b>{title}</b>
           {message && <p>{message}</p>}
         </div>
-        <div className="m-alert-actions">
+        <div className={'m-alert-actions' + (vertical ? ' is-vertical' : '')}>
           {buttons.map((button, i) => (
             <button key={button.label} ref={i === 0 ? first : undefined} type="button" className={button.destructive ? 'is-destructive' : undefined} onClick={button.onPress}>
               {button.label}

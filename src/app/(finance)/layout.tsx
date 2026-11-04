@@ -5,7 +5,8 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { format, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
-import { CalendarDays, ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
+import { PlanMonthGuide } from '../../components/PlanMonthGuide';
 import { QuickEntryDialog } from '../../components/quickEntry/QuickEntryDialog';
 import type { SaveResult } from '../../components/quickEntry/useQuickEntry';
 import { MonthlyIncomeModal } from '../../components/MonthlyIncomeModal';
@@ -21,6 +22,7 @@ import { pages } from '../../lib/pages';
 import type { FinancePage } from '../../lib/pages';
 import { authHref, pageHref, readPageDate } from '../../lib/navigation';
 import '../../styles/AuthScreen.css';
+import '../../styles/Plans.css';
 
 function resolveFinancePage(pathname: string): FinancePage {
   const clean = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
@@ -28,6 +30,7 @@ function resolveFinancePage(pathname: string): FinancePage {
   if (clean === '/day') return 'day';
   if (clean === '/analytics') return 'analytics';
   if (clean === '/profile') return 'profile';
+  if (clean === '/plans') return 'plans';
   return 'calendar';
 }
 
@@ -140,6 +143,12 @@ function FinanceDocument({
     setIncomeDialogMonth(month);
   }, []);
 
+  // "Plan your month" guide, opened from the calendar, the Plans page and the phone Month screen.
+  const [planGuideMonth, setPlanGuideMonth] = useState<string | null>(null);
+  const openPlanGuide = useCallback((month?: string) => {
+    setPlanGuideMonth(month ?? format(new Date(), 'yyyy-MM'));
+  }, []);
+
   const urlDate = useMemo(() => readPageDate(fullSearch), [fullSearch]);
   const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
   const currentDate = page === 'calendar' ? calendarDate : urlDate;
@@ -198,14 +207,16 @@ function FinanceDocument({
     openBackToCalendar,
     openExpense,
     openIncomeModal,
+    openPlanGuide,
     keypadOpen,
     setKeypadOpen,
     keypadPulse,
-  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, keypadOpen, keypadPulse]);
+  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, openPlanGuide, keypadOpen, keypadPulse]);
 
   const navigation = [
     { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
     { page: 'week', label: 'Week', Icon: List },
+    { page: 'plans', label: 'Plans', Icon: CalendarRange },
     { page: 'analytics', label: 'Analytics', Icon: ChartColumn },
     { page: 'profile', label: 'Profile', Icon: User },
   ] as const;
@@ -228,8 +239,8 @@ function FinanceDocument({
     }
   }, [page]);
 
-  const periodLabel = page === 'profile' ? 'User Profile' : format(activeDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy');
-  const mobilePeriodLabel = page === 'profile' ? 'User Profile' : format(activeDate, page === 'day' ? 'MMM d, yyyy' : 'MMMM yyyy');
+  const periodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : format(activeDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy');
+  const mobilePeriodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : format(activeDate, page === 'day' ? 'MMM d, yyyy' : 'MMMM yyyy');
 
   const renderPrevAction = (extraClass = '') => {
     const className = `document-action${extraClass ? ` ${extraClass}` : ''}`;
@@ -388,6 +399,7 @@ function FinanceDocument({
         </nav>
 
         {incomeDialogMonth && <MonthlyIncomeModal month={incomeDialogMonth} onClose={() => setIncomeDialogMonth(null)} />}
+        {planGuideMonth && <PlanMonthGuide month={planGuideMonth} onClose={() => setPlanGuideMonth(null)} onDone={setExpenseNotice} />}
         {expenseDialog && (
           <QuickEntryDialog
             expense={expenseDialog.expense}

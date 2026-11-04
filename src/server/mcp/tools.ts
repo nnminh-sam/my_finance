@@ -3,19 +3,18 @@ import { HttpError } from "../auth/http";
 import type { User } from "../auth/store";
 import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category } from "../finance/model";
 import type { FinanceStore } from "../finance/store";
-import { incomeInput, repeatRuleInput, settingsPatch, spendingInput, uuid } from "../finance/validation";
+import { incomeInput, planExceptionInput, planInput, settingsPatch, spendingInput, uuid } from "../finance/validation";
+import { addDays, describePlanSchedule, localNowStamp, projectPlans } from "../../lib/plans";
 import {
   buildDateRangeSummary,
   buildMonthlyAnalyticsReport,
   buildSalaryCycleReport,
   enrichIncome,
-  enrichRepeatRule,
   fetchAllIncomes,
   fetchAllSpendings,
 } from "./data";
 import { JsonRpcErrorCode, McpError, type McpToolCallResult, type McpToolDefinition } from "./protocol";
 import { getMonthIncome } from "../../lib/income";
-import { monthlyRepeatCost } from "../../lib/repeatRules";
 
 export const MCP_TOOLS: McpToolDefinition[] = [
   {
@@ -402,111 +401,98 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   },
   {
-    name: "list_repeat_rules",
-    description: "List all recurring spending rules with their schedule, progress, and estimated monthly cost.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      additionalProperties: false,
-    },
-    annotations: {
-      title: "List Repeat Rules",
-      readOnlyHint: true,
-    },
+    name: "list_plans",
+    description: "List planned (forecast) spendings. A plan's future occurrences are projections, not real spendings; each becomes a real spending automatically once its local date and time pass. Includes each plan's next occurrences and projected totals for the rest of this month and next month.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { title: "List Planned Spendings", readOnlyHint: true },
   },
   {
-    name: "create_repeat_rule",
-    description: "Create a recurring spending rule and automatically generate due spending occurrences.",
+    name: "get_spending_forecast",
+    description: "Forecast spending for a date range: real spendings already recorded plus planned occurrences that have not happened yet, with totals per category and per day.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        startDate: { type: "string", description: "Start date (YYYY-MM-DD), inclusive." },
+        endDate: { type: "string", description: "End date (YYYY-MM-DD), inclusive; at most 366 days after startDate." },
+      },
+      required: ["startDate", "endDate"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Get Spending Forecast", readOnlyHint: true },
+  },
+  {
+    name: "create_plan",
+    description: "Create a planned (forecast) spending, e.g. 35000 lunch every weekday. Nothing is written as a spending until each occurrence's time passes; past dates are never back-filled.",
     inputSchema: {
       type: "object",
       properties: {
         amount: { type: "number", description: "Positive amount per occurrence." },
-        description: { type: "string", description: "Description of the recurring expense." },
+        description: { type: "string", description: "What the spending is, e.g. 'Lunch'." },
         category: { type: "string", description: "Category ID from user settings." },
-        startDate: { type: "string", description: "Start date in YYYY-MM-DD format." },
-        time: { type: "string", description: "Time in HH:mm format (defaults to '09:00')." },
-        frequency: {
-          type: "string",
-          enum: ["daily", "weekdays", "weekly", "monthly"],
-          description: "Recurrence frequency.",
-        },
-        interval: {
-          type: "number",
-          description: "Recurrence interval (1–365, default 1).",
-        },
-        daysOfWeek: {
-          type: "array",
-          items: { type: "number" },
-          description: "Optional days of week for weekly frequency (0=Sunday .. 6=Saturday).",
-        },
-        endType: {
-          type: "string",
-          enum: ["unlimited", "occurrences", "until_date"],
-          description: "How the recurrence ends (defaults to 'unlimited').",
-        },
-        totalOccurrences: {
-          type: "number",
-          description: "Total occurrences (1–100) when endType is 'occurrences'.",
-        },
-        endDate: {
-          type: "string",
-          description: "Inclusive end date (YYYY-MM-DD) when endType is 'until_date'.",
-        },
+        time: { type: "string", description: "Local time HH:mm when it becomes real (defaults to '12:00')." },
+        startDate: { type: "string", description: "First possible occurrence (YYYY-MM-DD); the only date for 'once'." },
+        frequency: { type: "string", enum: ["once", "daily", "weekdays", "weekly", "monthly"] },
+        interval: { type: "number", description: "Every N days/weeks/months (1–365, default 1)." },
+        daysOfWeek: { type: "array", items: { type: "number" }, description: "Weekly only: 0=Sunday..6=Saturday (defaults to the start date's weekday)." },
+        endDate: { type: "string", description: "Optional inclusive last date (YYYY-MM-DD); omit for no end." },
+        sure: { type: "boolean", description: "true for a commitment with a fixed amount and date (rent, bills, subscriptions); false (default) for an estimate (food, coffee, fuel)." },
       },
-      required: ["amount", "description", "category", "startDate", "frequency"],
+      required: ["amount", "category", "startDate", "frequency"],
       additionalProperties: false,
     },
-    annotations: {
-      title: "Create Repeat Rule",
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-    },
+    annotations: { title: "Create Plan", readOnlyHint: false, destructiveHint: false, idempotentHint: false },
   },
   {
-    name: "delete_repeat_rule",
-    description: "Stop and delete a recurring spending rule by its UUID.",
+    name: "update_plan",
+    description: "Change a plan. By default the change applies to every upcoming occurrence (past ones are already real and never change). With effectiveFrom, the plan instead ends the day before and a new plan with these values starts on that date.",
     inputSchema: {
       type: "object",
       properties: {
-        id: {
-          type: "string",
-          description: "UUID of the repeat rule to delete.",
-        },
-        deleteFuture: {
-          type: "boolean",
-          description: "Whether to also delete generated spendings from today onward (defaults to true).",
-        },
+        id: { type: "string", description: "Plan UUID." },
+        amount: { type: "number" },
+        description: { type: "string" },
+        category: { type: "string" },
+        time: { type: "string", description: "HH:mm" },
+        startDate: { type: "string", description: "YYYY-MM-DD" },
+        frequency: { type: "string", enum: ["once", "daily", "weekdays", "weekly", "monthly"] },
+        interval: { type: "number" },
+        daysOfWeek: { type: "array", items: { type: "number" } },
+        endDate: { type: ["string", "null"], description: "Inclusive last date, or null for no end." },
+        sure: { type: "boolean", description: "Commitment (true) or estimate (false)." },
+        effectiveFrom: { type: "string", description: "Optional YYYY-MM-DD after the plan's start date: split the plan here (this and future)." },
       },
       required: ["id"],
       additionalProperties: false,
     },
-    annotations: {
-      title: "Delete Repeat Rule",
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: true,
-    },
+    annotations: { title: "Update Plan", readOnlyHint: false, destructiveHint: false, idempotentHint: true },
   },
   {
-    name: "sync_repeat_rules",
-    description: "Synchronize and materialize any due recurring spending transactions up to a given date.",
+    name: "delete_plan",
+    description: "Delete a plan. Upcoming projected occurrences disappear; spendings it already created are kept as ordinary spendings.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Plan UUID." } },
+      required: ["id"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Delete Plan", readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+  },
+  {
+    name: "update_plan_occurrence",
+    description: "Change one upcoming occurrence of a plan: skip it, override its amount (and optionally description), restore it to the plan's usual values, or mark it done now.",
     inputSchema: {
       type: "object",
       properties: {
-        asOfDate: {
-          type: "string",
-          description: "Optional reference date in YYYY-MM-DD format (defaults to today).",
-        },
+        id: { type: "string", description: "Plan UUID." },
+        date: { type: "string", description: "Occurrence date (YYYY-MM-DD); must be an upcoming occurrence of the plan." },
+        action: { type: "string", enum: ["skip", "override", "restore", "done"], description: "done records it as a real spending right away (paid early or already logged), so it is never counted twice." },
+        amount: { type: "number", description: "Required for 'override'." },
+        description: { type: "string", description: "Optional for 'override'." },
       },
+      required: ["id", "date", "action"],
       additionalProperties: false,
     },
-    annotations: {
-      title: "Sync Repeat Rules",
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-    },
+    annotations: { title: "Update Plan Occurrence", readOnlyHint: false, destructiveHint: false, idempotentHint: true },
   },
   {
     name: "get_date_range_summary",
@@ -633,6 +619,17 @@ function validateDateString(value: unknown, field: string): string {
     throw new HttpError(400, `Invalid ${field}`);
   }
   return value;
+}
+
+function lastDayOfMonth(date: string): string {
+  const [year, month] = date.split("-").map(Number);
+  const day = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${date.slice(0, 7)}-${String(day).padStart(2, "0")}`;
+}
+
+async function invalidCategory(financeStore: FinanceStore, userId: string, category: string): Promise<HttpError> {
+  const settings = await financeStore.getSettings(userId);
+  return new HttpError(400, `Category '${category}' must exist in current settings. Valid categories: ${settings.categories.map(c => c.id).join(", ")}`);
 }
 
 export async function executeMcpTool(
@@ -870,63 +867,126 @@ export async function executeMcpTool(
         return toolSuccess({ deleted: true, id });
       }
 
-      case "list_repeat_rules": {
-        const [settings, repeatRules] = await Promise.all([
-          financeStore.getSettings(user.id),
-          financeStore.listRepeatRules(user.id),
+      case "list_plans": {
+        const [settings, plans] = await Promise.all([financeStore.getSettings(user.id), financeStore.listPlans(user.id)]);
+        const today = localNowStamp(settings.timezone).slice(0, 10);
+        const monthEnd = lastDayOfMonth(today);
+        const nextMonthStart = addDays(monthEnd, 1);
+        const sum = (items: { amount: number }[]) => Math.round(items.reduce((total, item) => total + item.amount, 0) * 100) / 100;
+        const restOfMonth = projectPlans(plans, today, monthEnd);
+        const nextMonth = projectPlans(plans, nextMonthStart, lastDayOfMonth(nextMonthStart));
+        return toolSuccess({
+          timezone: settings.timezone,
+          today,
+          count: plans.length,
+          plannedRestOfMonth: sum(restOfMonth),
+          plannedNextMonth: sum(nextMonth),
+          plans: plans.map(plan => ({
+            ...plan,
+            schedule: describePlanSchedule(plan),
+            nextOccurrences: projectPlans([plan], today, addDays(today, 400)).slice(0, 5),
+          })),
+        });
+      }
+
+      case "get_spending_forecast": {
+        const startDate = validateDateString(args.startDate, "startDate");
+        const endDate = validateDateString(args.endDate, "endDate");
+        if (endDate < startDate) throw new HttpError(400, "endDate cannot be before startDate");
+        if (endDate > addDays(startDate, 366)) throw new HttpError(400, "The range can be at most 366 days");
+        const [plans, spendings] = await Promise.all([
+          financeStore.listPlans(user.id),
+          fetchAllSpendings(financeStore, user.id, startDate, endDate),
         ]);
-        const estimatedMonthlyTotal = Math.round(
-          repeatRules.reduce((sum, rule) => sum + monthlyRepeatCost(rule), 0) * 100,
-        ) / 100;
-        return toolSuccess({
-          estimatedMonthlyTotal,
-          count: repeatRules.length,
-          repeatRules: repeatRules.map(rule => enrichRepeatRule(rule, settings)),
-        });
-      }
-
-      case "create_repeat_rule": {
-        const payload: Record<string, unknown> = {
-          amount: args.amount,
-          description: args.description,
-          category: args.category,
-          startDate: args.startDate,
-          time: args.time ?? "09:00",
-          frequency: args.frequency,
-          endType: args.endType ?? "unlimited",
-        };
-        if (args.interval !== undefined) payload.interval = args.interval;
-        if (args.daysOfWeek !== undefined) payload.daysOfWeek = args.daysOfWeek;
-        if (args.totalOccurrences !== undefined) payload.totalOccurrences = args.totalOccurrences;
-        if (args.endDate !== undefined) payload.endDate = args.endDate;
-
-        const validated = repeatRuleInput(payload);
-        const created = await financeStore.createRepeatRule(user.id, validated);
-        if (!created) {
-          const settings = await financeStore.getSettings(user.id);
-          const validIds = settings.categories.map(c => c.id).join(", ");
-          throw new HttpError(400, `Category '${validated.category}' must exist in current settings. Valid categories: ${validIds}`);
+        const realKeys = new Set(spendings.filter(s => s.planId && s.planDate).map(s => `${s.planId}|${s.planDate}`));
+        const planned = projectPlans(plans, startDate, endDate, realKeys);
+        const round = (value: number) => Math.round(value * 100) / 100;
+        const byCategory: Record<string, { spent: number; planned: number }> = {};
+        const byDay: Record<string, { spent: number; planned: number }> = {};
+        for (const s of spendings) {
+          (byCategory[s.category] ??= { spent: 0, planned: 0 }).spent += s.amount;
+          (byDay[s.date] ??= { spent: 0, planned: 0 }).spent += s.amount;
         }
-        const settings = await financeStore.getSettings(user.id);
+        for (const p of planned) {
+          (byCategory[p.category] ??= { spent: 0, planned: 0 }).planned += p.amount;
+          (byDay[p.date] ??= { spent: 0, planned: 0 }).planned += p.amount;
+        }
+        for (const bucket of [...Object.values(byCategory), ...Object.values(byDay)]) {
+          bucket.spent = round(bucket.spent);
+          bucket.planned = round(bucket.planned);
+        }
+        const spent = round(spendings.reduce((total, s) => total + s.amount, 0));
+        const plannedTotal = round(planned.reduce((total, p) => total + p.amount, 0));
         return toolSuccess({
-          repeatRule: enrichRepeatRule(created.repeatRule, settings),
-          spendingsGenerated: created.spendings.length,
-          spendings: created.spendings,
+          startDate, endDate, spent, planned: plannedTotal, projected: round(spent + plannedTotal),
+          byCategory, byDay, plannedOccurrences: planned,
         });
       }
 
-      case "delete_repeat_rule": {
-        const id = uuid(args.id);
-        const deleteFuture = args.deleteFuture !== false;
-        const deleted = await financeStore.deleteRepeatRule(user.id, id, deleteFuture);
-        if (!deleted) throw new HttpError(404, "Repeat rule not found");
-        return toolSuccess({ deleted: true, id, deleteFuture });
+      case "create_plan": {
+        const plan = await financeStore.createPlan(user.id, planInput({
+          amount: args.amount, description: args.description ?? "", category: args.category, time: args.time ?? "12:00",
+          startDate: args.startDate, frequency: args.frequency, interval: args.interval, daysOfWeek: args.daysOfWeek, endDate: args.endDate, sure: args.sure,
+        }));
+        if (plan === "invalid-category") throw await invalidCategory(financeStore, user.id, String(args.category));
+        return toolSuccess({ plan: { ...plan, schedule: describePlanSchedule(plan) } });
       }
 
-      case "sync_repeat_rules": {
-        const asOfDate = args.asOfDate !== undefined ? validateDateString(args.asOfDate, "asOfDate") : undefined;
-        const spendingsCreated = await financeStore.syncRepeatSpendings(user.id, asOfDate);
-        return toolSuccess({ spendingsCreated, asOfDate: asOfDate ?? format(new Date(), "yyyy-MM-dd") });
+      case "update_plan": {
+        const id = uuid(args.id);
+        const current = (await financeStore.listPlans(user.id)).find(plan => plan.id === id);
+        if (!current) throw new HttpError(404, "Plan not found");
+        const pick = (key: string, fallback: unknown) => args[key] !== undefined ? args[key] : fallback;
+        const input = planInput({
+          amount: pick("amount", current.amount), description: pick("description", current.description),
+          category: pick("category", current.category), time: pick("time", current.time),
+          startDate: pick("startDate", current.startDate), frequency: pick("frequency", current.frequency),
+          interval: pick("interval", current.interval), daysOfWeek: pick("daysOfWeek", current.daysOfWeek),
+          endDate: pick("endDate", current.endDate), sure: pick("sure", current.sure),
+        });
+        if (args.effectiveFrom !== undefined) {
+          const effectiveFrom = validateDateString(args.effectiveFrom, "effectiveFrom");
+          const result = await financeStore.splitPlan(user.id, id, { ...input, startDate: effectiveFrom });
+          if (result === "not-found") throw new HttpError(404, "Plan not found");
+          if (result === "invalid-category") throw await invalidCategory(financeStore, user.id, input.category);
+          if (result === "invalid-date") throw new HttpError(400, "effectiveFrom must be after the plan's start date (and the plan must repeat)");
+          return toolSuccess(result as unknown as Record<string, unknown>);
+        }
+        const plan = await financeStore.updatePlan(user.id, id, input);
+        if (plan === "not-found") throw new HttpError(404, "Plan not found");
+        if (plan === "invalid-category") throw await invalidCategory(financeStore, user.id, input.category);
+        return toolSuccess({ plan: { ...plan, schedule: describePlanSchedule(plan) } });
+      }
+
+      case "delete_plan": {
+        const id = uuid(args.id);
+        if (!await financeStore.deletePlan(user.id, id)) throw new HttpError(404, "Plan not found");
+        return toolSuccess({ deleted: true, id });
+      }
+
+      case "update_plan_occurrence": {
+        const id = uuid(args.id);
+        const date = validateDateString(args.date, "date");
+        let plan;
+        if (args.action === "done") {
+          const spending = await financeStore.completePlanOccurrence(user.id, id, date);
+          if (spending === "not-found") throw new HttpError(404, "Plan not found");
+          if (spending === "invalid-date") throw new HttpError(400, "date must be an upcoming occurrence of this plan that is not already recorded");
+          return toolSuccess({ spending });
+        }
+        if (args.action === "restore") {
+          plan = await financeStore.deletePlanException(user.id, id, date);
+        } else if (args.action === "skip" || args.action === "override") {
+          const exception = planExceptionInput(args.action === "skip"
+            ? { kind: "skip" }
+            : { kind: "override", amount: args.amount, description: args.description });
+          plan = await financeStore.setPlanException(user.id, id, date, exception);
+        } else {
+          throw new HttpError(400, "Invalid action (expected skip, override or restore)");
+        }
+        if (plan === "not-found") throw new HttpError(404, "Plan not found");
+        if (plan === "invalid-date") throw new HttpError(400, "date must be an upcoming occurrence of this plan");
+        return toolSuccess({ plan });
       }
 
       case "get_date_range_summary": {

@@ -1,8 +1,8 @@
-import { validateExpenseDraft, validateRepeatDraft } from './expenseDraft';
+import { validateExpenseDraft } from './expenseDraft';
 import type { ExpenseDraft } from './expenseDraft';
 import { validateIncomeDraft } from './incomeDraft';
 import type { SpendingInput } from '../services/finance';
-import type { CategoryData, IncomeFrequency, IncomeInput, RepeatEndType, RepeatFrequency, RepeatRuleInput, Spending } from '../types';
+import type { CategoryData, IncomeFrequency, IncomeInput, PlanInput, RepeatEndType, RepeatFrequency, Spending } from '../types';
 
 /**
  * Quick entry (direction A): one keypad-first input for spending and income, shared by the
@@ -40,11 +40,15 @@ export interface QuickEntry {
   time: string;
   repeat: RepeatDraft;
   income: IncomeEntry;
+  /** The Plan tab: always save as a plan (needs a future date/time or a repeat). */
+  plan: boolean;
+  /** Commitment vs estimate; null = decide from the category. */
+  sure: boolean | null;
 }
 
 export type PreparedEntry =
   | { kind: 'spending'; input: SpendingInput }
-  | { kind: 'repeat'; input: RepeatRuleInput }
+  | { kind: 'plan'; input: PlanInput }
   | { kind: 'income'; input: IncomeInput };
 
 export const MAX_AMOUNT_DIGITS = 12;
@@ -81,6 +85,8 @@ export function createQuickEntry(categories: readonly Pick<CategoryData, 'id'>[]
     time: nowTime(now),
     repeat: defaultRepeat(date),
     income: { source: 'Salary', name: '', frequency: 'monthly', startDate: date, endDate: '' },
+    plan: false,
+    sure: null,
   };
 }
 
@@ -103,6 +109,7 @@ export function nextQuickEntry(entry: QuickEntry): QuickEntry {
     description: '',
     repeat: defaultRepeat(entry.date),
     income: { ...entry.income, name: '' },
+    sure: null,
   };
 }
 
@@ -118,8 +125,25 @@ export function entryAmount(entry: Pick<QuickEntry, 'amount'>): number {
   return Number(entry.amount || '0');
 }
 
+/** Local "now" as a comparable YYYY-MM-DDTHH:mm stamp. */
+export function nowStamp(now = new Date()): string {
+  return `${isoDate(now)}T${nowTime(now)}`;
+}
+
+const entryStamp = (entry: Pick<QuickEntry, 'date' | 'time'>) => `${entry.date}T${entry.time}`;
+
+/** Bills, rent and subscriptions default to commitments; everything else to estimates. */
+export function defaultSure(categoryName: string): boolean {
+  return /bill|rent|home|subscri|internet|phone|electric|insurance|tuition|loan|debt/i.test(categoryName);
+}
+
+/** A spending entry becomes a plan when the Plan tab is on, it repeats, or its date and time are still ahead. */
+export function isPlanEntry(entry: QuickEntry, now = new Date()): boolean {
+  return entry.mode === 'spending' && (entry.plan || entry.repeat.on || entryStamp(entry) > nowStamp(now));
+}
+
 /** Validates an entry with the same rules as the full form. A blank description becomes the category name. */
-export function prepareEntry(entry: QuickEntry, categories: readonly CategoryData[]): PreparedEntry {
+export function prepareEntry(entry: QuickEntry, categories: readonly CategoryData[], now = new Date(), asSpending = false): PreparedEntry {
   if (entry.mode === 'income') {
     return {
       kind: 'income',
@@ -143,19 +167,32 @@ export function prepareEntry(entry: QuickEntry, categories: readonly CategoryDat
     repeatCount: entry.repeat.count,
     repeatEndDate: entry.repeat.endDate,
   };
-  if (entry.repeat.on) {
-    if (entry.repeat.frequency === 'weekly' && entry.repeat.daysOfWeek.length === 0) {
-      throw new Error('Pick at least one day for a weekly repeat.');
-    }
-    return { kind: 'repeat', input: validateRepeatDraft(draft, categories) };
+  const input = validateExpenseDraft({ ...draft, isRepeat: false }, categories);
+  // Editing an existing spending never turns it into a plan, even when it is dated ahead.
+  if (asSpending || !isPlanEntry(entry, now)) return { kind: 'spending', input };
+  if (!entry.repeat.on && entryStamp(entry) <= nowStamp(now)) {
+    throw new Error('A plan needs a future date or time, or Repeat turned on.');
   }
-  return { kind: 'spending', input: validateExpenseDraft(draft, categories) };
+  const r = entry.repeat;
+  if (r.on && r.frequency === 'weekly' && r.daysOfWeek.length === 0) throw new Error('Pick at least one day for a weekly repeat.');
+  if (r.on && (!Number.isInteger(r.interval) || r.interval < 1 || r.interval > 365)) throw new Error('Repeat every 1 to 365 days.');
+  const endDate = r.on && r.endType === 'until_date' && r.endDate ? r.endDate : null;
+  if (endDate && endDate < entry.date) throw new Error('The end date cannot be before the start date.');
+  return {
+    kind: 'plan',
+    input: {
+      amount: input.amount, description: input.description, category: input.category, time: input.time, startDate: input.date,
+      frequency: r.on ? r.frequency : 'once', interval: r.on && r.frequency === 'daily' ? r.interval : 1,
+      daysOfWeek: r.on && r.frequency === 'weekly' ? [...r.daysOfWeek].sort((a, b) => a - b) : [],
+      endDate, sure: entry.sure ?? defaultSure(categoryName),
+    },
+  };
 }
 
-export function prepareEntries(entries: readonly QuickEntry[], categories: readonly CategoryData[]): PreparedEntry[] {
+export function prepareEntries(entries: readonly QuickEntry[], categories: readonly CategoryData[], now = new Date()): PreparedEntry[] {
   return entries.map((entry, index) => {
     try {
-      return prepareEntry(entry, categories);
+      return prepareEntry(entry, categories, now);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(entries.length > 1 ? `Entry ${index + 1}: ${message}` : message);
@@ -165,7 +202,7 @@ export function prepareEntries(entries: readonly QuickEntry[], categories: reado
 
 export interface EntrySavers {
   spending: (input: SpendingInput) => Promise<unknown>;
-  repeat: (input: RepeatRuleInput) => Promise<unknown>;
+  plan: (input: PlanInput) => Promise<unknown>;
   income: (input: IncomeInput) => Promise<unknown>;
 }
 
@@ -179,7 +216,7 @@ export async function saveEntries<T extends { prepared: PreparedEntry }>(
     try {
       const { prepared } = item;
       if (prepared.kind === 'income') await savers.income(prepared.input);
-      else if (prepared.kind === 'repeat') await savers.repeat(prepared.input);
+      else if (prepared.kind === 'plan') await savers.plan(prepared.input);
       else await savers.spending(prepared.input);
     } catch (error) {
       return { saved, remaining: items.slice(index), error };
@@ -207,7 +244,6 @@ export function repeatSummary(repeat: RepeatDraft, today = new Date()): string {
     : repeat.frequency === 'weekly'
       ? `Weekly · ${WEEKDAY_ORDER.filter(day => repeat.daysOfWeek.includes(day)).map(day => WEEKDAY_SHORT[day]).join(', ') || 'pick days'}`
       : 'Monthly';
-  if (repeat.endType === 'occurrences') text += ` · ${repeat.count}×`;
   if (repeat.endType === 'until_date' && repeat.endDate) text += ` · until ${dayLabel(repeat.endDate, today)}`;
   return text;
 }

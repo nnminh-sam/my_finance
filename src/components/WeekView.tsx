@@ -31,7 +31,7 @@ interface WeekViewProps {
 
 export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, onNavigateDate }) => {
   const { settings } = useSettings();
-  const { spendings, incomes } = useFinance();
+  const { spendings, incomes, projectedBetween } = useFinance();
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const mobileDayCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -67,6 +67,8 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
   const days = eachDayOfInterval({ start: startDate, end: endDate });
 
   const totalWeekSpending = days.reduce((sum, day) => sum + getTotalForDate(day, spendings), 0);
+  const weekPlanned = projectedBetween(format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'));
+  const weekPlannedTotal = weekPlanned.reduce((sum, item) => sum + item.amount, 0);
   const weekRangeLabel = `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d')}`;
 
   return (
@@ -123,6 +125,11 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
           <span className="week-mobile-stat">
             Income: <strong className="week-mobile-stat-income">+{formatCompactSpending(totalIncome)}</strong>
           </span>
+          {weekPlannedTotal > 0 && (
+            <span className="week-mobile-stat">
+              Planned: <strong className="week-mobile-stat-planned">~{formatCompactSpending(weekPlannedTotal)}</strong>
+            </span>
+          )}
         </div>
       </div>
 
@@ -131,6 +138,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
         {days.map((day) => {
           const dayKey = format(day, 'yyyy-MM-dd');
           const daySpendings = getSpendingsForDate(day, spendings);
+          const dayPlanned = weekPlanned.filter(item => item.date === dayKey);
           const isCurrentDay = isToday(day);
 
           return (
@@ -154,7 +162,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
               </div>
 
               <div className="week-feed-tx-col">
-                {daySpendings.length === 0 ? (
+                {daySpendings.length === 0 && dayPlanned.length === 0 ? (
                   <div className="week-feed-empty-row">
                     <span>No spending</span>
                     <span className="week-feed-empty-amount">0</span>
@@ -184,7 +192,23 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
                         </span>
                       </div>
                     );
-                  })
+                  }).concat(dayPlanned.map((p) => {
+                    const catData = settings.categories?.find((c) => c.id === p.category);
+                    const color = catData?.color ?? 'var(--primary)';
+                    return (
+                      <div key={`plan-${p.planId}`} className="week-feed-tx-row is-planned" title="Planned, not spent yet">
+                        <span
+                          className="week-feed-tx-badge"
+                          style={{ backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`, color }}
+                          aria-hidden="true"
+                        >
+                          <CategoryIcon iconName={catData?.icon ?? 'CircleDollarSign'} size={15} />
+                        </span>
+                        <span className="week-feed-tx-desc">{p.description}<span className="sr-only"> (planned)</span></span>
+                        <span className="week-feed-tx-amount">~{formatCompactSpending(p.amount)}</span>
+                      </div>
+                    );
+                  }))
                 )}
               </div>
             </div>

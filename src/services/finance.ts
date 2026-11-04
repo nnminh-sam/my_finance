@@ -1,8 +1,8 @@
 import { authenticatedFetch } from './auth';
-import type { Income, IncomeInput, RepeatRule, RepeatRuleInput, Spending, UserSettings } from '../types';
+import type { Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, RepeatRule, RepeatRuleInput, Spending, UserSettings } from '../types';
 
-export type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'>;
-export type SpendingInput = Omit<Spending, 'id'>;
+export type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'> & { timezone?: string };
+export type SpendingInput = Omit<Spending, 'id' | 'planId' | 'planDate'>;
 type Fetcher = (path: string, init?: RequestInit) => Promise<Response>;
 
 export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
@@ -92,6 +92,30 @@ export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
     },
     async syncRepeatRules(asOfDate?: string): Promise<{ spendingsCreated: number }> {
       return await request<{ spendingsCreated: number }>('/repeat-rules/sync', json('POST', { asOfDate }));
+    },
+    async getPlans(): Promise<Plan[]> {
+      return (await request<{ plans: Plan[] }>('/plans')).plans;
+    },
+    async createPlan(input: PlanInput): Promise<Plan> {
+      return (await request<{ plan: Plan }>('/plans', json('POST', input))).plan;
+    },
+    async updatePlan(id: string, input: PlanInput): Promise<Plan> {
+      return (await request<{ plan: Plan }>(`/plans/${encodeURIComponent(id)}`, json('PUT', input))).plan;
+    },
+    async splitPlan(id: string, input: PlanInput): Promise<{ ended: Plan; created: Plan }> {
+      return await request<{ ended: Plan; created: Plan }>(`/plans/${encodeURIComponent(id)}/split`, json('POST', input));
+    },
+    async deletePlan(id: string): Promise<void> {
+      await request<void>(`/plans/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+    async setPlanException(id: string, date: string, input: PlanExceptionInput): Promise<Plan> {
+      return (await request<{ plan: Plan }>(`/plans/${encodeURIComponent(id)}/exceptions/${encodeURIComponent(date)}`, json('PUT', input))).plan;
+    },
+    async completePlanOccurrence(id: string, date: string): Promise<Spending> {
+      return (await request<{ spending: Spending }>(`/plans/${encodeURIComponent(id)}/occurrences/${encodeURIComponent(date)}/done`, { method: 'POST' })).spending;
+    },
+    async deletePlanException(id: string, date: string): Promise<Plan> {
+      return (await request<{ plan: Plan }>(`/plans/${encodeURIComponent(id)}/exceptions/${encodeURIComponent(date)}`, { method: 'DELETE' })).plan;
     },
   };
 }

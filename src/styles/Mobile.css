@@ -166,3 +166,18 @@
 @media (prefers-reduced-motion: reduce) {
   .m-row, .m-wbars button, .m-toast, .m-dock.is-pulse, .m-kp-amt.is-shake, .m-alert { transition: none; animation: none; }
 }
+
+/* Planned (forecast) spendings: dashed outline bars and faded rows, never solid like real spending. */
+.m-planned-text { color: var(--primary); font-style: italic; }
+.m-fbars button.is-planned,
+.m-wbars button.is-planned { background: transparent; border: 1.5px dashed var(--primary); opacity: 0.7; }
+.m-wbars button.is-planned.is-future:not(.is-sel) { opacity: 0.55; }
+.m-planned-h { margin-top: 14px; }
+.m-row-planned { width: 100%; text-align: left; border: 0; color: inherit; font: inherit; background: repeating-linear-gradient(135deg, var(--bg-card) 0 10px, color-mix(in srgb, var(--primary) 5%, var(--bg-card)) 10px 20px); }
+.m-row-planned .m-ic { border: 1.5px dashed var(--c, var(--primary)); }
+.m-row-planned .m-rt b { font-weight: 500; color: var(--text-muted); }
+.m-row-planned .m-amt { color: var(--primary); font-style: italic; }
+.m-row-planned.is-skipped .m-rt b,
+.m-row-planned.is-skipped .m-amt { text-decoration: line-through; color: var(--text-muted); }
+.m-alert-actions.is-vertical { flex-direction: column; }
+.m-alert-actions.is-vertical button + button { border-left: 0; border-top: 1px solid var(--border-color); }

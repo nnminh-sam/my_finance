@@ -1,7 +1,12 @@
 import { authenticateRequest, HttpError } from "../auth/http";
 import type { AuthStore } from "../auth/store";
 import type { FinanceStore } from "./store";
-import { incomeInput, pagination, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
+import { incomeInput, pagination, planDate, planExceptionInput, planInput, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
+
+function planId(value: unknown): string {
+  try { return uuid(value); }
+  catch { throw new HttpError(404, "Plan not found"); }
+}
 
 function incomeId(value: unknown): string {
   try { return uuid(value); }
@@ -146,6 +151,59 @@ export async function handleFinanceRequest(
       throw new HttpError(404, "Repeat rule not found");
     }
     return new Response(null, { status: 204, headers: responseHeaders });
+  }
+
+  if (subpath === "/plans") {
+    if (method === "GET" || method === "HEAD") {
+      return jsonResponse({ plans: await store.listPlans(user.id) });
+    }
+    if (method === "POST") {
+      const plan = await store.createPlan(user.id, planInput(body));
+      if (plan === "invalid-category") throw new HttpError(400, "Category must exist in current settings");
+      return jsonResponse({ plan }, 201);
+    }
+  }
+
+  const planSplitMatch = /^\/plans\/([^/]+)\/split$/.exec(subpath);
+  if (planSplitMatch && method === "POST") {
+    const result = await store.splitPlan(user.id, planId(decodeURIComponent(planSplitMatch[1])), planInput(body));
+    if (result === "not-found") throw new HttpError(404, "Plan not found");
+    if (result === "invalid-category") throw new HttpError(400, "Category must exist in current settings");
+    if (result === "invalid-date") throw new HttpError(400, "Invalid startDate (a split must start after the plan's start date)");
+    return jsonResponse(result, 201);
+  }
+
+  const planDoneMatch = /^\/plans\/([^/]+)\/occurrences\/([^/]+)\/done$/.exec(subpath);
+  if (planDoneMatch && method === "POST") {
+    const result = await store.completePlanOccurrence(user.id, planId(decodeURIComponent(planDoneMatch[1])), planDate(decodeURIComponent(planDoneMatch[2])));
+    if (result === "not-found") throw new HttpError(404, "Plan not found");
+    if (result === "invalid-date") throw new HttpError(400, "Invalid date (must be an upcoming occurrence of this plan)");
+    return jsonResponse({ spending: result }, 201);
+  }
+
+  const planExceptionMatch = /^\/plans\/([^/]+)\/exceptions\/([^/]+)$/.exec(subpath);
+  if (planExceptionMatch && (method === "PUT" || method === "DELETE")) {
+    const id = planId(decodeURIComponent(planExceptionMatch[1]));
+    const date = planDate(decodeURIComponent(planExceptionMatch[2]));
+    const plan = method === "PUT"
+      ? await store.setPlanException(user.id, id, date, planExceptionInput(body))
+      : await store.deletePlanException(user.id, id, date);
+    if (plan === "not-found") throw new HttpError(404, "Plan not found");
+    if (plan === "invalid-date") throw new HttpError(400, "Invalid date (must be an upcoming occurrence of this plan)");
+    return jsonResponse({ plan });
+  }
+
+  const planMatch = /^\/plans\/([^/]+)$/.exec(subpath);
+  if (planMatch && (method === "PUT" || method === "DELETE")) {
+    const id = planId(decodeURIComponent(planMatch[1]));
+    if (method === "DELETE") {
+      if (!await store.deletePlan(user.id, id)) throw new HttpError(404, "Plan not found");
+      return new Response(null, { status: 204, headers: responseHeaders });
+    }
+    const plan = await store.updatePlan(user.id, id, planInput(body));
+    if (plan === "not-found") throw new HttpError(404, "Plan not found");
+    if (plan === "invalid-category") throw new HttpError(400, "Category must exist in current settings");
+    return jsonResponse({ plan });
   }
 
   throw new HttpError(404, "Not found");

@@ -5,12 +5,23 @@ import { test, type TestContext } from "node:test";
 import { createApplication } from "../src/server/application";
 import { hashToken, newToken } from "../src/server/auth/crypto";
 import type { AuthStore, User } from "../src/server/auth/store";
-import { defaultFinanceSettings, type FinanceSettings, type Income, type IncomeInput, type IncomePage, type RepeatRule, type RepeatRuleInput, type Spending, type SpendingInput } from "../src/server/finance/model";
+import { defaultFinanceSettings, type FinanceSettings, type Income, type Plan, type IncomeInput, type IncomePage, type RepeatRule, type RepeatRuleInput, type Spending, type SpendingInput } from "../src/server/finance/model";
 import { formatDateUtc, generateOccurrences, isRuleDueForSync } from "../src/server/finance/recurrence";
 import type { FinanceStore } from "../src/server/finance/store";
 import { incomeInput as validateIncome } from "../src/server/finance/validation";
+import { MemoryPlans } from "./support/memoryPlans";
 
 class MemoryFinanceStore implements FinanceStore {
+  planStore = new MemoryPlans(this);
+  listPlans = this.planStore.listPlans.bind(this.planStore);
+  createPlan = this.planStore.createPlan.bind(this.planStore);
+  updatePlan = this.planStore.updatePlan.bind(this.planStore);
+  splitPlan = this.planStore.splitPlan.bind(this.planStore);
+  deletePlan = this.planStore.deletePlan.bind(this.planStore);
+  setPlanException = this.planStore.setPlanException.bind(this.planStore);
+  deletePlanException = this.planStore.deletePlanException.bind(this.planStore);
+  materializePlans = this.planStore.materializePlans.bind(this.planStore);
+  completePlanOccurrence = this.planStore.completePlanOccurrence.bind(this.planStore);
   settings = new Map<string, FinanceSettings>();
   spendings = new Map<string, Map<string, Spending>>();
   incomes = new Map<string, Map<string, Income>>();
@@ -42,6 +53,7 @@ class MemoryFinanceStore implements FinanceStore {
   async listSpendings(userId: string, limit: number, cursor?: string, startDate?: string, endDate?: string) {
     this.check();
     await this.syncRepeatSpendings(userId);
+    await this.materializePlans(userId);
     const rows = [...this.rows(userId).values()]
       .filter(row => (!cursor || row.id > cursor) && (!startDate || row.date >= startDate) && (!endDate || row.date <= endDate))
       .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -59,8 +71,10 @@ class MemoryFinanceStore implements FinanceStore {
     this.check();
     if (!this.rows(userId).has(id)) return "not-found" as const;
     if (!(await this.getSettings(userId)).categories.some(category => category.id === input.category)) return "invalid-category" as const;
+    const { planId, planDate } = this.rows(userId).get(id)!;
     const spending: Spending = { id, ...input };
     if (!input.repeatRuleId) delete spending.repeatRuleId;
+    if (planId) Object.assign(spending, { planId, planDate });
     this.rows(userId).set(id, spending);
     return structuredClone(spending);
   }
@@ -208,7 +222,7 @@ async function fixture(t: TestContext) {
 async function settings(response: Response): Promise<FinanceSettings> {
   assert.equal(response.status, 200);
   const settings = (await response.json() as { settings: FinanceSettings }).settings;
-  assert.deepEqual(Object.keys(settings).sort(), ["avatar", "categories"]);
+  assert.deepEqual(Object.keys(settings).sort(), ["avatar", "categories", "timezone"]);
   return settings;
 }
 async function created(response: Response): Promise<Spending> {
@@ -633,4 +647,130 @@ test("repeat rule strict validation rejects invalid inputs and capped at 100", a
   assert.equal((await request("/repeat-rules", "POST", { ...repeatInput, endType: "until_date", endDate: "2026-10-10" })).status, 400);
   // Category not in settings
   assert.equal((await request("/repeat-rules", "POST", { ...repeatInput, category: "NonExistent" })).status, 400);
+});
+
+const lunchPlan = {
+  amount: 35000, description: "Lunch", category: "Food", time: "12:30",
+  startDate: "2026-11-02", frequency: "weekdays", interval: 1, daysOfWeek: [], endDate: null,
+};
+
+test("plans project the future and only become real spendings once their local time passes", async t => {
+  const { request, store } = await fixture(t);
+  // 05:00 UTC = 12:00 in the default Asia/Ho_Chi_Minh time zone, Wednesday 2026-11-04.
+  store.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+
+  const createdRes = await request("/plans", "POST", lunchPlan);
+  assert.equal(createdRes.status, 201);
+  const plan = (await createdRes.json() as { plan: Plan }).plan;
+  assert.equal(plan.materializedThrough, "2026-11-04T12:00");
+  assert.deepEqual(plan.exceptions, []);
+  // Monday's and Tuesday's lunches are in the past: a new plan never back-fills them.
+  const noneYet = await (await request("/spendings")).json() as { spendings: Spending[] };
+  assert.equal(noneYet.spendings.length, 0);
+
+  // Skip Thursday, change Friday; weekends and already-real dates are rejected.
+  const skip = await request(`/plans/${plan.id}/exceptions/2026-11-05`, "PUT", { kind: "skip" });
+  assert.equal(skip.status, 200);
+  const override = await request(`/plans/${plan.id}/exceptions/2026-11-06`, "PUT", { kind: "override", amount: 50000, description: "Team lunch" });
+  assert.deepEqual((await override.json() as { plan: Plan }).plan.exceptions, [
+    { date: "2026-11-05", kind: "skip", amount: null, description: null },
+    { date: "2026-11-06", kind: "override", amount: 50000, description: "Team lunch" },
+  ]);
+  assert.equal((await request(`/plans/${plan.id}/exceptions/2026-11-07`, "PUT", { kind: "skip" })).status, 400);
+  assert.equal((await request(`/plans/${plan.id}/exceptions/2026-11-03`, "PUT", { kind: "skip" })).status, 400);
+  assert.equal((await request(`/plans/${plan.id}/exceptions/2026-11-06`, "PUT", { kind: "skip", amount: 1 })).status, 400);
+
+  // Next Monday 13:00 local: Wed, (skipped Thu), Fri override and Mon have passed.
+  store.planStore.now = () => new Date("2026-11-09T06:00:00Z");
+  const real = (await (await request("/spendings")).json() as { spendings: Spending[] }).spendings
+    .sort((a, b) => a.date.localeCompare(b.date));
+  assert.deepEqual(real.map(row => [row.date, row.time, row.amount, row.description, row.planId, row.planDate]), [
+    ["2026-11-04", "12:30", 35000, "Lunch", plan.id, "2026-11-04"],
+    ["2026-11-06", "12:30", 50000, "Team lunch", plan.id, "2026-11-06"],
+    ["2026-11-09", "12:30", 35000, "Lunch", plan.id, "2026-11-09"],
+  ]);
+  // Reading again never duplicates, and a deleted occurrence ("didn't happen") is not recreated.
+  assert.equal((await request(`/spendings/${real[1].id}`, "DELETE")).status, 204);
+  const again = (await (await request("/spendings")).json() as { spendings: Spending[] }).spendings;
+  assert.equal(again.length, 2);
+  const listed = (await (await request("/plans")).json() as { plans: Plan[] }).plans;
+  assert.equal(listed[0].materializedThrough, "2026-11-09T13:00");
+  assert.deepEqual(listed[0].exceptions, []);
+  // Editing a materialized spending keeps its link to the plan.
+  const edited = await request(`/spendings/${real[0].id}`, "PUT", { amount: 42000, description: "Lunch", category: "Food", date: "2026-11-04", time: "12:30" });
+  assert.equal((await edited.json() as { spending: Spending }).spending.planId, plan.id);
+
+  // Another user sees none of it.
+  assert.deepEqual((await (await request("/plans", "GET", undefined, 1)).json() as { plans: Plan[] }).plans, []);
+  assert.equal((await request(`/plans/${plan.id}`, "DELETE", undefined, 1)).status, 404);
+});
+
+test("plans support edit, split (this and future), delete, and strict validation", async t => {
+  const { request, store } = await fixture(t);
+  store.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+  const plan = (await (await request("/plans", "POST", lunchPlan)).json() as { plan: Plan }).plan;
+
+  const updated = await request(`/plans/${plan.id}`, "PUT", { ...lunchPlan, amount: 38000 });
+  assert.equal((await updated.json() as { plan: Plan }).plan.amount, 38000);
+  assert.equal((await request(`/plans/${plan.id}/exceptions/2026-11-20`, "PUT", { kind: "skip" })).status, 200);
+
+  const splitRes = await request(`/plans/${plan.id}/split`, "POST", { ...lunchPlan, amount: 40000, startDate: "2026-11-16" });
+  assert.equal(splitRes.status, 201);
+  const split = await splitRes.json() as { ended: Plan; created: Plan };
+  assert.equal(split.ended.endDate, "2026-11-15");
+  assert.equal(split.created.startDate, "2026-11-16");
+  assert.equal(split.created.amount, 40000);
+  assert.deepEqual(split.created.exceptions.map(item => item.date), ["2026-11-20"]);
+  assert.deepEqual(split.ended.exceptions, []);
+  assert.equal((await request(`/plans/${plan.id}/split`, "POST", { ...lunchPlan, startDate: "2026-11-01" })).status, 400);
+
+  assert.equal((await request(`/plans/${plan.id}`, "DELETE")).status, 204);
+  assert.equal((await request(`/plans/${plan.id}`, "DELETE")).status, 404);
+  assert.equal((await request(`/plans/${plan.id}`, "PUT", lunchPlan)).status, 404);
+  assert.equal((await request("/plans/not-a-uuid", "DELETE")).status, 404);
+
+  for (const bad of [
+    { ...lunchPlan, frequency: "yearly" },
+    { ...lunchPlan, amount: 0 },
+    { ...lunchPlan, time: "25:00" },
+    { ...lunchPlan, frequency: "once", endDate: "2026-12-01" },
+    { ...lunchPlan, endDate: "2026-11-01" },
+    { ...lunchPlan, interval: 0 },
+    { ...lunchPlan, daysOfWeek: [7] },
+    { ...lunchPlan, extra: true },
+  ]) assert.equal((await request("/plans", "POST", bad)).status, 400, JSON.stringify(bad));
+  assert.equal((await request("/plans", "POST", { ...lunchPlan, category: "Nope" })).status, 400);
+});
+
+test("settings time zone is validated and drives plan materialization", async t => {
+  const { request, store } = await fixture(t);
+  assert.equal((await request("/settings", "PUT", { timezone: "Mars/Base" })).status, 400);
+  const saved = await request("/settings", "PUT", { timezone: "UTC" });
+  assert.equal((await saved.json() as { settings: FinanceSettings }).settings.timezone, "UTC");
+  store.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+  const plan = (await (await request("/plans", "POST", lunchPlan)).json() as { plan: Plan }).plan;
+  assert.equal(plan.materializedThrough, "2026-11-04T05:00");
+});
+
+test("plans can be commitments and an upcoming occurrence can be recorded as done now", async t => {
+  const { request, store } = await fixture(t);
+  store.planStore.now = () => new Date("2026-11-04T05:00:00Z"); // Wed 12:00 local
+  const rent = (await (await request("/plans", "POST", { ...lunchPlan, description: "Rent", amount: 4000000, frequency: "monthly", startDate: "2026-11-05", time: "08:00", sure: true })).json() as { plan: Plan }).plan;
+  assert.equal(rent.sure, true);
+  assert.equal((await request("/plans", "POST", { ...lunchPlan, sure: "yes" })).status, 400);
+  const lunch = (await (await request("/plans", "POST", lunchPlan)).json() as { plan: Plan }).plan;
+  assert.equal(lunch.sure, false);
+
+  // Paying Friday's lunch early lands on "now" but stays linked to Friday's occurrence.
+  const done = await request(`/plans/${lunch.id}/occurrences/2026-11-06/done`, "POST");
+  assert.equal(done.status, 201);
+  const spending = (await done.json() as { spending: Spending }).spending;
+  assert.deepEqual([spending.date, spending.time, spending.planId, spending.planDate, spending.amount], ["2026-11-04", "12:00", lunch.id, "2026-11-06", 35000]);
+  // It can't be done twice, and later materialization doesn't add it again.
+  assert.equal((await request(`/plans/${lunch.id}/occurrences/2026-11-06/done`, "POST")).status, 400);
+  assert.equal((await request(`/plans/${lunch.id}/occurrences/2026-11-07/done`, "POST")).status, 400);
+  store.planStore.now = () => new Date("2026-11-06T06:00:00Z");
+  const rows = (await (await request("/spendings")).json() as { spendings: Spending[] }).spendings.filter(row => row.planId === lunch.id);
+  assert.deepEqual(rows.map(row => row.planDate).sort(), ["2026-11-04", "2026-11-05", "2026-11-06"]);
+  assert.equal((await request(`/plans/${randomUUID()}/occurrences/2026-11-06/done`, "POST")).status, 404);
 });

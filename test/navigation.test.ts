@@ -10,6 +10,7 @@ const financePaths: Record<FinancePage, string> = {
   week: '/week',
   day: '/day',
   analytics: '/analytics',
+  plans: '/plans',
   profile: '/profile',
 };
 
@@ -18,7 +19,7 @@ test('finance links use separate documents and local dates, except profile', () 
   const timestamp = date.getTime();
   for (const page of Object.keys(financePaths) as FinancePage[]) {
     assert.equal(pageHref(page), financePaths[page]);
-    assert.equal(pageHref(page, date), `${financePaths[page]}${page === 'profile' ? '' : '?date=2024-02-29'}`);
+    assert.equal(pageHref(page, date), `${financePaths[page]}${page === 'profile' || page === 'plans' ? '' : '?date=2024-02-29'}`);
   }
   assert.equal(date.getTime(), timestamp);
 });

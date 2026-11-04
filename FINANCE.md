@@ -18,7 +18,7 @@ npm run db:migrate
 npm run dev
 ```
 
-The migration command (`scripts/migrate.ts`) discovers checked-in `migrations/<number>_<name>.sql` files and applies them in numeric order: `001_auth.sql`, `002_finance.sql`, `003_month_income.sql`, `004_repeat_spendings.sql`, then `005_incomes.sql`. Each file runs in its own transaction. All schema files use `CREATE TABLE/INDEX IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS`, so rerunning the command safely preserves existing records. There are no destructive drops and no general migration ledger; these files are rerunnable, not a mechanism for altering an existing table definition. Future schema changes need their own ordered, rerunnable migration. The script's simple statement splitter supports these DDL files, not procedural SQL or semicolons inside literals/comments.
+The migration command (`scripts/migrate.ts`) discovers checked-in `migrations/<number>_<name>.sql` files and applies them in numeric order: `001_auth.sql`, `002_finance.sql`, `003_month_income.sql`, `004_repeat_spendings.sql`, `005_incomes.sql`, `006_api_tokens.sql`, `007_plans.sql` (planned spendings, plan exceptions, `finance_spendings.plan_id`/`plan_date` with a unique occurrence index, and `finance_settings.timezone`), then `008_plan_commitments.sql` (`finance_plans.sure`, and the one-time conversion of repeat rules into plans described under **Planned spendings**). Each file runs in its own transaction. All schema files use `CREATE TABLE/INDEX IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS`, so rerunning the command safely preserves existing records. There are no destructive drops and no general migration ledger; these files are rerunnable, not a mechanism for altering an existing table definition. Future schema changes need their own ordered, rerunnable migration. The script's simple statement splitter supports these DDL files, not procedural SQL or semicolons inside literals/comments.
 
 `002_finance.sql` adds:
 
@@ -98,6 +98,40 @@ Forms confirm before discarding changes, block closing while saving, keep drafts
 - **Totals**: cycle spending, top categories, and peak day across the cycle days; income for the cycle's anchor month (all income sources' payments in that `YYYY-MM`); leftover = income − cycle spending.
 - **Storage**: the configuration is saved in `localStorage` under `tracker_salary_cycle_v1_<userId>`. It is per device and browser and is not synced through Neon.
 
+## Planned spendings (forecasts)
+
+A plan forecasts a spending, such as 15,000 ₫ breakfast at 07:30 and 35,000 ₫ lunch at 12:00 every weekday, with no end. Plans differ from repeat spendings, which are commitments (bills, subscriptions) written ahead as real rows:
+
+| | Repeat spendings | Planned spendings |
+| --- | --- | --- |
+| Purpose | Costs that will happen | Forecasting and preparation |
+| Future occurrences | Real `finance_spendings` rows, written up to 14 days ahead | Never stored; computed for whatever range is shown |
+| Counted as spent | Immediately, even for future dates | Only once the occurrence's local date and time pass |
+| End | `unlimited` = keeps topping up a 100-row buffer | Truly open-ended |
+
+**Schedule** (`src/lib/plans.ts`, shared by the server and the browser): `once` (start date only), `daily` every N days, `weekdays` (Mon–Fri), `weekly` every N weeks on chosen weekdays (default: the start date's weekday, weeks anchored to the start week), `monthly` every N months on the start date's day, moved to the last day in shorter months. Optional inclusive end date.
+
+**Becoming real (materialization):** each plan keeps a `materialized_through` watermark, a local timestamp in the user's `timezone` setting. Every `GET /spendings`, `GET /plans` and MCP read turns each occurrence with `watermark < date+time ≤ now` into a normal spending (`plan_id`, `plan_date` set), then advances the watermark. This runs in one transaction. Three guards keep it exactly-once: the watermark check inside the `INSERT` stops a stale request from recreating an occurrence the user deleted, the unique `(plan_id, plan_date)` index absorbs concurrent requests, and `ON CONFLICT DO NOTHING` does the rest. A new plan's watermark starts at the user's local "now", so creating a plan never back-fills past dates. After a long absence, every missed occurrence is created on the next read.
+
+**Changing one day:** skip an upcoming occurrence, or override its amount (and optionally its description). These are `finance_plan_exceptions` rows, applied when projecting and materializing, and removed once their day has passed. Only an upcoming date of that plan's schedule can be changed.
+
+**Changing the plan:** editing applies to every upcoming occurrence. Past ones are already real and never change. Editing "from a date" (`POST /plans/:id/split`) ends the plan the day before and starts a new plan from that date, moving that date's and later exceptions along. Deleting a plan removes its projection only. Its past spendings stay, unlinked (`ON DELETE SET NULL`).
+
+**Time zone:** `finance_settings.timezone` (IANA, default `Asia/Ho_Chi_Minh`). The browser sends its device zone on load when it differs.
+
+**Commitments and estimates:** every plan is either **sure** (`sure: true`, a commitment with a fixed amount and date such as rent, bills and subscriptions) or an **estimate** (food, coffee, fuel, one-offs). Both work the same way; commitments are drawn with a solid outline, estimates dashed and prefixed with `~`. New quick-entry plans default to sure for categories named like bills, rent, home, subscriptions, internet, phone, electricity, insurance, tuition, loans or debt.
+
+**Done now:** `POST /plans/:id/occurrences/:date/done` records an upcoming occurrence as a real spending immediately (paid early, or logged by hand). A past occurrence keeps its own date and time; a future one is recorded at the user's local "now". It stays linked by `plan_id`/`plan_date`, so later materialization skips it (unique index) and it is never counted twice.
+
+**Repeat spendings became plans (`008_plan_commitments.sql`):** each existing repeat rule is copied into `finance_plans` with the same id, schedule and `sure = true` (an `occurrences` rule ends on its last generated date, an `until_date` rule on its end date). Its spendings dated after the user's local now, which were written ahead, are deleted because they are now projections; earlier ones are linked to the plan (`plan_id`, `plan_date`). The rule is stamped `migrated_at`, and migrated rules are no longer listed or synced. The migration is rerunnable. The repeat-rule HTTP routes remain for compatibility, but the app and MCP no longer use them; MCP's repeat tools were removed in favour of the plan tools.
+
+**Where plans show:**
+- **Add transaction** (header + / phone Add): a **Spending · Income · Plan** toggle. A spending becomes a plan when **Plan** is selected, **Repeat** is on, or its date and time are still ahead; otherwise it is recorded as real. The **Repeat** box offers Weekdays, Weekly, Monthly or Every N days with an optional end date, a **How sure is it? Sure / Estimate** choice, and a status line saying whether the entry is recorded now or planned and when it becomes real. Choosing **Plan** on a time that has passed moves the entry to tomorrow 12:00. Editing an existing spending never turns it into a plan.
+- **`/plans`** (navigation; phone Month → Plans): this month's income, spent so far, still planned and projected left over; spending plans grouped into **Commitments** and **Estimates** (add, edit all upcoming or from a date, delete); and income sources. `/plans?edit=<id>&from=<date>` opens a plan's editor changing from that date.
+- **Plan your month** (calendar overview card, `/plans`, phone Month): a five-step guide (income, fixed costs, daily habits, one-offs, review). Income items create monthly income sources, fixed costs create sure monthly plans, habits create estimate plans (breakfast 15k and lunch 35k on weekdays are prefilled), one-offs create one-time plans on the chosen dates. Items that already exist are shown as already planned and are not created again. Presets are matched to the user's categories by name.
+- The calendar shows `~amount` in faded, dashed day cells, and the overview shows **Still planned**, **Projected spending** and **Projected left over** for the month or pay cycle. The week, day and phone Month/Week views show planned rows and faded bars. The day view offers **Done**, **Change**, **Usual**, **Skip** and **Series** (opens the plan from that date); the phone Week sheet offers the same. A planned item is hidden once its real spending is loaded, so it never shows twice. After a reload that moves a watermark, the client fetches the newly created spendings.
+- Income is still planned with income sources (counted for the whole month); turning income into plans that become real income transactions is a later phase.
+
 ## API
 
 All routes below are under `/api/v1/finance` and require:
@@ -124,6 +158,16 @@ Write requests additionally require `Origin` equal to `APP_ORIGIN` and JSON bodi
 | POST   | `/repeat-rules`                           | Full repeat rule input                                | `201 {repeatRule, spendings}`                  |
 | DELETE | `/repeat-rules/:id?deleteFuture=true`     | —                                                     | `204`, empty body                              |
 | POST   | `/repeat-rules/sync`                      | `{asOfDate?}`                                         | `200 {spendingsCreated}`                       |
+| GET    | `/plans`                                  | — (materializes passed occurrences first)             | `200 {plans}`                                  |
+| POST   | `/plans`                                  | Plan input                                            | `201 {plan}`                                   |
+| PUT    | `/plans/:id`                              | Plan input (applies to upcoming occurrences)          | `200 {plan}`                                   |
+| POST   | `/plans/:id/split`                        | Plan input; `startDate` = first day of the new plan   | `201 {ended, created}`                         |
+| POST   | `/plans/:id/occurrences/:date/done`       | — (records that occurrence as real now)               | `201 {spending}`                               |
+| DELETE | `/plans/:id`                              | —                                                     | `204`, empty body                              |
+| PUT    | `/plans/:id/exceptions/:date`             | `{kind: "skip"}` or `{kind: "override", amount, description?}` | `200 {plan}`                          |
+| DELETE | `/plans/:id/exceptions/:date`             | —                                                     | `200 {plan}`                                   |
+
+Plan input: `{amount, description, category, time: "HH:mm", startDate, frequency: once|daily|weekdays|weekly|monthly, interval?: 1–365, daysOfWeek?: [0–6], endDate?: date|null, sure?: boolean}`. A plan response adds `id`, `materializedThrough` (`YYYY-MM-DDTHH:mm` local), `createdAt` and `exceptions` (upcoming only). Spendings created from a plan carry read-only `planId` and `planDate`, and editing such a spending keeps them. Settings accept and return `timezone`. MCP adds `list_plans`, `get_spending_forecast`, `create_plan`, `update_plan` (with `effectiveFrom` to split), `delete_plan` and `update_plan_occurrence` (skip, override, restore or done); `create_plan`/`update_plan` accept `sure`. The repeat-rule tools were removed.
 
 Settings shape:
 
@@ -164,7 +208,7 @@ Validation:
 - JSON request bodies are limited to 128 KB for finance routes (auth retains its existing 16 KB limit).
 - Invalid bodies, IDs, query limits/cursors, or categories return `400`; invalid/missing bearer sessions return `401`; disallowed/missing write origins return `403`; missing or another user's spending ID returns `404`; oversized JSON returns `413`; database failures return a generic `503` without private database details.
 
-### Repeat spending rules and incremental auto-apply tracking
+### Repeat spending rules (legacy: converted to plans by `008_plan_commitments.sql`)
 
 Users can configure repeat spendings (breakfast, lunch, coffee, gas, rent, etc.) via the Add Expense modal or by selecting one of the Quick Repeat presets.
 

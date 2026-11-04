@@ -3,7 +3,7 @@ import { pages } from './pages';
 import type { FinancePage } from './pages';
 
 export function pageHref(page: FinancePage, date?: Date): string {
-  return date && page !== 'profile' ? `${pages[page].path}?date=${format(date, 'yyyy-MM-dd')}` : pages[page].path;
+  return date && page !== 'profile' && page !== 'plans' ? `${pages[page].path}?date=${format(date, 'yyyy-MM-dd')}` : pages[page].path;
 }
 
 export function readPageDate(search: string, fallback = new Date()): Date {

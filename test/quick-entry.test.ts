@@ -39,46 +39,68 @@ test('a new entry defaults to the first category, the given day, now and no repe
 });
 
 test('a plain spending uses the category name when the description is blank', () => {
-  const prepared = prepareEntry(base(), categories);
+  const prepared = prepareEntry(base(), categories, NOW);
   assert.deepEqual(prepared, {
     kind: 'spending',
     input: { amount: 45000, description: 'Breakfast & Lunch', category: 'food', date: '2026-11-04', time: '08:30' },
   });
-  assert.equal((prepareEntry(base({ description: '  Phở bò ' }), categories) as Extract<PreparedEntry, { kind: 'spending' }>).input.description, 'Phở bò');
+  assert.equal((prepareEntry(base({ description: '  Phở bò ' }), categories, NOW) as Extract<PreparedEntry, { kind: 'spending' }>).input.description, 'Phở bò');
 });
 
 test('zero amounts and unknown categories are rejected with the full form’s messages', () => {
-  assert.throws(() => prepareEntry(base({ amount: '' }), categories), /positive amount/);
-  assert.throws(() => prepareEntry(base({ category: 'nope' }), categories), /available category/);
+  assert.throws(() => prepareEntry(base({ amount: '' }), categories, NOW), /positive amount/);
+  assert.throws(() => prepareEntry(base({ category: 'nope' }), categories, NOW), /available category/);
 });
 
-test('repeat entries become repeat rules, with weekly days sorted and required', () => {
-  const weekly = base({ repeat: { on: true, frequency: 'weekly', interval: 1, daysOfWeek: [5, 1], endType: 'occurrences', count: 4, endDate: '' } });
-  const prepared = prepareEntry(weekly, categories);
-  assert.equal(prepared.kind, 'repeat');
+test('repeating entries become plans, with weekly days sorted and required', () => {
+  const weekly = base({ repeat: { on: true, frequency: 'weekly', interval: 1, daysOfWeek: [5, 1], endType: 'unlimited', count: 4, endDate: '' } });
+  const prepared = prepareEntry(weekly, categories, NOW);
+  assert.equal(prepared.kind, 'plan');
   assert.deepEqual(prepared.input, {
     amount: 45000, description: 'Breakfast & Lunch', category: 'food', startDate: '2026-11-04', time: '08:30',
-    frequency: 'weekly', interval: 1, daysOfWeek: [1, 5], endType: 'occurrences', totalOccurrences: 4, endDate: undefined,
+    frequency: 'weekly', interval: 1, daysOfWeek: [1, 5], endDate: null, sure: false,
   });
-  assert.throws(() => prepareEntry(base({ repeat: { ...weekly.repeat, daysOfWeek: [] } }), categories), /at least one day/);
+  assert.throws(() => prepareEntry(base({ repeat: { ...weekly.repeat, daysOfWeek: [] } }), categories, NOW), /at least one day/);
   assert.throws(
-    () => prepareEntry(base({ repeat: { ...weekly.repeat, frequency: 'daily', endType: 'until_date', endDate: '2026-11-01' } }), categories),
-    /earlier than start/,
+    () => prepareEntry(base({ repeat: { ...weekly.repeat, frequency: 'daily', endType: 'until_date', endDate: '2026-11-01' } }), categories, NOW),
+    /before the start date/,
   );
+});
+
+test('a future date or the Plan tab makes a one-time plan; the past stays a real spending', () => {
+  const tomorrow = prepareEntry(base({ date: '2026-11-05', time: '12:00' }), categories, NOW);
+  assert.equal(tomorrow.kind, 'plan');
+  assert.equal((tomorrow as Extract<PreparedEntry, { kind: 'plan' }>).input.frequency, 'once');
+  // Later today is still ahead of 08:30.
+  assert.equal(prepareEntry(base({ time: '12:00' }), categories, NOW).kind, 'plan');
+  assert.equal(prepareEntry(base({ time: '08:00' }), categories, NOW).kind, 'spending');
+  // The Plan tab on a past time asks for a future date or a repeat.
+  assert.throws(() => prepareEntry(base({ plan: true, time: '08:00' }), categories, NOW), /future date or time/);
+  // Editing a spending dated ahead keeps it a spending.
+  assert.equal(prepareEntry(base({ date: '2026-11-05' }), categories, NOW, true).kind, 'spending');
+});
+
+test('bills, rent and subscriptions default to commitments; an explicit choice wins', () => {
+  const cats = [...categories, { id: 'bills', name: 'Bills', color: '#22c55e', icon: 'Receipt' }];
+  const plan = (overrides: Partial<QuickEntry>) => (prepareEntry(base({ date: '2026-11-05', ...overrides }), cats, NOW) as Extract<PreparedEntry, { kind: 'plan' }>).input.sure;
+  assert.equal(plan({ category: 'bills' }), true);
+  assert.equal(plan({ category: 'food' }), false);
+  assert.equal(plan({ category: 'food', sure: true }), true);
+  assert.equal(plan({ category: 'bills', sure: false }), false);
 });
 
 test('income entries validate source, frequency and dates; one-time income has no end date', () => {
   const income = base({ mode: 'income', amount: '25000000', income: { source: 'Salary', name: 'Rikkei', frequency: 'once', startDate: '2026-11-10', endDate: '2026-12-01' } });
-  assert.deepEqual(prepareEntry(income, categories), {
+  assert.deepEqual(prepareEntry(income, categories, NOW), {
     kind: 'income',
     input: { source: 'Salary', name: 'Rikkei', amount: 25000000, frequency: 'once', startDate: '2026-11-10', endDate: null },
   });
-  assert.throws(() => prepareEntry({ ...income, income: { ...income.income, frequency: 'monthly', endDate: '2026-11-01' } }, categories), /before the start date/);
+  assert.throws(() => prepareEntry({ ...income, income: { ...income.income, frequency: 'monthly', endDate: '2026-11-01' } }, categories, NOW), /before the start date/);
 });
 
 test('batch errors name the failing entry; a single entry keeps the plain message', () => {
-  assert.throws(() => prepareEntries([base(), base({ amount: '' })], categories), /^Error: Entry 2: Enter a positive amount/);
-  assert.throws(() => prepareEntries([base({ amount: '' })], categories), /^Error: Enter a positive amount/);
+  assert.throws(() => prepareEntries([base(), base({ amount: '' })], categories, NOW), /^Error: Entry 2: Enter a positive amount/);
+  assert.throws(() => prepareEntries([base({ amount: '' })], categories, NOW), /^Error: Enter a positive amount/);
 });
 
 test('saving stops at the first failure and returns the rest so a retry never duplicates', async () => {
@@ -87,14 +109,14 @@ test('saving stops at the first failure and returns the rest so a retry never du
     base({ mode: 'income', amount: '100', income: { source: 'Gift', name: '', frequency: 'once', startDate: '2026-11-04', endDate: '' } }),
     base({ repeat: { on: true, frequency: 'daily', interval: 2, daysOfWeek: [3], endType: 'unlimited', count: 10, endDate: '' } }),
     base({ amount: '7' }),
-  ], categories).map((prepared, key) => ({ key, prepared }));
+  ], categories, NOW).map((prepared, key) => ({ key, prepared }));
   const calls: string[] = [];
   const result = await saveEntries(items, {
     spending: async input => { calls.push(`spending ${input.amount}`); },
     income: async input => { calls.push(`income ${input.amount}`); },
-    repeat: async () => { calls.push('repeat'); throw new Error('network'); },
+    plan: async () => { calls.push('plan'); throw new Error('network'); },
   });
-  assert.deepEqual(calls, ['spending 45000', 'income 100', 'repeat']);
+  assert.deepEqual(calls, ['spending 45000', 'income 100', 'plan']);
   assert.deepEqual(result.saved.map(item => item.key), [0, 1]);
   assert.deepEqual(result.remaining.map(item => item.key), [2, 3]);
   assert.match(String(result.error), /network/);
@@ -123,8 +145,8 @@ test('summaries read naturally for chips', () => {
   assert.equal(dayLabel('2026-11-03', NOW), 'Yesterday');
   assert.equal(dayLabel('2026-11-05', NOW), 'Tomorrow');
   assert.equal(dayLabel('2026-11-10', NOW), 'Tue 10 Nov');
-  const repeat = { on: true, frequency: 'weekly' as const, interval: 1, daysOfWeek: [0, 1], endType: 'occurrences' as const, count: 3, endDate: '' };
-  assert.equal(repeatSummary(repeat, NOW), 'Weekly · Mon, Sun · 3×');
+  const repeat = { on: true, frequency: 'weekly' as const, interval: 1, daysOfWeek: [0, 1], endType: 'unlimited' as const, count: 3, endDate: '' };
+  assert.equal(repeatSummary(repeat, NOW), 'Weekly · Mon, Sun');
   assert.equal(repeatSummary({ ...repeat, on: false }, NOW), 'Once');
   assert.equal(repeatSummary({ ...repeat, frequency: 'daily', interval: 2, endType: 'unlimited' }, NOW), 'Every 2 days');
   assert.equal(incomeSummary({ source: 'Salary', name: '', frequency: 'monthly', startDate: '2026-11-04', endDate: '' }, NOW), 'Monthly from Today');

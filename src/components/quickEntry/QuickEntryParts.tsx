@@ -5,8 +5,9 @@ import { CalendarDays, Clock, Delete, NotebookPen, Pencil, Repeat, Search, Squar
 import { useFinance } from '../../contexts/FinanceContext';
 import { CategoryIcon, categoryMeta, haptic } from '../mobile/MobileUi';
 import {
-  INCOME_FREQUENCY_SHORT, INCOME_SOURCES, WEEKDAY_ORDER, dayLabel, entryAmount, formatVnd, incomeSummary, isoDate, nowTime, repeatSummary,
+  INCOME_FREQUENCY_SHORT, INCOME_SOURCES, WEEKDAY_ORDER, dayLabel, defaultSure, entryAmount, formatVnd, incomeSummary, isPlanEntry, isoDate, nowStamp, nowTime, repeatSummary,
 } from '../../lib/quickEntry';
+import { describePlanSchedule } from '../../lib/plans';
 import type { QuickEntry } from '../../lib/quickEntry';
 import type { CategoryData, IncomeFrequency, RepeatEndType, RepeatFrequency } from '../../types';
 import type { QuickEntryController, QuickPanel, QueuedEntry } from './useQuickEntry';
@@ -21,16 +22,20 @@ const SOURCE_ICONS: Record<string, string> = {
 };
 
 export const PANEL_TITLES: Record<QuickPanel, string> = {
-  date: 'Date', time: 'Time', note: 'Description', repeat: 'Repeat', queue: 'Queued', freq: 'How often', start: 'Start date', end: 'End date', name: 'Source & name',
+  date: 'Date', time: 'Time', note: 'Description', repeat: 'Repeat & plan', queue: 'Queued', freq: 'How often', start: 'Start date', end: 'End date', name: 'Source & name',
 };
 
+const MODE_LABELS = { spending: 'Spending', income: 'Income', plan: 'Plan' } as const;
+
+/** Spending · Income · Plan. Plan is a spending that is always saved as a plan (a forecast). */
 export function ModeToggle({ qe, small }: { qe: QuickEntryController; small?: boolean }) {
   if (qe.editing) return null;
+  const current = qe.entry.mode === 'income' ? 'income' : qe.entry.plan ? 'plan' : 'spending';
   return (
     <div className={`qe-seg qe-mode${small ? ' is-small' : ''}`} role="radiogroup" aria-label="Transaction type">
-      {(['spending', 'income'] as const).map(mode => (
-        <button key={mode} type="button" role="radio" aria-checked={qe.entry.mode === mode} data-mode={mode} className={qe.entry.mode === mode ? 'is-on' : undefined} onClick={() => qe.setMode(mode)}>
-          {mode === 'spending' ? 'Spending' : 'Income'}
+      {(['spending', 'income', 'plan'] as const).map(mode => (
+        <button key={mode} type="button" role="radio" aria-checked={current === mode} data-mode={mode} className={current === mode ? 'is-on' : undefined} onClick={() => qe.setMode(mode)}>
+          {MODE_LABELS[mode]}
         </button>
       ))}
     </div>
@@ -77,7 +82,7 @@ export function Keypad({ qe, onSave, onNext, saveLabel }: { qe: QuickEntryContro
 export function saveLabelFor(qe: QuickEntryController) {
   if (qe.editing) return 'Save';
   const count = qe.queue.length + (qe.amount > 0 ? 1 : 0);
-  return qe.queue.length ? `Save ${count}` : 'Add';
+  return qe.queue.length ? `Save ${count}` : isPlanEntry(qe.entry) ? 'Add plan' : 'Add';
 }
 
 export function CategoryChips({ qe }: { qe: QuickEntryController }) {
@@ -144,7 +149,7 @@ export function DetailChips({ qe }: { qe: QuickEntryController }) {
       chip('date', CalendarDays, dayLabel(entry.date), entry.date !== today),
       chip('time', Clock, entry.time, false),
       chip('note', NotebookPen, entry.description || 'Note', Boolean(entry.description)),
-      ...(qe.editing ? [] : [chip('repeat', Repeat, repeatSummary(entry.repeat), entry.repeat.on)]),
+      ...(qe.editing ? [] : [chip('repeat', Repeat, entry.repeat.on ? repeatSummary(entry.repeat) : isPlanEntry(entry) ? 'Planned' : 'Repeat / plan', entry.repeat.on || isPlanEntry(entry))]),
     ]
     : [
       chip('freq', Repeat, INCOME_FREQUENCY_SHORT[entry.income.frequency], true),
@@ -215,16 +220,19 @@ export function NotePanel({ qe, autoFocus }: { qe: QuickEntryController; autoFoc
   );
 }
 
-const REPEAT_FREQUENCIES: [RepeatFrequency, string][] = [['daily', 'Every N days'], ['weekdays', 'Weekdays'], ['weekly', 'Weekly'], ['monthly', 'Monthly']];
-const REPEAT_ENDS: [RepeatEndType, string][] = [['unlimited', 'Never'], ['occurrences', 'After N times'], ['until_date', 'On a date']];
+const REPEAT_FREQUENCIES: [RepeatFrequency, string][] = [['weekdays', 'Weekdays'], ['weekly', 'Weekly'], ['monthly', 'Monthly'], ['daily', 'Every N days']];
+const REPEAT_ENDS: [RepeatEndType, string][] = [['unlimited', 'Never'], ['until_date', 'On a date']];
 
+/** Repeat & plan: repeating, future-dated or Plan-tab entries are saved as plans that become real when their time passes. */
 export function RepeatPanel({ qe }: { qe: QuickEntryController }) {
   const r = qe.entry.repeat;
   const day = Number(qe.entry.date.slice(8, 10));
+  const planned = isPlanEntry(qe.entry);
+  const sure = qe.entry.sure ?? defaultSure(categoryMeta(qe.categories, qe.entry.category).name);
   return (
     <div className="qe-stack">
       <button type="button" className="qe-trow" role="switch" aria-checked={r.on} onClick={() => qe.patchRepeat({ on: !r.on })}>
-        <span>Repeat this spending</span><span className={`qe-switch${r.on ? ' is-on' : ''}`} aria-hidden="true" />
+        <span>Repeat</span><span className={`qe-switch${r.on ? ' is-on' : ''}`} aria-hidden="true" />
       </button>
       {r.on && (
         <>
@@ -266,22 +274,47 @@ export function RepeatPanel({ qe }: { qe: QuickEntryController }) {
               ))}
             </div>
           </div>
-          {r.endType === 'occurrences' && (
-            <div className="qe-trow">
-              <span>Repeats (1–100)</span>
-              <span className="qe-stepper">
-                <button type="button" aria-label="Fewer repeats" onClick={() => qe.patchRepeat({ count: Math.max(1, r.count - 1) })}>−</button>
-                <b>{r.count}</b>
-                <button type="button" aria-label="More repeats" onClick={() => qe.patchRepeat({ count: Math.min(100, r.count + 1) })}>+</button>
-              </span>
-            </div>
-          )}
           {r.endType === 'until_date' && (
             <label className="qe-field"><span>Until</span><input type="date" min={qe.entry.date} value={r.endDate} onChange={e => qe.patchRepeat({ endDate: e.target.value })} /></label>
           )}
         </>
       )}
+      {planned && (
+        <div className="qe-field">
+          <span>How sure is it?</span>
+          <div className="qe-seg is-small qe-sure" role="radiogroup" aria-label="How sure is it">
+            <button type="button" role="radio" aria-checked={sure} className={sure ? 'is-on' : undefined} onClick={() => qe.patch({ sure: true })}>Sure<small>fixed: rent, bills</small></button>
+            <button type="button" role="radio" aria-checked={!sure} className={!sure ? 'is-on' : undefined} onClick={() => qe.patch({ sure: false })}>Estimate<small>about: food, coffee</small></button>
+          </div>
+        </div>
+      )}
+      <PlanStatus qe={qe} />
     </div>
+  );
+}
+
+/** One line saying whether the entry is recorded now or planned, and when a plan becomes real. */
+export function PlanStatus({ qe }: { qe: QuickEntryController }) {
+  const { entry } = qe;
+  if (entry.mode !== 'spending') return null;
+  const r = entry.repeat;
+  const ahead = `${entry.date}T${entry.time}` > nowStamp();
+  if (entry.plan && !r.on && !ahead) {
+    return <p className="qe-status is-warn" role="status">A plan needs a future date or time, or Repeat turned on. Pick <b>Tomorrow</b>, or switch to Spending to record it now.</p>;
+  }
+  if (!isPlanEntry(entry)) {
+    return <p className="qe-status" role="status">Recorded as a real expense on {dayLabel(entry.date)} at {entry.time}.</p>;
+  }
+  const meta = categoryMeta(qe.categories, entry.category);
+  const sure = entry.sure ?? defaultSure(meta.name);
+  const amount = qe.amount ? `${sure ? '' : '~'}${formatVnd(qe.amount)}` : 'It';
+  const when = r.on
+    ? `${describePlanSchedule({ startDate: entry.date, frequency: r.frequency, interval: r.interval, daysOfWeek: r.daysOfWeek, endDate: null }).toLowerCase()} at ${entry.time} from ${dayLabel(entry.date)}${r.endType === 'until_date' && r.endDate ? ` until ${dayLabel(r.endDate)}` : ', no end'}`
+    : `on ${dayLabel(entry.date)} at ${entry.time}`;
+  return (
+    <p className="qe-status is-plan" role="status">
+      <b>Planned.</b> {amount} {when}. {r.on ? 'Each one becomes' : 'It becomes'} a real expense when its time passes.
+    </p>
   );
 }
 

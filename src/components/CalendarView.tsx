@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { PlanOccurrence } from "../lib/plans";
 import {
   format,
   eachDayOfInterval,
@@ -16,6 +17,7 @@ import {
   parseISO,
 } from "date-fns";
 import {
+  Sparkles,
   Utensils,
   Car,
   Film,
@@ -44,6 +46,7 @@ import {
 } from "../lib/calendarWindow";
 import type { FetchedWeekBounds, MonthRange, WeekRenderStage } from "../lib/calendarWindow";
 import { useFinance } from "../contexts/FinanceContext";
+import { useFinanceShell } from "../contexts/FinanceShellContext";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useSettings } from "../contexts/SettingsContext";
@@ -84,7 +87,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onDateClick,
 }) => {
   const { settings } = useSettings();
-  const { spendings, incomes, fetchWeeksSpendings } = useFinance();
+  const { spendings, incomes, fetchWeeksSpendings, projectedBetween } = useFinance();
+  const { openPlanGuide } = useFinanceShell();
   const { user } = useAuth();
   const [cycleConfig, setCycleConfig] = useState<SalaryCycleConfig>(() => defaultSalaryCycleConfig());
 
@@ -354,6 +358,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     return peaks;
   }, [allDays, spendings]);
 
+  // Planned (not yet real) occurrences across every rendered day, grouped by date.
+  const plannedByDate = useMemo(() => {
+    const byDate = new Map<string, PlanOccurrence[]>();
+    if (!allDays.length) return byDate;
+    const items = projectedBetween(format(allDays[0], 'yyyy-MM-dd'), format(allDays[allDays.length - 1], 'yyyy-MM-dd'));
+    for (const item of items) byDate.set(item.date, [...(byDate.get(item.date) ?? []), item]);
+    return byDate;
+  }, [allDays, projectedBetween]);
+
   // Active month date for overview metrics
   const activeDate = useMemo(() => {
     try {
@@ -377,6 +390,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   const totalSpending = periodDays.reduce((sum, day) => sum + getTotalForDate(day, spendings), 0);
   const leftOver = totalIncome - totalSpending;
+  // Planned occurrences in this period are projected by date range, so a period
+  // outside the rendered calendar still gets its full forecast.
+  const periodPlanned = periodDays.length
+    ? projectedBetween(format(periodDays[0], 'yyyy-MM-dd'), format(periodDays[periodDays.length - 1], 'yyyy-MM-dd'))
+      .reduce((sum, item) => sum + item.amount, 0)
+    : 0;
+  const projectedSpending = totalSpending + periodPlanned;
+  const projectedLeftOver = totalIncome - projectedSpending;
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const findMonthStartElement = useCallback((container: HTMLElement, targetMonth: Date) => {
@@ -718,11 +739,35 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               {" · "}{basis === "cycle" ? `${format(cycle.startDate, "MMM d")} – ${format(cycle.endDate, "MMM d")}` : format(activeDate, "MMMM")}
             </span>
             </span>
-            <div className="calendar-basis-toggle" role="group" aria-label="Totals calculated for">
-              <button type="button" aria-pressed={basis === "month"} onClick={() => setBasis("month")}>Month</button>
-              <button type="button" aria-pressed={basis === "cycle"} onClick={() => setBasis("cycle")}>Pay cycle</button>
-            </div>
+            <span className="calendar-overview-tools">
+              <button type="button" className="calendar-plan-btn" onClick={() => openPlanGuide(format(activeDate, "yyyy-MM"))}>
+                <Sparkles size={14} aria-hidden="true" /><span className="hide-mobile">Plan your month</span><span className="show-mobile">Plan</span>
+              </button>
+              <div className="calendar-basis-toggle" role="group" aria-label="Totals calculated for">
+                <button type="button" aria-pressed={basis === "month"} onClick={() => setBasis("month")}>Month</button>
+                <button type="button" aria-pressed={basis === "cycle"} onClick={() => setBasis("cycle")}>Pay cycle</button>
+              </div>
+            </span>
           </div>
+
+          {periodPlanned > 0 && (
+            <div className="calendar-projection-row" aria-label="Projection including planned spendings">
+              <span className="calendar-projection-item">
+                <span className="calendar-projection-label">Still planned</span>
+                <b className="calendar-projection-planned">+{formatCompactSpending(periodPlanned)}</b>
+              </span>
+              <span className="calendar-projection-item">
+                <span className="calendar-projection-label">Projected spending</span>
+                <b>{formatCompactSpending(projectedSpending)}</b>
+              </span>
+              <span className="calendar-projection-item">
+                <span className="calendar-projection-label">Projected left over</span>
+                <b style={{ color: totalIncome > 0 ? (projectedLeftOver >= 0 ? "var(--primary)" : "var(--danger)") : "var(--text-muted)" }}>
+                  {totalIncome > 0 ? formatCompactSpending(projectedLeftOver) : "—"}
+                </b>
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -773,6 +818,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   : undefined;
 
                 const topSpendings = showDetails ? getTopSpendingsForDate(day, 5, spendings) : [];
+                const plannedItems = showTotals ? plannedByDate.get(dayKey) ?? [] : [];
+                const plannedTotal = plannedItems.reduce((sum, item) => sum + item.amount, 0);
 
                 return (
                   <div
@@ -824,6 +871,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           {total.toLocaleString("vi-VN")} ₫
                         </span>
                       )}
+                      {showTotals && total === 0 && plannedTotal > 0 && (
+                        <span className="calendar-day-total-desktop calendar-day-planned-total" title="Planned, not spent yet">
+                          ~{plannedTotal.toLocaleString("vi-VN")} ₫
+                        </span>
+                      )}
                     </div>
 
                     {showTotals && total > 0 && (
@@ -831,11 +883,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         {formatCompactSpending(total)}
                       </div>
                     )}
+                    {showTotals && total === 0 && plannedTotal > 0 && (
+                      <div className="calendar-day-total-mobile calendar-day-planned-total">
+                        ~{formatCompactSpending(plannedTotal)}
+                      </div>
+                    )}
 
                     {/* Stage 3: Detailed spendings fill in after the day's total */}
                     {showDetails && (
                       <div className="calendar-spending-list">
-                        {topSpendings.length === 0 && (
+                        {topSpendings.length === 0 && plannedItems.length === 0 && (
                           <span className="calendar-no-expenses">
                             No expenses
                           </span>
@@ -856,6 +913,26 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             </span>
                             <span className="calendar-spending-amount">
                               {s.amount.toLocaleString("vi-VN")} ₫
+                            </span>
+                          </div>
+                        ))}
+                        {plannedItems.slice(0, Math.max(0, 5 - topSpendings.length)).map((p, plannedIdx) => (
+                          <div
+                            key={`plan-${p.planId}`}
+                            className={cn("calendar-spending-row calendar-spending-row-planned", p.sure && "is-sure")}
+                            style={{ '--row-idx': topSpendings.length + plannedIdx } as React.CSSProperties}
+                            title={`Planned: ${p.description}`}
+                          >
+                            <span className="calendar-spending-label">
+                              <span className="calendar-spending-icon">
+                                <CategoryIcon iconName={settings.categories.find(c => c.id === p.category)?.icon || "CircleDollarSign"} size={12} />
+                              </span>
+                              <span className="calendar-spending-description">
+                                {p.description}
+                              </span>
+                            </span>
+                            <span className="calendar-spending-amount">
+                              ~{p.amount.toLocaleString("vi-VN")} ₫
                             </span>
                           </div>
                         ))}
