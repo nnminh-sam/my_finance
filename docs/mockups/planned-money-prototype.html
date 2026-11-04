@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planned money prototype</title>
+<script>
+  // The same file renders two things: the outer demo page, and (with ?app) the app itself inside an iframe.
+  // The app loads the real stylesheets from src/styles so it looks exactly like MyFinance, and the phone
+  // frame simply narrows the iframe so the app's own ≤768px breakpoints take over.
+  window.IS_APP = new URLSearchParams(location.search).has('app');
+  if (window.IS_APP) {
+    for (const f of ['globals', 'navigation', 'CalendarView', 'ExpenseForm', 'QuickEntry', 'Mobile', 'UserProfile']) {
+      document.write(`<link rel="stylesheet" href="../../src/styles/${f}.css">`);
+    }
+  }
+</script>
+<style id="outer-css">
+  .outer { margin: 0; font: 14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; background: #e9ebef; color: #0f172a; }
+  .outer.dark { background: #050506; color: #f4f4f5; }
+  .outer .wrap { max-width: 1480px; margin: 0 auto; padding: 0 20px; }
+  .outer h1 { font-size: 26px; margin: 22px 0 4px; letter-spacing: -.02em; }
+  .outer .lede { color: #64748b; margin: 0 0 10px; max-width: 1000px; }
+  .outer .bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, currentColor 0%, #e9ebef 92%); backdrop-filter: blur(8px); border-bottom: 1px solid #d4d4d8; }
+  .outer.dark .bar { background: rgba(5,5,6,.9); border-color: #27272a; }
+  .outer .bar .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding-top: 9px; padding-bottom: 9px; }
+  .outer .ctl { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #64748b; }
+  .outer .seg { display: inline-flex; background: #fff; border: 1px solid #d4d4d8; border-radius: 10px; padding: 2px; }
+  .outer.dark .seg, .outer.dark .tb, .outer.dark .clock, .outer.dark .tips { background: #18181b; border-color: #3f3f46; color: #f4f4f5; }
+  .outer .seg button { border: 0; background: none; font: inherit; padding: 4px 10px; border-radius: 8px; font-weight: 600; color: #64748b; cursor: pointer; }
+  .outer .seg button.on { background: #3b82f6; color: #fff; }
+  .outer .clock { font-weight: 700; background: #fff; border: 1px solid #d4d4d8; color: #0f172a; padding: 4px 10px; border-radius: 9px; font-variant-numeric: tabular-nums; }
+  .outer .tb { font: inherit; font-size: 12.5px; font-weight: 600; padding: 4px 9px; border-radius: 8px; border: 1px solid #d4d4d8; background: #fff; cursor: pointer; color: #0f172a; }
+  .outer .tb:hover { border-color: #3b82f6; color: #3b82f6; }
+  .outer .layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 20px; margin: 16px auto 40px; align-items: start; }
+  @media (max-width: 1250px) { .outer .layout { grid-template-columns: 1fr; } }
+  .outer .stage { display: flex; justify-content: center; }
+  .outer .desk { width: 100%; height: 880px; border-radius: 12px; overflow: hidden; border: 1px solid #d4d4d8; box-shadow: 0 18px 50px rgba(15,23,42,.18); display: flex; flex-direction: column; background: #fff; }
+  .outer .desk .chrome { height: 32px; flex: none; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #e4e4e7; }
+  .outer.dark .desk { border-color: #27272a; } .outer.dark .desk .chrome { background: #27272a; }
+  .outer .desk .chrome i { width: 10px; height: 10px; border-radius: 50%; }
+  .outer .desk .chrome span { margin-left: 10px; background: rgba(255,255,255,.7); border-radius: 7px; padding: 1px 12px; font-size: 11.5px; color: #52525b; }
+  .outer .phone { width: 410px; height: 864px; border-radius: 52px; border: 10px solid #1f2937; overflow: hidden; box-shadow: 0 18px 50px rgba(15,23,42,.25); background: #000; position: relative; }
+  .outer .phone::before { content: ""; position: absolute; top: 9px; left: 50%; transform: translateX(-50%); width: 96px; height: 26px; background: #000; border-radius: 14px; z-index: 2; }
+  .outer iframe { border: 0; width: 100%; flex: 1; display: block; height: 100%; }
+  .outer .phone iframe { padding-top: 34px; background: inherit; }
+  .outer .tips { background: #fff; border: 1px solid #d4d4d8; border-radius: 16px; padding: 14px 16px; font-size: 13px; position: sticky; top: 62px; }
+  .outer .tips h3 { margin: 0 0 6px; font-size: 15px; } .outer .tips ol { margin: 0; padding-left: 18px; } .outer .tips li { margin: 5px 0; }
+  .outer .tips p { margin: 10px 0 0; color: #64748b; font-size: 12px; }
+</style>
+<style id="app-css">
+  /* Glue for the new planning pieces. Everything else comes from src/styles. Only app tokens are used. */
+  .pp-status { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; font-size: 0.82rem; line-height: 1.4; background: color-mix(in srgb, var(--text-main) 6%, var(--bg-card)); color: var(--text-muted); }
+  .pp-status svg { flex: none; margin-top: 1px; }
+  .pp-status.is-plan { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--text-main); }
+  .pp-status.is-plan svg { color: var(--primary); }
+  .pp-status.is-warn { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--text-main); }
+  .qe-mode button.is-on[data-mode="plan"] { background: var(--primary); color: #fff; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.55); }
+  .qe-seg.pp-sure button { display: flex; flex-direction: column; align-items: center; line-height: 1.2; padding: 5px 8px; white-space: normal; }
+  .qe-seg.pp-sure button small { font-weight: 500; font-size: 0.7rem; color: var(--text-muted); }
+  .pp-plan-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-weight: 600; font-size: 0.8rem; }
+  .pp-plan-btn:hover { background: color-mix(in srgb, var(--primary) 20%, transparent); }
+  .calendar-spending-row.pp-in .calendar-spending-amount { color: var(--success); }
+  .calendar-spending-row-planned.pp-in { border-color: color-mix(in srgb, var(--success) 55%, transparent); }
+  .calendar-spending-row-planned.pp-in .calendar-spending-amount { color: var(--success); }
+  .calendar-spending-row-planned.pp-sure { border-style: solid; opacity: .85; }
+  .day-tx-row.is-planned.pp-sure .day-tx-icon-circle { border-style: solid; }
+  .day-tx-amount.is-income { color: var(--success); }
+  .day-planned-btns { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; max-width: 330px; }
+  .pp-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: color-mix(in srgb, var(--text-main) 8%, transparent); color: var(--text-muted); }
+  .pp-pill.is-sure { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); }
+  .pp-pill.is-in { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
+  .user-profile .pp-group { margin: 6px 0 -6px; display: flex; align-items: baseline; gap: 8px; font-size: 1rem; }
+  .user-profile .pp-group small { color: var(--text-muted); font-weight: 500; font-size: 0.8rem; }
+  .user-profile .pp-explain { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px; font-size: 0.82rem; color: var(--text-muted); }
+  .user-profile .pp-explain b { color: var(--text-main); }
+  .pp-steps { display: flex; gap: 4px; padding: 10px 18px 0; }
+  .pp-steps span { flex: 1; height: 4px; border-radius: 3px; background: var(--border-color); }
+  .pp-steps span.is-on { background: var(--primary); }
+  .pp-guide { padding: 14px 18px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  .pp-guide h3 { margin: 0; font-size: 1.05rem; }
+  .pp-guide > p { margin: -6px 0 0; color: var(--text-muted); font-size: 0.85rem; }
+  .pp-grow { display: grid; grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 1fr) 96px; gap: 10px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--border-color); }
+  .pp-grow.is-done { opacity: .55; }
+  .pp-grow b { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .pp-grow small { display: block; color: var(--text-muted); font-size: 0.75rem; }
+  .pp-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .pp-cal span { text-align: center; font-size: 0.75rem; color: var(--text-muted); }
+  .pp-cal button { min-height: 36px; border-radius: 9px; background: color-mix(in srgb, var(--text-main) 7%, var(--bg-card)); font-weight: 600; }
+  .pp-cal button:disabled { opacity: .3; cursor: default; }
+  .pp-cal button.is-on { background: var(--primary); color: #fff; }
+  .pp-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pp-kpis div { background: color-mix(in srgb, var(--text-main) 6%, var(--bg-card)); border-radius: 12px; padding: 10px 12px; font-size: 0.8rem; color: var(--text-muted); }
+  .pp-kpis b { display: block; font-size: 1.15rem; color: var(--text-main); font-variant-numeric: tabular-nums; }
+  .pp-spark { width: 100%; height: 72px; }
+  .pp-occ { display: flex; flex-direction: column; gap: 10px; padding: 14px 18px; }
+  .pp-occ .pp-occ-amt { font-size: 1.6rem; font-weight: 750; color: var(--primary); font-variant-numeric: tabular-nums; }
+  .pp-occ-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .pp-occ-actions .qe-btn { justify-content: center; }
+  .pp-toast { position: fixed !important; z-index: 2000; left: 50% !important; right: auto !important; bottom: 22px !important; transform: translateX(-50%) !important; max-width: min(560px, 92vw); }
+  @media (min-width: 769px) { .pp-occ-dialog { max-width: 420px; } }
+  .pp-noanim, .pp-noanim * { animation: none !important; transition: none !important; }
+  .m-plans-link { display: flex; align-items: center; gap: 10px; margin: 12px 12px 0; }
+  @media (max-width: 768px) {
+    .pp-grow { grid-template-columns: auto minmax(0, 1fr) 96px; }
+    .pp-grow > :last-child { grid-column: 2 / -1; }
+    .pp-toast { bottom: 84px !important; }
+    .day-planned-btns { max-width: none; justify-content: flex-start; width: 100%; }
+    .user-profile .pp-explain { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(() => {
+// =====================================================================================
+// OUTER DEMO PAGE
+// =====================================================================================
+if (!window.IS_APP) {
+  document.getElementById('app-css').remove();
+  document.body.className = 'outer';
+  document.getElementById('root').innerHTML = `
+    <div class="wrap"><h1>Planned money · prototype</h1>
+      <p class="lede">Built from the app's real stylesheets and components. Every future transaction is a <b>plan</b>, either money in or out, and either <b>sure</b> (rent, salary, bills) or an <b>estimate</b> (food, coffee, one-offs), and each one becomes a real transaction when its time passes. Nothing is saved; use <b>Reset</b> to start over.</p></div>
+    <div class="bar"><div class="wrap">
+      <div class="ctl">Frame <div class="seg" data-c="frame"><button data-v="desktop" class="on">Desktop</button><button data-v="phone">Phone</button></div></div>
+      <div class="ctl">Plan entry <div class="seg" data-c="entry"><button data-v="tab" class="on">Visible “Plan” tab</button><button data-v="date">Decided by the date</button></div></div>
+      <div class="ctl">Now <span class="clock" id="clock">Wed 4 Nov · 10:00</span>
+        <button class="tb" data-t="60">+1 hour</button><button class="tb" data-t="1440">+1 day</button><button class="tb" data-t="10080">+1 week</button><button class="tb" data-t="reset">Reset</button></div>
+      <div class="ctl" style="margin-left:auto">Theme <div class="seg" data-c="theme"><button data-v="light" class="on">Light</button><button data-v="dark">Dark</button></div></div>
+    </div></div>
+    <div class="wrap layout">
+      <div class="stage" id="stage"><div class="desk" id="device"><div class="chrome"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i><span>localhost:5173/calendar</span></div><iframe id="app" src="?app" title="MyFinance prototype"></iframe></div></div>
+      <aside class="tips"><h3>Things to try</h3><ol>
+        <li>Press <b>+1 day</b>: salary and rent (5 Nov), breakfast and lunch become real transactions.</li>
+        <li>Press <b>+</b> in the header. Type an amount on the keypad and pick <b>Tomorrow</b>: it becomes a plan. Keep <b>Today</b> and it's recorded as real.</li>
+        <li>Switch <b>Plan entry</b> to compare a visible <b>Plan</b> tab with “the date decides”.</li>
+        <li>Click a future day → the day page shows its <b>Planned</b> items: Done, Change, Skip, Edit series.</li>
+        <li><b>Plan your month</b> (calendar overview card) walks through income, bills, daily habits and one-offs.</li>
+        <li>Open <b>Plans</b> in the navigation: one page for income, commitments and estimates.</li>
+        <li>Switch to <b>Phone</b>: the real Month/Week screens, the dialog becomes a bottom sheet.</li>
+      </ol><p>Styles are loaded live from <code>src/styles</code>, so this mockup always matches the current app design.</p></aside>
+    </div>`;
+  const frame = document.getElementById('app');
+  const send = msg => frame.contentWindow.postMessage(msg, '*');
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.seg button'); if (b) {
+      b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      const c = b.parentElement.dataset.c, v = b.dataset.v;
+      if (c === 'frame') {
+        const dev = document.getElementById('device');
+        dev.className = v === 'phone' ? 'phone' : 'desk';
+        dev.querySelector('.chrome')?.style.setProperty('display', v === 'phone' ? 'none' : 'flex');
+      }
+      if (c === 'entry') send({ cmd: 'entry', v });
+      if (c === 'theme') { send({ cmd: 'theme', v }); document.body.classList.toggle('dark', v === 'dark'); }
+      return;
+    }
+    const t = e.target.closest('[data-t]'); if (t) send(t.dataset.t === 'reset' ? { cmd: 'reset' } : { cmd: 'time', min: +t.dataset.t });
+  });
+  window.addEventListener('message', e => { if (e.data?.cmd === 'clock') document.getElementById('clock').textContent = e.data.text; });
+  return;
+}
+
+// =====================================================================================
+// APP (inside the iframe)
+// =====================================================================================
+document.getElementById('outer-css').remove();
+document.body.classList.add('light-mode');
+
+// ---------- lucide icons (same set the app imports) ----------
+const IP = {
+  plus: 'M5 12h14M12 5v14', left: 'm15 18-6-6 6-6', right: 'm9 18 6-6-6-6', x: 'M18 6 6 18M6 6l12 12',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  list: 'M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13', chart: 'M3 3v16a2 2 0 0 0 2 2h16M18 17V9M13 17V5M8 17v-3',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
+  range: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M3 10h18M8 2v4M17 14h-6M13 18H7M7 14h.01M17 18h.01"/>',
+  refresh: 'M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M8 16H3v5',
+  moon: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z', sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-14.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  del: 'M10 5a2 2 0 0 0-1.344.519l-6.328 5.74a1 1 0 0 0 0 1.481l6.328 5.741A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zM12 9l6 6M18 9l-6 6',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  Utensils: 'M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7',
+  Car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2M9 17h6"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+  Film: '<rect x="2" y="2" width="20" height="20" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/>',
+  ShoppingBag: 'M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4ZM3 6h18M16 10a4 4 0 0 1-8 0',
+  Receipt: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1ZM16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11',
+  CircleDollarSign: '<circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 18V6"/>',
+  Coffee: 'M10 2v2M14 2v2M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1M6 2v2',
+  Home: 'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  Heart: 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z',
+  Briefcase: '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect x="2" y="6" width="20" height="14" rx="2"/>',
+  Gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>',
+  pencil: 'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z',
+  skip: 'M5 4l10 8-10 8zM19 5v14', undo: 'M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11',
+  trash: 'M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2', check: 'M20 6 9 17l-5-5',
+  sparkles: 'M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z',
+  down: 'M12 5v14M19 12l-7 7-7-7', up: 'M12 19V5M5 12l7-7 7 7', settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+};
+const ic = (n, s = 16) => { const p = IP[n] || IP.CircleDollarSign; return `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p.startsWith('<') ? p : `<path d="${p}"/>`}</svg>`; };
+
+// ---------- helpers ----------
+const DAY = 86400000;
+const dn = s => Math.floor(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / DAY);
+const ds = n => new Date(n * DAY).toISOString().slice(0, 10);
+const addDays = (s, n) => ds(dn(s) + n);
+const dow = s => new Date(dn(s) * DAY).getUTCDay();
+const dim = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WDL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const nice = s => `${WD[dow(s)]} ${+s.slice(8)} ${MON[+s.slice(5, 7) - 1]}`;
+const vnd = n => `${Math.round(n).toLocaleString('vi-VN')} ₫`;
+const k = n => { const a = Math.abs(n); const v = a >= 1e6 ? (Math.round(a / 1e5) / 10).toString().replace('.', ',') + 'M' : a >= 1000 ? Math.round(a / 1000) + 'k' : String(a); return (n < 0 ? '−' : '') + v; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const ord = n => n + (n % 10 > 3 || [11, 12, 13].includes(n % 100) || n % 10 === 0 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10]);
+const addMinutes = (stamp, m) => new Date(new Date(stamp + ':00Z').getTime() + m * 60000).toISOString().slice(0, 16);
+let uid = 100; const nid = () => 'x' + (uid++);
+const time12 = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; };
+
+const CATS = [
+  { id: 'meal', name: 'Breakfast & Lunch', color: '#eab308', icon: 'Utensils' }, { id: 'gas', name: 'Gas', color: '#3b82f6', icon: 'Car' },
+  { id: 'sub', name: 'Subscription', color: '#8b5cf6', icon: 'Film' }, { id: 'shopping', name: 'Shopping', color: '#f59e0b', icon: 'ShoppingBag' },
+  { id: 'bills', name: 'Bills', color: '#22c55e', icon: 'Receipt' }, { id: 'home', name: 'Rent & Home', color: '#f97316', icon: 'Home' },
+  { id: 'eatout', name: 'Eat out', color: '#ef4444', icon: 'CircleDollarSign' }, { id: 'coffee', name: 'Coffee', color: '#a16207', icon: 'Coffee' },
+  { id: 'parents', name: 'For parents', color: '#ec4899', icon: 'Heart' }, { id: 'gift', name: 'Gifts', color: '#db2777', icon: 'Gift' },
+  { id: 'other', name: 'Other', color: '#6b7280', icon: 'CircleDollarSign' },
+];
+const SOURCES = [
+  { id: 'Salary', color: '#10b981', icon: 'Briefcase' }, { id: 'Freelance', color: '#3b82f6', icon: 'Coffee' }, { id: 'Bonus', color: '#f59e0b', icon: 'Gift' },
+  { id: 'Allowance', color: '#8b5cf6', icon: 'Heart' }, { id: 'Gift', color: '#ec4899', icon: 'Gift' }, { id: 'Investment', color: '#06b6d4', icon: 'CircleDollarSign' }, { id: 'Other', color: '#71717a', icon: 'CircleDollarSign' },
+];
+const meta = (kind, cat) => kind === 'in' ? (SOURCES.find(s => s.id === cat) ? { ...SOURCES.find(s => s.id === cat), name: cat } : { name: cat, color: '#10b981', icon: 'CircleDollarSign' })
+  : (CATS.find(c => c.id === cat) || { name: cat, color: '#64748b', icon: 'CircleDollarSign' });
+
+// ---------- state ----------
+const START_NOW = '2026-11-04T10:00';
+function seed() {
+  const mt = START_NOW;
+  const P = (o) => ({ interval: 1, days: [], end: null, ex: {}, mt, ...o });
+  const plans = [
+    P({ id: 'salary', kind: 'in', sure: true, name: 'Salary', amount: 12000000, cat: 'Salary', time: '09:00', start: '2026-10-05', freq: 'monthly' }),
+    P({ id: 'rent', kind: 'out', sure: true, name: 'Rent', amount: 4000000, cat: 'home', time: '08:00', start: '2026-10-05', freq: 'monthly' }),
+    P({ id: 'netflix', kind: 'out', sure: true, name: 'Netflix', amount: 260000, cat: 'sub', time: '08:00', start: '2026-10-15', freq: 'monthly' }),
+    P({ id: 'breakfast', kind: 'out', sure: false, name: 'Breakfast', amount: 15000, cat: 'meal', time: '07:30', start: '2026-11-02', freq: 'weekdays' }),
+    P({ id: 'lunch', kind: 'out', sure: false, name: 'Lunch', amount: 35000, cat: 'meal', time: '12:00', start: '2026-11-02', freq: 'weekdays', ex: { '2026-11-06': { amount: 50000, name: 'Team lunch' } } }),
+    P({ id: 'wedding', kind: 'out', sure: false, name: 'Wedding gift', amount: 500000, cat: 'gift', time: '18:00', start: '2026-11-21', freq: 'once' }),
+    P({ id: 'freelance', kind: 'in', sure: false, name: 'Freelance logo', amount: 3000000, cat: 'Freelance', time: '10:00', start: '2026-11-20', freq: 'once' }),
+  ];
+  const T = (kind, name, amount, cat, date, time, planId) => ({ id: nid(), kind, name, amount, cat, date, time, planId: planId || null, planDate: planId ? date : null });
+  const txs = [
+    T('out', 'Taxi về trọ', 110000, 'gas', '2026-10-26', '22:10'), T('out', 'Mua gạo', 85000, 'shopping', '2026-10-27', '18:00'),
+    T('out', 'Siêu thị', 281000, 'shopping', '2026-10-31', '17:20'),
+    T('out', 'Breakfast', 15000, 'meal', '2026-11-02', '07:30', 'breakfast'), T('out', 'Lunch', 40000, 'meal', '2026-11-02', '12:00', 'lunch'),
+    T('out', 'Breakfast', 15000, 'meal', '2026-11-03', '07:30', 'breakfast'), T('out', 'Lunch', 35000, 'meal', '2026-11-03', '12:00', 'lunch'),
+    T('out', 'Grab', 52000, 'gas', '2026-11-03', '18:40'), T('out', 'Breakfast', 15000, 'meal', '2026-11-04', '07:30', 'breakfast'),
+    T('in', 'Salary', 12000000, 'Salary', '2026-10-05', '09:00', 'salary'), T('out', 'Rent', 4000000, 'home', '2026-10-05', '08:00', 'rent'),
+  ];
+  return { now: START_NOW, plans, txs };
+}
+const S = { ...seed(), page: 'calendar', month: '2026-11', day: '2026-11-04', entry: 'tab', theme: 'light', dialog: null, guide: null, occ: null, toast: null, changing: null };
+const isMobile = () => matchMedia('(max-width: 768px)').matches;
+
+// ---------- plan engine (mirrors src/lib/plans.ts) ----------
+function isPlanDate(p, d) {
+  if (d < p.start || (p.end && d > p.end)) return false;
+  const iv = Math.max(1, p.interval || 1), s = dn(p.start), x = dn(d);
+  switch (p.freq) {
+    case 'once': return x === s;
+    case 'daily': return (x - s) % iv === 0;
+    case 'weekdays': return dow(d) >= 1 && dow(d) <= 5;
+    case 'weekly': { const days = p.days.length ? p.days : [dow(p.start)]; const mon = n => n - ((new Date(n * DAY).getUTCDay() + 6) % 7); return days.includes(dow(d)) && ((mon(x) - mon(s)) / 7) % iv === 0; }
+    case 'monthly': { const months = (+d.slice(0, 4) - +p.start.slice(0, 4)) * 12 + (+d.slice(5, 7) - +p.start.slice(5, 7)); return months % iv === 0 && +d.slice(8) === Math.min(+p.start.slice(8), dim(+d.slice(0, 4), +d.slice(5, 7))); }
+  }
+  return false;
+}
+function occurrences(p, from, to, withSkipped = false) {
+  const out = [], a = from > p.start ? from : p.start, b = p.end && p.end < to ? p.end : to;
+  for (let x = dn(a); x <= dn(b); x++) {
+    const d = ds(x); if (!isPlanDate(p, d)) continue;
+    const e = p.ex[d]; if (e?.skip && !withSkipped) continue;
+    out.push({ plan: p, date: d, time: p.time, amount: e?.amount || p.amount, name: e?.name || p.name, changed: !!e?.amount, skipped: !!e?.skip });
+  }
+  return out;
+}
+const realKeys = () => new Set(S.txs.filter(t => t.planId).map(t => t.planId + '|' + t.planDate));
+function projected(from, to, withSkipped = false) {
+  const keys = realKeys(), res = [];
+  for (const p of S.plans) for (const o of occurrences(p, from, to, withSkipped)) {
+    if (`${o.date}T${o.time}` <= p.mt || keys.has(p.id + '|' + o.date)) continue;
+    res.push(o);
+  }
+  return res.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+}
+function materialize() {
+  const keys = realKeys(), made = [];
+  for (const p of S.plans) {
+    if (p.mt >= S.now) continue;
+    for (const o of occurrences(p, p.mt.slice(0, 10), S.now.slice(0, 10))) {
+      const st = `${o.date}T${o.time}`;
+      if (st <= p.mt || st > S.now || keys.has(p.id + '|' + o.date)) continue;
+      const tx = { id: nid(), kind: p.kind, name: o.name, amount: o.amount, cat: p.cat, date: o.date, time: o.time, planId: p.id, planDate: o.date };
+      S.txs.push(tx); made.push(tx);
+    }
+    p.mt = S.now;
+  }
+  return made;
+}
+const monthRange = m => [`${m}-01`, `${m}-${String(dim(+m.slice(0, 4), +m.slice(5, 7))).padStart(2, '0')}`];
+function monthSummary(m) {
+  const [a, b] = monthRange(m), real = S.txs.filter(t => t.date >= a && t.date <= b), plan = projected(a, b);
+  const r = {
+    inReal: real.filter(t => t.kind === 'in').reduce((s, t) => s + t.amount, 0), outReal: real.filter(t => t.kind === 'out').reduce((s, t) => s + t.amount, 0),
+    inPlan: plan.filter(o => o.plan.kind === 'in').reduce((s, o) => s + o.amount, 0), outPlan: plan.filter(o => o.plan.kind === 'out').reduce((s, o) => s + o.amount, 0),
+  };
+  r.left = r.inReal + r.inPlan - r.outReal - r.outPlan;
+  return r;
+}
+function describe(p) {
+  const iv = p.interval > 1 ? p.interval : 0;
+  switch (p.freq) {
+    case 'once': return `Once on ${nice(p.start)}`;
+    case 'daily': return iv ? `Every ${iv} days` : 'Every day';
+    case 'weekdays': return 'Every weekday';
+    case 'weekly': return `${iv ? `Every ${iv} weeks` : 'Weekly'} · ${(p.days.length ? p.days : [dow(p.start)]).map(d => WD[d]).join(', ')}`;
+    case 'monthly': return `${iv ? `Every ${iv} months` : 'Monthly'} on the ${ord(+p.start.slice(8))}`;
+  }
+}
+const lc = t => t.charAt(0).toLowerCase() + t.slice(1);
+const nextOcc = p => projected(S.now.slice(0, 10), addDays(S.now.slice(0, 10), 400)).find(o => o.plan.id === p.id);
+const perMonth = (p, m) => { const [a, b] = monthRange(m); return occurrences(p, a, b).reduce((t, o) => t + o.amount, 0); };
+
+// =====================================================================================
+// RENDER
+// =====================================================================================
+const $root = document.getElementById('root');
+function render() {
+  document.body.classList.toggle('light-mode', S.theme === 'light');
+  parent.postMessage({ cmd: 'clock', text: `${nice(S.now.slice(0, 10))} · ${S.now.slice(11)}` }, '*');
+  const m = isMobile();
+  let content;
+  if (S.page === 'plans') content = plansPage();
+  else if (S.page === 'day' && !m) content = dayPage();
+  else if (m && (S.page === 'week' || S.page === 'day')) content = mobileWeek();
+  else content = m ? mobileMonth() : calendarPage();
+  // Re-rendering rebuilds the DOM; only let the app's entry animations play for things that just appeared.
+  const pageKey = `${S.page}|${m}`, layerKey = S.dialog ? 'dialog' : S.guide ? 'guide' : S.occ ? 'occ' : '';
+  const still = (a, b) => (a === b ? ' pp-noanim' : '');
+  const SCROLLERS = ['.qe-d-body', '.pp-guide', '.calendar-days-grid', '.day-details', '.user-profile', '.m-scroll', '.m-ledger'];
+  const scrolls = SCROLLERS.map(sel => document.querySelector(sel)?.scrollTop || 0);
+  $root.innerHTML = `<div class="finance-document${still(pageKey, lastKeys.page)}">${header()}<main class="document-content">${content}</main>${bottomNav()}</div><div class="${still(layerKey, lastKeys.layer)}">${dialog()}${guide()}${occSheet()}</div>${S.toast ? `<div class="m-toast is-on pp-toast" role="status"><span>${S.toast}</span></div>` : ''}`;
+  if (pageKey === lastKeys.page || layerKey === lastKeys.layer) SCROLLERS.forEach((sel, i) => {
+    const el = document.querySelector(sel);
+    const isLayer = sel === '.qe-d-body' || sel === '.pp-guide';
+    if (el && (isLayer ? layerKey === lastKeys.layer : pageKey === lastKeys.page)) el.scrollTop = scrolls[i];
+  });
+  lastKeys.page = pageKey; lastKeys.layer = layerKey;
+}
+const lastKeys = { page: '', layer: '' };
+
+function header() {
+  const period = S.page === 'plans' ? 'Plans' : S.page === 'day' ? `${MONL[+S.day.slice(5, 7) - 1]} ${+S.day.slice(8)}, ${S.day.slice(0, 4)}` : `${MONL[+S.month.slice(5) - 1]} ${S.month.slice(0, 4)}`;
+  const nav = [['calendar', 'Calendar', 'grid'], ['week', 'Week', 'list'], ['plans', 'Plans', 'range'], ['analytics', 'Analytics', 'chart'], ['profile', 'Profile', 'user']];
+  const current = S.page === 'day' ? 'calendar' : S.page;
+  return `<header class="document-header glass">
+    <a class="document-brand" href="#" data-act="go" data-v="calendar"><span class="document-brand-icon"><img src="../../public/favicon.svg" width="40" height="40" alt=""></span><span class="document-brand-text"><span class="document-title">MyFinance</span><span class="document-subtitle">${period}</span></span></a>
+    <div class="document-mobile-period">${S.page === 'plans' ? '' : `<button class="document-action document-period-chevron" data-act="month" data-v="-1">${ic('left', 20)}</button>`}<span class="document-mobile-period-label">${period}</span>${S.page === 'plans' ? '' : `<button class="document-action document-period-chevron" data-act="month" data-v="1">${ic('right', 20)}</button>`}</div>
+    <nav class="document-nav">${nav.map(([p, l, i]) => `<a href="#" class="document-nav-link" data-act="go" data-v="${p}" ${current === p ? 'aria-current="page"' : ''}>${ic(i, 16)}<span>${l}</span></a>`).join('')}</nav>
+    <div class="document-actions">
+      <button class="document-action document-desktop-only" data-act="month" data-v="-1">${ic('left', 20)}</button>
+      <button class="document-action document-desktop-only" data-act="month" data-v="1">${ic('right', 20)}</button>
+      <button class="document-action document-add document-desktop-only" data-act="add" title="Add">${ic('plus', 20)}</button>
+      <button class="document-action document-desktop-only">${ic('refresh', 20)}</button>
+      <button class="document-action document-desktop-only" data-act="theme">${ic(S.theme === 'light' ? 'moon' : 'sun', 20)}</button>
+    </div>
+  </header>`;
+}
+function bottomNav() {
+  const cur = S.page === 'day' ? 'week' : S.page === 'plans' ? 'calendar' : S.page;
+  const link = (p, l, i) => `<a href="#" class="document-bottom-link" data-act="go" data-v="${p}" ${cur === p ? 'aria-current="page"' : ''}>${ic(i, 20)}<span>${l}</span></a>`;
+  return `<nav class="document-bottom-nav glass">${link('calendar', 'Month', 'cal')}${link('week', 'Week', 'list')}
+    <button type="button" class="document-bottom-add" data-act="add"><span class="document-bottom-add-circle">${ic('plus', 24)}</span><span class="document-bottom-add-label">Add</span></button>
+    ${link('analytics', 'Analytics', 'chart')}${link('profile', 'Profile', 'user')}</nav>`;
+}
+
+// ---------- desktop calendar (CalendarView markup) ----------
+function calendarPage() {
+  const s = monthSummary(S.month);
+  const [a] = monthRange(S.month), start = addDays(a, -((dow(a) + 6) % 7)), today = S.now.slice(0, 10);
+  const plan = projected(start, addDays(start, 41), true);
+  let weeks = '';
+  for (let w = 0; w < 6; w++) {
+    let cells = '';
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(start, w * 7 + i);
+      const real = S.txs.filter(t => t.date === d).sort((x, y) => y.amount - x.amount), pl = plan.filter(o => o.date === d);
+      const outR = real.filter(t => t.kind === 'out').reduce((t, x) => t + x.amount, 0);
+      const outP = pl.filter(o => !o.skipped && o.plan.kind === 'out').reduce((t, x) => t + x.amount, 0);
+      const rows = [
+        ...real.map(t => { const c = meta(t.kind, t.cat); return `<div class="calendar-spending-row ${t.kind === 'in' ? 'pp-in' : ''}"><span class="calendar-spending-label"><span class="calendar-spending-icon">${ic(c.icon, 12)}</span><span class="calendar-spending-description">${esc(t.name)}</span></span><span class="calendar-spending-amount">${t.kind === 'in' ? '+' : ''}${t.amount.toLocaleString('vi-VN')} ₫</span></div>`; }),
+        ...pl.filter(o => !o.skipped).map(o => { const c = meta(o.plan.kind, o.plan.cat); return `<div class="calendar-spending-row calendar-spending-row-planned ${o.plan.kind === 'in' ? 'pp-in' : ''} ${o.plan.sure ? 'pp-sure' : ''}" title="Planned"><span class="calendar-spending-label"><span class="calendar-spending-icon">${ic(c.icon, 12)}</span><span class="calendar-spending-description">${esc(o.name)}</span></span><span class="calendar-spending-amount">${o.plan.sure ? '' : '~'}${o.plan.kind === 'in' ? '+' : ''}${o.amount.toLocaleString('vi-VN')} ₫</span></div>`; }),
+      ];
+      const shown = rows.slice(0, 4);
+      const first = d.slice(8) === '01';
+      cells += `<div class="glass calendar-day-cell ${d === today ? 'calendar-day-today' : ''} ${first ? 'calendar-day-first-of-month' : ''} ${d.slice(0, 7) !== S.month ? 'calendar-day-other-month' : ''}" data-act="open-day" data-d="${d}" data-day-stage="details">
+        <div class="calendar-day-header"><span class="calendar-day-number ${d === today ? 'calendar-day-number-today' : ''} ${first ? 'calendar-day-number-first' : ''}">${first ? `<span class="calendar-day-first-badge">${MON[+d.slice(5, 7) - 1]}</span><span>1</span>` : +d.slice(8)}</span>
+          ${outR ? `<span class="calendar-day-total-desktop">${outR.toLocaleString('vi-VN')} ₫</span>` : outP ? `<span class="calendar-day-total-desktop calendar-day-planned-total">~${outP.toLocaleString('vi-VN')} ₫</span>` : ''}</div>
+        <div class="calendar-spending-list">${shown.length ? shown.join('') : '<span class="calendar-no-expenses">No expenses</span>'}${rows.length > 4 ? `<span class="calendar-no-expenses">+${rows.length - 4} more</span>` : ''}</div>
+      </div>`;
+    }
+    weeks += `<div class="calendar-week-row">${cells}</div>`;
+  }
+  return `<div class="calendar-container">
+    <div class="calendar-overview-grid"><div class="glass animate-fade-in calendar-overview-card">
+      <div class="calendar-overview-stat calendar-overview-income"><div class="overview-income-heading"><span class="calendar-stat-label"><span class="hide-mobile">Monthly </span>Income</span></div>
+        <span class="calendar-stat-value calendar-stat-income-value"><span class="hide-mobile">${vnd(s.inReal)}</span><span class="show-mobile">${k(s.inReal)}</span></span></div>
+      <div class="calendar-overview-stat calendar-overview-spending"><span class="calendar-stat-label"><span class="hide-mobile">Total </span>Spending</span>
+        <span class="calendar-stat-value calendar-stat-spending-value"><span class="hide-mobile">${vnd(s.outReal)}</span><span class="show-mobile">${k(s.outReal)}</span></span></div>
+      <div class="calendar-overview-stat calendar-overview-leftover"><span class="calendar-stat-label">Left Over</span>
+        <span class="calendar-stat-value" style="color:var(--primary)"><span class="hide-mobile">${vnd(s.inReal - s.outReal)}</span><span class="show-mobile">${k(s.inReal - s.outReal)}</span></span></div>
+      <div class="calendar-stat-subtext calendar-stat-subtext-row">
+        <span>Received ${s.inReal.toLocaleString('vi-VN')} ₫ · Planned income +${s.inPlan.toLocaleString('vi-VN')} ₫<span class="calendar-basis-range"> · ${MONL[+S.month.slice(5) - 1]}</span></span>
+        <span style="display:inline-flex;gap:8px;align-items:center"><button class="pp-plan-btn" data-act="guide">${ic('sparkles', 14)} Plan your month</button>
+        <div class="calendar-basis-toggle" role="group"><button type="button" aria-pressed="true">Month</button><button type="button" aria-pressed="false">Pay cycle</button></div></span>
+      </div>
+      <div class="calendar-projection-row">
+        <span class="calendar-projection-item"><span class="calendar-projection-label">Still planned</span><b class="calendar-projection-planned">+${k(s.outPlan)}</b></span>
+        <span class="calendar-projection-item"><span class="calendar-projection-label">Projected spending</span><b>${k(s.outReal + s.outPlan)}</b></span>
+        <span class="calendar-projection-item"><span class="calendar-projection-label">Projected left over</span><b style="color:${s.left >= 0 ? 'var(--primary)' : 'var(--danger)'}">${k(s.left)}</b></span>
+      </div>
+    </div></div>
+    <div class="calendar-weekdays-grid">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(w => `<div class="calendar-weekday-label">${w}</div>`).join('')}</div>
+    <div class="calendar-days-grid hide-scrollbar">${weeks}</div>
+  </div>`;
+}
+
+// ---------- desktop day page (DayDetails markup + Planned section) ----------
+function dayPage() {
+  const d = S.day, today = S.now.slice(0, 10);
+  const real = S.txs.filter(t => t.date === d).sort((a, b) => a.time.localeCompare(b.time));
+  const pl = projected(d, d, true);
+  const spent = real.filter(t => t.kind === 'out').reduce((s, t) => s + t.amount, 0);
+  const income = real.filter(t => t.kind === 'in').reduce((s, t) => s + t.amount, 0);
+  const planned = pl.filter(o => !o.skipped && o.plan.kind === 'out').reduce((s, o) => s + o.amount, 0);
+  const future = `${d}T23:59` > S.now;
+  const txRows = real.map(t => { const c = meta(t.kind, t.cat); return `<div class="day-tx-row"><div class="day-tx-icon-circle" style="background-color:color-mix(in srgb, ${c.color} 18%, transparent);color:${c.color}">${ic(c.icon, 18)}</div>
+    <div class="day-tx-info"><span class="day-tx-title">${esc(t.name)}</span><div class="day-tx-sub"><span>${time12(t.time)}</span>${t.planId ? `<span class="day-tx-repeat-badge">${ic('range', 11)}<span>From a plan</span></span>` : ''}</div></div>
+    <div class="day-tx-right"><span class="day-tx-amount ${t.kind === 'in' ? 'is-income' : 'is-spent'}">${t.kind === 'in' ? '+' : '-'}${t.amount.toLocaleString('vi-VN')} ₫</span><button class="day-tx-delete-btn" data-act="deltx" data-id="${t.id}" title="Delete">${ic('trash', 15)}</button></div></div>`; }).join('');
+  const planRows = pl.map(o => {
+    const c = meta(o.plan.kind, o.plan.cat), p = o.plan, key = p.id + '|' + o.date;
+    if (o.skipped) return `<div class="day-tx-row is-planned is-skipped"><div class="day-tx-icon-circle">${ic('skip', 16)}</div><div class="day-tx-info"><span class="day-tx-title">${esc(o.name)}</span><div class="day-tx-sub"><span>Skipped this day</span></div></div>
+      <div class="day-tx-right"><span class="day-tx-amount is-planned">${o.amount.toLocaleString('vi-VN')} ₫</span><button class="day-planned-btn" data-act="occ-unskip" data-p="${p.id}" data-d="${o.date}">${ic('undo', 13)}<span>Undo</span></button></div></div>`;
+    const changing = S.changing === key;
+    return `<div class="day-tx-row is-planned ${p.sure ? 'pp-sure' : ''}"><div class="day-tx-icon-circle" style="background-color:color-mix(in srgb, ${c.color} 12%, transparent);color:${c.color}">${ic(c.icon, 18)}</div>
+      <div class="day-tx-info"><span class="day-tx-title">${esc(o.name)}</span><div class="day-tx-sub"><span>${time12(o.time)}</span><span class="day-tx-repeat-badge is-planned">${ic('range', 11)}<span>Planned${o.changed ? ' · changed' : ''}</span></span><span class="pp-pill ${p.kind === 'in' ? 'is-in' : p.sure ? 'is-sure' : ''}">${p.sure ? 'Sure' : 'Estimate'}</span></div></div>
+      ${changing ? `<form class="day-planned-change" data-form="change" data-p="${p.id}" data-d="${o.date}"><input inputmode="numeric" autofocus value="${o.amount}" name="amount"><button class="day-planned-btn" type="submit">Save</button><button class="day-planned-btn" type="button" data-act="change-cancel">Cancel</button></form>`
+      : `<div class="day-tx-right"><span class="day-tx-amount ${p.kind === 'in' ? 'is-income' : 'is-planned'}">${p.sure ? '' : '~'}${p.kind === 'in' ? '+' : ''}${o.amount.toLocaleString('vi-VN')} ₫</span>
+        <div class="day-planned-btns"><button class="day-planned-btn" data-act="occ-done" data-p="${p.id}" data-d="${o.date}" title="Record it as real now">${ic('check', 13)}<span>Done</span></button>
+        <button class="day-planned-btn" data-act="change" data-key="${key}">${ic('pencil', 13)}<span>Change</span></button>
+        ${o.changed ? `<button class="day-planned-btn" data-act="occ-usual" data-p="${p.id}" data-d="${o.date}">${ic('undo', 13)}<span>Usual</span></button>` : ''}
+        <button class="day-planned-btn" data-act="occ-skip" data-p="${p.id}" data-d="${o.date}">${ic('skip', 13)}<span>Skip</span></button>
+        <button class="day-planned-btn" data-act="occ-series" data-p="${p.id}" data-d="${o.date}">${ic('settings', 13)}<span>Series</span></button></div></div>`}
+    </div>`;
+  }).join('');
+  return `<div class="day-details animate-slide-up hide-scrollbar"><div class="day-details-inner">
+    <div class="day-details-header"><button class="day-details-back-btn" data-act="go" data-v="calendar">${ic('left', 22)}</button>
+      <h2 class="day-details-date-title">${WDL[dow(d)]}, ${MONL[+d.slice(5, 7) - 1]} ${+d.slice(8)}, ${d.slice(0, 4)}</h2>
+      <button class="expense-button expense-button-primary day-details-add-desktop" data-act="add" data-d="${d}">${ic('plus', 16)} ${future ? (d === today ? 'Add or plan' : 'Plan for this day') : 'Add expense'}</button></div>
+    <section class="day-summary-card glass"><h3 class="day-summary-heading">Daily Summary</h3><div class="day-summary-grid">
+      <div class="day-summary-col"><div class="day-summary-label-row"><span class="day-summary-label">Total Spent</span><span class="day-summary-arrow is-spent">${ic('down', 14)}</span></div><div class="day-summary-value is-spent">${spent.toLocaleString('vi-VN')} ₫</div></div>
+      <div class="day-summary-col"><div class="day-summary-label-row"><span class="day-summary-label">Total Income</span><span class="day-summary-arrow is-income">${ic('up', 14)}</span></div><div class="day-summary-value is-income">${income.toLocaleString('vi-VN')} ₫</div></div>
+      ${planned ? `<div class="day-summary-col"><div class="day-summary-label-row"><span class="day-summary-label">Still planned</span><span class="day-summary-arrow is-planned">${ic('range', 14)}</span></div><div class="day-summary-value is-planned">${planned.toLocaleString('vi-VN')} ₫</div></div>` : ''}
+    </div></section>
+    <section class="day-tx-section"><h3 class="day-tx-section-label">Transactions</h3>${txRows ? `<div class="day-tx-card glass">${txRows}</div>` : '<div class="day-tx-card day-tx-empty glass">No spending recorded for this day.</div>'}</section>
+    ${pl.length ? `<section class="day-tx-section"><h3 class="day-tx-section-label">Planned</h3><p class="day-planned-help">Each one becomes a real transaction once its time passes. <b>Done</b> records it now (paid early, or you logged it yourself), so it's never counted twice.</p><div class="day-tx-card glass">${planRows}</div></section>` : ''}
+  </div></div>`;
+}
+
+// ---------- plans page (profile panel markup) ----------
+function plansPage() {
+  const s = monthSummary(S.month);
+  const [a, b] = monthRange(S.month);
+  const sumOf = f => S.plans.filter(f).reduce((t, p) => t + occurrences(p, a, b).reduce((x, o) => x + o.amount, 0), 0);
+  const groups = [
+    ['Income', 'money in', p => p.kind === 'in'],
+    ['Commitments', 'sure spending: rent, bills, subscriptions', p => p.kind === 'out' && p.sure],
+    ['Estimates', 'expected spending: food, coffee, fuel, one-offs', p => p.kind === 'out' && !p.sure],
+  ];
+  const item = p => {
+    const c = meta(p.kind, p.cat), n = nextOcc(p);
+    return `<li class="profile-list-item ${n ? '' : 'profile-list-item-muted'}"><span class="profile-glyph" style="color:${c.color};background:color-mix(in srgb, ${c.color} 15%, transparent)">${ic(c.icon, 18)}</span>
+      <div class="profile-list-main"><strong>${esc(p.name)}</strong><span class="profile-meta"><span class="profile-pill profile-pill-on">${describe(p)}</span><span>${p.time}</span><span class="pp-pill ${p.kind === 'in' ? 'is-in' : p.sure ? 'is-sure' : ''}">${p.sure ? 'Sure' : 'Estimate'}</span><span>${n ? `Next ${nice(n.date)}` : 'Nothing upcoming'}</span></span></div>
+      <div class="profile-amount" ${p.kind === 'in' ? 'style="color:var(--success)"' : ''}>${p.sure ? '' : '~'}${vnd(p.amount)}<small>${k(perMonth(p, S.month))} in ${MONL[+S.month.slice(5) - 1]}</small></div>
+      <div class="profile-row-actions"><button class="profile-icon-button" data-act="edit" data-p="${p.id}" title="Edit">${ic('pencil', 16)}</button><button class="profile-icon-button profile-icon-button-danger" data-act="delplan" data-p="${p.id}" title="Delete">${ic('trash', 16)}</button></div></li>`;
+  };
+  return `<div class="user-profile hide-scrollbar animate-fade-in"><section class="profile-panel">
+    <div class="profile-panel-head"><div><h2>Plans</h2><p>Everything you expect to receive or spend. Each plan becomes a real transaction when its time passes; past transactions never change.</p></div>
+      <div class="profile-panel-tools"><button class="profile-button" data-act="guide">${ic('sparkles', 16)}Plan your month</button><button class="profile-button profile-button-primary" data-act="add" data-plan="1">${ic('plus', 16)}New plan</button></div></div>
+    <dl class="profile-card profile-summary">
+      <div><dt>Income in ${MONL[+S.month.slice(5) - 1]}</dt><dd class="profile-positive">${vnd(s.inReal + s.inPlan)}</dd></div>
+      <div><dt>Commitments</dt><dd>${vnd(sumOf(p => p.kind === 'out' && p.sure))}</dd></div>
+      <div><dt>Estimates</dt><dd>~${vnd(sumOf(p => p.kind === 'out' && !p.sure))}</dd></div>
+      <div><dt>Projected left over</dt><dd style="color:var(--primary)">${vnd(s.left)}</dd></div>
+    </dl>
+    <div class="profile-card pp-explain"><div><b>Sure</b>: fixed amount and date (rent, salary, bills). Shown with a solid outline.</div><div><b>Estimate</b>: roughly this much (food, coffee, fuel). Dashed and prefixed with ~; adjust single days freely.</div></div>
+    ${groups.map(([t, sub, f]) => { const ps = S.plans.filter(f); return `<h3 class="pp-group">${t} <small>${sub}</small></h3>${ps.length ? `<ul class="profile-card profile-list">${ps.map(item).join('')}</ul>` : '<p class="profile-card profile-empty">None yet.</p>'}`; }).join('')}
+  </section></div>`;
+}
+
+// ---------- phone month (MobileMonth markup) ----------
+function mobileMonth() {
+  const [a, b] = monthRange(S.month), today = S.now.slice(0, 10);
+  const days = []; for (let x = dn(a); x <= dn(b); x++) days.push(ds(x));
+  const real = d => S.txs.filter(t => t.date === d && t.kind === 'out').reduce((s, t) => s + t.amount, 0);
+  const plan = projected(a, b), planned = d => plan.filter(o => o.date === d && o.plan.kind === 'out').reduce((s, o) => s + o.amount, 0);
+  const max = Math.max(1, ...days.map(d => Math.max(real(d), planned(d))));
+  const s = monthSummary(S.month);
+  const lead = (dow(a) + 6) % 7;
+  return `<div class="m-screen m-scroll">
+    <header class="m-nav"><h1>${MONL[+S.month.slice(5) - 1]}</h1><span class="m-sub">${S.month.slice(0, 4)}</span></header>
+    <div class="m-mhead"><button class="m-icon-btn" data-act="month" data-v="-1">${ic('left', 22)}</button>
+      <span class="m-muted">Spent <b class="m-strong">${k(s.outReal)} ₫</b> · <span class="m-planned-text">~${k(s.outReal + s.outPlan)} projected</span></span>
+      <button class="m-icon-btn" data-act="month" data-v="1">${ic('right', 22)}</button></div>
+    <div class="m-fbars">${days.map(d => { const r = real(d), p = planned(d), v = r || p; return `<button class="${d === today ? 'is-today' : ''}${d > today ? ' is-future' : ''}${!r && p ? ' is-planned' : ''}" style="height:${v ? Math.max(6, 100 * v / max) : 6}%" data-act="open-day" data-d="${d}"></button>`; }).join('')}</div>
+    <div class="m-faxis"><span>1 ${MON[+S.month.slice(5) - 1]}</span><span>${+b.slice(8)} ${MON[+S.month.slice(5) - 1]}</span></div>
+    <div class="m-mgrid">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(l => `<span class="m-wd">${l}</span>`).join('')}${'<span></span>'.repeat(lead)}${days.map(d => `<button class="m-dc${d === today ? ' is-today' : ''}${d > today ? ' is-future' : ''}" data-act="open-day" data-d="${d}"><b>${+d.slice(8)}</b></button>`).join('')}</div>
+    <div class="m-pad" style="padding-top:12px">
+      <div class="m-list"><div class="m-row" data-act="go" data-v="plans"><span class="m-ic" style="--c:var(--primary)">${ic('range', 16)}</span><span class="m-rt"><b>Plans</b><small>${S.plans.length} plans · left over ~${k(s.left)} ₫ projected</small></span><span class="m-muted">${ic('right', 18)}</span></div>
+      <div class="m-row" data-act="guide" style="border-top:1px solid var(--border-color)"><span class="m-ic" style="--c:var(--warning)">${ic('sparkles', 16)}</span><span class="m-rt"><b>Plan your month</b><small>Income, bills, daily habits, one-offs</small></span><span class="m-muted">${ic('right', 18)}</span></div></div>
+      <p class="m-hint">Tap a date to open that day</p>
+    </div>
+  </div>`;
+}
+
+// ---------- phone week (MobileWeek markup) ----------
+function mobileWeek() {
+  const sel = S.day, today = S.now.slice(0, 10);
+  const ws = addDays(sel, -((dow(sel) + 6) % 7)), days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(ws, i));
+  const plan = projected(ws, days[6], true);
+  const real = d => S.txs.filter(t => t.date === d && t.kind === 'out').reduce((s, t) => s + t.amount, 0);
+  const planned = d => plan.filter(o => o.date === d && !o.skipped && o.plan.kind === 'out').reduce((s, o) => s + o.amount, 0);
+  const max = Math.max(1, ...days.map(d => Math.max(real(d), planned(d))));
+  const weekTotal = days.reduce((s, d) => s + real(d), 0), weekPlan = days.reduce((s, d) => s + planned(d), 0);
+  const offset = Math.round((dn(ws) - dn(addDays(today, -((dow(today) + 6) % 7)))) / 7);
+  const title = offset === 0 ? 'This week' : offset === 1 ? 'Next week' : offset === -1 ? 'Last week' : offset > 0 ? `In ${offset} weeks` : `${-offset} weeks ago`;
+  const dayTx = S.txs.filter(t => t.date === sel).sort((a, b) => a.time.localeCompare(b.time));
+  const dayPl = plan.filter(o => o.date === sel);
+  const label = sel === today ? `Today, ${+sel.slice(8)} ${MON[+sel.slice(5, 7) - 1]}` : `${WDL[dow(sel)]}, ${+sel.slice(8)} ${MON[+sel.slice(5, 7) - 1]}`;
+  return `<div class="m-screen m-week">
+    <header class="m-nav m-nav-tight"><div><div class="m-sub">${+ws.slice(8)} ${MON[+ws.slice(5, 7) - 1]} – ${+days[6].slice(8)} ${MON[+days[6].slice(5, 7) - 1]} · ${vnd(weekTotal)}${weekPlan ? ` <span class="m-planned-text">· ~${vnd(weekPlan)} planned</span>` : ''}</div><h1>${title}</h1></div>
+      <div class="m-wnav"><button data-act="week" data-v="-7">${ic('left', 20)}</button><button data-act="week" data-v="7">${ic('right', 20)}</button></div></header>
+    <div class="m-wbars">${days.map(d => { const r = real(d), p = planned(d), v = r || p; return `<div><button class="${d === sel ? 'is-sel' : ''}${d === today ? ' is-today' : ''}${d > today ? ' is-future' : ''}${!r && p ? ' is-planned' : ''}" style="height:${v ? Math.max(10, 100 * v / max) : 10}%" data-act="open-day" data-d="${d}"></button></div>`; }).join('')}</div>
+    <div class="m-strip">${days.map(d => `<button class="${d === sel ? 'is-on' : ''}${d === today ? ' is-today' : ''}${d > today ? ' is-future' : ''}" data-act="open-day" data-d="${d}"><small>${WD[dow(d)]}</small><b>${+d.slice(8)}</b></button>`).join('')}</div>
+    <div class="m-ledger">
+      <div class="m-ledger-h"><span class="m-muted">${label}</span><b>${vnd(dayTx.filter(t => t.kind === 'out').reduce((s, t) => s + t.amount, 0))}</b></div>
+      ${dayTx.length ? `<div class="m-list">${dayTx.map(t => { const c = meta(t.kind, t.cat); return `<div class="m-swipe"><div class="m-row"><span class="m-ic" style="--c:${c.color}">${ic(c.icon, 16)}</span><span class="m-rt"><b>${esc(t.name)}</b><small>${c.name} · ${t.time}${t.planId ? ' · from a plan' : ''}</small></span><span class="m-amt" ${t.kind === 'in' ? 'style="color:var(--success)"' : ''}>${t.kind === 'in' ? '+' : '−'}${vnd(t.amount)}</span></div></div>`; }).join('')}</div>` : (dayPl.length ? '' : '<p class="m-empty">No expenses yet.</p>')}
+      ${dayPl.length ? `<div class="m-ledger-h m-planned-h"><span class="m-muted">Planned</span><b class="m-planned-text">~${vnd(dayPl.filter(o => !o.skipped && o.plan.kind === 'out').reduce((s, o) => s + o.amount, 0))}</b></div>
+        <div class="m-list">${dayPl.map(o => { const c = meta(o.plan.kind, o.plan.cat); return `<button class="m-row m-row-planned ${o.skipped ? 'is-skipped' : ''}" data-act="${o.skipped ? 'occ-unskip' : 'occ-open'}" data-p="${o.plan.id}" data-d="${o.date}"><span class="m-ic" style="--c:${c.color}">${ic(c.icon, 16)}</span><span class="m-rt"><b>${esc(o.name)}</b><small>${o.skipped ? 'Skipped · tap to undo' : `${o.plan.sure ? 'Sure' : 'Estimate'}${o.changed ? ' · changed' : ''} · ${o.time}`}</small></span><span class="m-amt" ${o.plan.kind === 'in' ? 'style="color:var(--success)"' : ''}>${o.plan.sure ? '' : '~'}${o.plan.kind === 'in' ? '+' : ''}${vnd(o.amount)}</span></button>`; }).join('')}</div>
+        <p class="m-hint">Planned items become real when their time passes · tap one to skip, change or mark done</p>` : ''}
+      <button class="m-btn m-btn-ghost" data-act="add" data-d="${sel}">+ ${`${sel}T23:59` > S.now && sel !== today ? 'Plan for this day' : 'Add expense'}</button>
+    </div>
+  </div>`;
+}
+
+// =====================================================================================
+// ADD / EDIT DIALOG (QuickEntryDialog markup)
+// =====================================================================================
+function newDraft(opts = {}) {
+  const today = S.now.slice(0, 10), date = opts.date || today;
+  const plan = opts.plan || (S.entry === 'tab' && date > today);
+  return { mode: 'spending', plan, amount: '', cat: 'meal', source: 'Salary', name: '', date, time: date === today ? S.now.slice(11) : '12:00',
+    repeat: false, freq: 'weekdays', days: [dow(date)], interval: 1, end: '', sure: null, editId: null, applyFrom: '', query: '' };
+}
+function draftFromPlan(p) {
+  return { mode: p.kind === 'in' ? 'income' : 'spending', plan: true, amount: String(p.amount), cat: p.kind === 'out' ? p.cat : 'meal', source: p.kind === 'in' ? p.cat : 'Salary',
+    name: p.name, date: p.start, time: p.time, repeat: p.freq !== 'once', freq: p.freq === 'once' ? 'weekdays' : p.freq, days: p.days.length ? [...p.days] : [dow(p.start)],
+    interval: p.interval, end: p.end || '', sure: p.sure, editId: p.id, applyFrom: '', query: '' };
+}
+function draftState(d) {
+  const forced = S.entry === 'tab' && d.plan;
+  const future = `${d.date}T${d.time}` > S.now;
+  return { forced, future, isPlan: !!d.editId || forced || d.repeat || future };
+}
+const defaultSure = d => d.mode === 'income' ? ['Salary', 'Allowance'].includes(d.source) : ['bills', 'home', 'sub'].includes(d.cat);
+const amountOf = d => +(d.amount || 0);
+function statusHtml(d) {
+  const st = draftState(d), amt = amountOf(d), income = d.mode === 'income';
+  if (st.forced && !st.future && !d.repeat) return `<div class="pp-status is-warn">${ic('info', 16)}<span>A plan needs a future date or a repeat. Pick <b>Tomorrow</b> or turn on <b>Repeat</b>, or switch to ${income ? 'Income' : 'Spending'} to record it now.</span></div>`;
+  if (!st.isPlan) return `<div class="pp-status">${ic('check', 16)}<span>Recorded as a real ${income ? 'income' : 'expense'} on ${nice(d.date)} at ${d.time}.</span></div>`;
+  const sure = d.sure ?? defaultSure(d);
+  const what = amt ? `${sure ? '' : '~'}${vnd(amt)}` : 'It';
+  const from = d.editId && d.applyFrom ? d.applyFrom : d.date;
+  const when = d.repeat ? `${lc(describe({ freq: d.freq, interval: +d.interval || 1, days: d.days, start: d.date }))} at ${d.time} from ${nice(from)}${d.end ? ` until ${nice(d.end)}` : ', no end'}` : `on ${nice(d.date)} at ${d.time}`;
+  const note = d.editId ? (d.applyFrom ? ' Earlier days keep the old plan.' : ' Applies to every upcoming day; past transactions stay as they are.') : (d.repeat && d.date < S.now.slice(0, 10) ? ' Days before now are not added.' : '');
+  return `<div class="pp-status is-plan">${ic('range', 16)}<span><b>Planned.</b> ${what} ${when}. ${d.repeat ? 'Each one becomes' : 'It becomes'} a real ${income ? 'income' : 'expense'} when its time passes.${note}</span></div>`;
+}
+const saveLabel = d => d.editId ? 'Save plan' : draftState(d).isPlan ? 'Add plan' : 'Add';
+function recentNames(d) {
+  const pool = d.mode === 'income' ? [...S.txs.filter(t => t.kind === 'in' && t.cat === d.source), ...S.plans.filter(p => p.kind === 'in' && p.cat === d.source)]
+    : [...S.txs.filter(t => t.kind === 'out' && t.cat === d.cat), ...S.plans.filter(p => p.kind === 'out' && p.cat === d.cat)];
+  return [...new Set(pool.map(x => x.name))].slice(0, 6);
+}
+function dialog() {
+  const d = S.dialog; if (!d) return '';
+  const st = draftState(d), income = d.mode === 'income', today = S.now.slice(0, 10);
+  const sure = d.sure ?? defaultSure(d);
+  const tabMode = S.entry === 'tab';
+  const modeSeg = d.editId ? '' : `<div class="qe-seg qe-mode" role="radiogroup">
+      <button type="button" data-mode="spending" class="${!income && !(tabMode && d.plan) ? 'is-on' : ''}" data-act="mode" data-v="spending">Spending</button>
+      <button type="button" data-mode="income" class="${income && !(tabMode && d.plan) ? 'is-on' : ''}" data-act="mode" data-v="income">Income</button>
+      ${tabMode ? `<button type="button" data-mode="plan" class="${d.plan ? 'is-on' : ''}" data-act="mode" data-v="plan">Plan</button>` : ''}</div>`;
+  const shortcuts = [-1, 0, 1].map(o => addDays(today, o));
+  const dayName = s => s === today ? 'Today' : s === addDays(today, -1) ? 'Yesterday' : s === addDays(today, 1) ? 'Tomorrow' : nice(s);
+  const cats = CATS.filter(c => !d.query || c.name.toLowerCase().includes(d.query.toLowerCase()));
+  const freqs = [['weekdays', 'Weekdays'], ['weekly', 'Weekly'], ['monthly', 'Monthly'], ['daily', 'Every N days']];
+  return `<div class="qe-layer" data-act="close-bg"><div class="qe-dialog" role="dialog" data-stop>
+    <header class="qe-d-head"><h2>${d.editId ? `Edit plan · ${esc(d.name)}` : 'Add transaction'}</h2>${modeSeg}<button type="button" class="qe-fx" data-act="close">${ic('x', 18)}</button></header>
+    <div class="qe-d-body">
+      <div class="qe-d-left">
+        ${(tabMode && d.plan) || d.editId ? `<div class="qe-seg is-small"><button class="${!income ? 'is-on' : ''}" data-act="kind" data-v="spending">Money out</button><button class="${income ? 'is-on' : ''}" data-act="kind" data-v="income">Money in</button></div>` : ''}
+        <div class="qe-amount ${amountOf(d) ? '' : 'is-zero'} ${income && amountOf(d) ? 'is-income' : ''}">${income && amountOf(d) ? '+' : ''}${amountOf(d).toLocaleString('vi-VN')} <small>₫</small></div>
+        <div class="qe-keys">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0'].map(x => `<button type="button" ${x === '0' ? 'class="qe-key-wide"' : ''} style="grid-area:k${x}" data-act="key" data-v="${x}">${x}</button>`).join('')}
+          <button type="button" style="grid-area:del" data-act="key" data-v="del">${ic('del', 20)}</button>
+          ${d.editId ? '' : '<button type="button" class="qe-key-next" style="grid-area:next" data-act="save" data-next="1">+ Next</button>'}
+          <button type="button" class="qe-key-ok ${income ? 'is-income' : ''}" style="grid-area:ok" data-act="save"><span>✓</span>${saveLabel(d)}</button></div>
+        <p class="qe-kbd">Type digits · <kbd>k</kbd> ×1000 · <kbd>⌫</kbd> · <kbd>Enter</kbd> save</p>
+      </div>
+      <div class="qe-d-right">
+        ${income ? `<section class="qe-sec"><h3>Source</h3><div class="qe-chips is-wrap">${SOURCES.map(s => `<button type="button" class="qe-chip ${d.source === s.id ? 'is-on' : ''}" style="--c:${s.color}" data-act="source" data-v="${s.id}">${ic(s.icon, 14)} ${s.id}</button>`).join('')}</div></section>`
+        : `<section class="qe-sec"><h3>Category</h3><div class="qe-stack"><label class="qe-search">${ic('search', 16)}<input data-f="query" value="${esc(d.query)}" placeholder="Search ${CATS.length} categories"></label>
+          <div class="qe-cgrid">${cats.map(c => `<button type="button" class="qe-chip ${d.cat === c.id ? 'is-on' : ''}" style="--c:${c.color}" data-act="cat" data-v="${c.id}">${ic(c.icon, 15)}<span>${c.name}</span></button>`).join('')}</div></div></section>`}
+        <div class="qe-stack"><label class="qe-field"><span>${income ? 'Name (employer, client…)' : 'Description'}</span><input data-f="name" value="${esc(d.name)}" placeholder="${income ? 'e.g. Monthly salary' : `${meta('out', d.cat).name} (default)`}"></label>
+          ${recentNames(d).length ? `<div class="qe-recent">${recentNames(d).map(n => `<button type="button" class="${d.name === n ? 'is-on' : ''}" data-act="name" data-v="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : ''}</div>
+        <div class="qe-row2">
+          <section class="qe-sec"><div class="qe-stack"><div class="qe-chips">${shortcuts.map(s => `<button type="button" class="qe-chip ${d.date === s ? 'is-on' : ''}" data-act="date" data-v="${s}">${dayName(s)}</button>`).join('')}</div>
+            <label class="qe-field"><span>${d.repeat ? 'Starts' : 'Date'}</span><input type="date" data-f="date" data-re value="${d.date}"></label></div></section>
+          <section class="qe-sec"><div class="qe-stack"><div class="qe-chips"><button type="button" class="qe-chip" data-act="time" data-v="now">Now</button>${[['Morning', '08:00'], ['Lunch', '12:00'], ['Evening', '19:00']].map(([l, t]) => `<button type="button" class="qe-chip ${d.time === t ? 'is-on' : ''}" data-act="time" data-v="${t}">${l}</button>`).join('')}</div>
+            <label class="qe-field"><span>Time</span><input type="time" data-f="time" data-re value="${d.time}"></label></div></section>
+        </div>
+        <section class="qe-box"><div class="qe-stack">
+          <button type="button" class="qe-trow" data-act="repeat"><span>Repeat</span><span class="qe-switch ${d.repeat ? 'is-on' : ''}"></span></button>
+          ${d.repeat ? `<div class="qe-seg is-small">${freqs.map(([v, l]) => `<button type="button" class="${d.freq === v ? 'is-on' : ''}" data-act="freq" data-v="${v}">${l}</button>`).join('')}</div>
+            ${d.freq === 'weekly' ? `<div class="qe-days">${[1, 2, 3, 4, 5, 6, 0].map(x => `<button type="button" class="${d.days.includes(x) ? 'is-on' : ''}" data-act="wday" data-v="${x}">${WD[x]}</button>`).join('')}</div>` : ''}
+            ${d.freq === 'daily' ? `<div class="qe-trow"><span>Every</span><span class="qe-stepper"><button type="button" data-act="step" data-v="-1">−</button><b>${d.interval}</b><button type="button" data-act="step" data-v="1">+</button>${d.interval === 1 ? 'day' : 'days'}</span></div>` : ''}
+            ${d.freq === 'monthly' ? `<span class="qe-hint">On day ${+d.date.slice(8)} of each month, starting from the date above.</span>` : ''}
+            ${d.freq === 'weekdays' ? '<span class="qe-hint">Monday to Friday, starting from the date above.</span>' : ''}
+            <label class="qe-field"><span>Ends (optional)</span><input type="date" data-f="end" data-re value="${d.end}" min="${d.date}"></label>` : ''}
+          ${st.isPlan ? `<div class="qe-field"><span>How sure is it?</span><div class="qe-seg is-small pp-sure"><button type="button" class="${sure ? 'is-on' : ''}" data-act="sure" data-v="1">Sure<small>fixed: rent, salary, bills</small></button><button type="button" class="${!sure ? 'is-on' : ''}" data-act="sure" data-v="0">Estimate<small>about: food, coffee, fuel</small></button></div></div>` : ''}
+          ${d.editId && d.repeat ? `<div class="qe-field"><span>Apply changes to</span><div class="qe-seg is-small"><button type="button" class="${!d.applyFrom ? 'is-on' : ''}" data-act="apply" data-v="">All upcoming</button><button type="button" class="${d.applyFrom ? 'is-on' : ''}" data-act="apply" data-v="from">From a date</button></div>${d.applyFrom ? `<input type="date" data-f="applyFrom" data-re value="${d.applyFrom}">` : ''}</div>` : ''}
+          <div id="pp-status">${statusHtml(d)}</div>
+        </div></section>
+      </div>
+    </div>
+    <footer class="qe-d-foot"><div class="qe-d-actions">
+      <button type="button" class="qe-btn is-plain" data-act="close">Cancel</button>
+      ${d.editId ? `<button type="button" class="qe-btn is-plain is-danger" data-act="delplan" data-p="${d.editId}">${ic('trash', 16)}Delete plan</button>` : ''}
+      <span class="qe-sp"></span>
+      ${d.editId ? '' : '<button type="button" class="qe-btn is-ghost" data-act="save" data-next="1">+ Add &amp; next</button>'}
+      <button type="button" class="qe-btn ${income ? 'is-income' : 'is-primary'}" data-act="save" id="pp-save">${saveLabel(d)}</button>
+    </div></footer>
+  </div></div>`;
+}
+
+// ---------- occurrence sheet (phone) ----------
+function occSheet() {
+  const o0 = S.occ; if (!o0) return '';
+  const p = S.plans.find(x => x.id === o0.p); if (!p) return '';
+  const o = occurrences(p, o0.d, o0.d, true)[0]; if (!o) return '';
+  const c = meta(p.kind, p.cat), key = p.id + '|' + o.date;
+  return `<div class="qe-layer" data-act="close-bg"><div class="qe-dialog pp-occ-dialog" data-stop>
+    <header class="qe-d-head"><h2><span class="qe-ic" style="--c:${c.color};display:inline-grid;vertical-align:middle;margin-right:8px">${ic(c.icon, 15)}</span>${esc(o.name)}</h2><button class="qe-fx" data-act="close">${ic('x', 18)}</button></header>
+    <div class="pp-occ">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span>${nice(o.date)} · ${o.time}</span><span class="pp-occ-amt" ${p.kind === 'in' ? 'style="color:var(--success)"' : ''}>${p.sure ? '' : '~'}${vnd(o.amount)}</span></div>
+      <span class="qe-hint">${describe(p)} · <span class="pp-pill ${p.kind === 'in' ? 'is-in' : p.sure ? 'is-sure' : ''}">${p.sure ? 'Sure' : 'Estimate'}</span>${o.changed ? ' · changed for this day' : ''}</span>
+      <div class="pp-status is-plan">${ic('range', 16)}<span>Becomes a real ${p.kind === 'in' ? 'income' : 'expense'} at ${o.time} on ${nice(o.date)}. Changes here affect only this day.</span></div>
+      ${S.changing === key ? `<form class="qe-field" data-form="change" data-p="${p.id}" data-d="${o.date}"><span>Amount for this day</span><div style="display:flex;gap:6px"><input name="amount" inputmode="numeric" value="${o.amount}" autofocus><button class="qe-btn is-primary" type="submit">Save</button></div></form>` : ''}
+      <div class="pp-occ-actions">
+        <button class="qe-btn is-plain" data-act="occ-done" data-p="${p.id}" data-d="${o.date}">${ic('check', 16)}Done now</button>
+        <button class="qe-btn is-plain" data-act="occ-skip" data-p="${p.id}" data-d="${o.date}">${ic('skip', 16)}Skip this day</button>
+        <button class="qe-btn is-plain" data-act="change" data-key="${key}">${ic('pencil', 16)}Change amount</button>
+        ${o.changed ? `<button class="qe-btn is-plain" data-act="occ-usual" data-p="${p.id}" data-d="${o.date}">${ic('undo', 16)}Usual amount</button>` : ''}
+        <button class="qe-btn is-ghost" data-act="occ-series" data-p="${p.id}" data-d="${o.date}">${ic('settings', 16)}Edit series</button>
+      </div>
+      <span class="qe-hint">“Done now” records it as real right away (paid early, or you logged it yourself), so it's never counted twice.</span>
+    </div></div></div>`;
+}
+
+// =====================================================================================
+// PLAN YOUR MONTH GUIDE
+// =====================================================================================
+function newGuide() {
+  const has = n => S.plans.some(p => p.name.toLowerCase() === n.toLowerCase());
+  const it = (name, amount, cat, kind, sure, freq, extra = {}) => ({ name, amount, cat, kind, sure, freq, on: has(name), done: has(name), day: 5, time: '08:00', days: [], ...extra });
+  return { step: 0,
+    income: [it('Salary', 12000000, 'Salary', 'in', true, 'monthly', { day: 5, time: '09:00' }), it('Allowance', 2000000, 'Allowance', 'in', true, 'monthly', { day: 10 }), it('Freelance', 3000000, 'Freelance', 'in', false, 'monthly', { day: 25 })],
+    fixed: [it('Rent', 4000000, 'home', 'out', true, 'monthly', { day: 5 }), it('Electricity', 600000, 'bills', 'out', true, 'monthly', { day: 10 }), it('Internet', 250000, 'bills', 'out', true, 'monthly', { day: 12 }), it('Netflix', 260000, 'sub', 'out', true, 'monthly', { day: 15 }), it('Phone', 100000, 'bills', 'out', true, 'monthly', { day: 20 })],
+    habits: [it('Breakfast', 15000, 'meal', 'out', false, 'weekdays', { time: '07:30' }), it('Lunch', 35000, 'meal', 'out', false, 'weekdays', { time: '12:00' }), it('Coffee', 25000, 'coffee', 'out', false, 'weekdays', { time: '09:30' }), it('Dinner', 50000, 'eatout', 'out', false, 'daily', { time: '19:00' }), it('Gas', 100000, 'gas', 'out', false, 'weekly', { days: [1] }), it('Groceries', 300000, 'shopping', 'out', false, 'weekly', { days: [6], time: '10:00' })],
+    oneoffs: [] };
+}
+const GSTEPS = [['Income', 'What comes in this month? Salary and allowance are usually sure; freelance is an estimate.', 'income'], ['Fixed costs', 'Bills and subscriptions with a known amount and day.', 'fixed'],
+  ['Daily habits', 'Rough, repeating spending. Turn on the ones you do and adjust the amounts.', 'habits'], ['One-offs', 'Weddings, birthdays, trips. Tap a date, then name it.', 'oneoffs'], ['Review', 'Your month, if things go as planned.', 'review']];
+const gsched = it => it.freq === 'monthly' ? `Monthly on the ${ord(+it.day)}` : it.freq === 'weekly' ? `Weekly · ${it.days.map(d => WD[d]).join(', ')}` : it.freq === 'weekdays' ? 'Every weekday' : 'Every day';
+function guidePlans(g) {
+  const today = S.now.slice(0, 10), out = [];
+  for (const key of ['income', 'fixed', 'habits']) for (const it of g[key]) {
+    if (!it.on || it.done || !(+it.amount > 0)) continue;
+    const start = it.freq === 'monthly' ? `${S.month}-${String(Math.min(+it.day, 28)).padStart(2, '0')}` : today;
+    out.push({ id: nid(), kind: it.kind, sure: it.sure, name: it.name, amount: +it.amount, cat: it.cat, time: it.time, start, freq: it.freq, interval: 1, days: it.days, end: null, ex: {}, mt: S.now });
+  }
+  for (const o of g.oneoffs) if (+o.amount > 0) out.push({ id: nid(), kind: 'out', sure: false, name: o.name || 'One-off', amount: +o.amount, cat: 'gift', time: '12:00', start: o.date, freq: 'once', interval: 1, days: [], end: null, ex: {}, mt: S.now });
+  return out;
+}
+function guide() {
+  const g = S.guide; if (!g) return '';
+  const [title, help, key] = GSTEPS[g.step];
+  let body;
+  if (key === 'income' || key === 'fixed' || key === 'habits') {
+    body = g[key].map((it, i) => { const c = meta(it.kind, it.cat); return `<div class="pp-grow ${it.done ? 'is-done' : ''}">
+      <button type="button" class="qe-switch ${it.on ? 'is-on' : ''}" ${it.done ? 'disabled' : ''} data-act="g-toggle" data-k="${key}" data-i="${i}" aria-label="${it.name}"></button>
+      <div><b><span class="qe-ic" style="--c:${c.color};width:26px;height:26px">${ic(c.icon, 14)}</span>${it.name}</b><small>${it.done ? 'Already planned' : `${it.sure ? 'Sure' : 'Estimate'} · ${gsched(it)} · ${it.time}`}</small></div>
+      <label class="qe-field"><span>Amount (₫)</span><input inputmode="numeric" data-g="${key}:${i}:amount" value="${it.amount}" ${it.done ? 'disabled' : ''}></label>
+      ${it.freq === 'monthly' ? `<label class="qe-field"><span>Day</span><input type="number" min="1" max="28" data-g="${key}:${i}:day" value="${it.day}" ${it.done ? 'disabled' : ''}></label>` : '<span></span>'}
+    </div>`; }).join('');
+  } else if (key === 'oneoffs') {
+    const [a, b] = monthRange(S.month), today = S.now.slice(0, 10);
+    let cal = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(w => `<span>${w}</span>`).join('') + '<span></span>'.repeat((dow(a) + 6) % 7);
+    for (let x = dn(a); x <= dn(b); x++) { const d = ds(x); cal += `<button type="button" ${d <= today ? 'disabled' : ''} class="${g.oneoffs.some(o => o.date === d) ? 'is-on' : ''}" data-act="g-date" data-d="${d}">${+d.slice(8)}</button>`; }
+    body = `<div class="pp-cal">${cal}</div>${g.oneoffs.length ? `<div class="qe-queue">${g.oneoffs.map((o, i) => `<div class="qe-qrow"><span class="qe-ic" style="--c:#db2777">${ic('Gift', 15)}</span><span class="qe-rt" style="display:grid;grid-template-columns:1fr 120px;gap:6px"><input data-g="oneoffs:${i}:name" placeholder="What on ${nice(o.date)}?" value="${esc(o.name)}" style="min-height:34px"><input data-g="oneoffs:${i}:amount" inputmode="numeric" placeholder="Amount" value="${o.amount}" style="min-height:34px"></span><button class="qe-x" data-act="g-rm" data-i="${i}">${ic('x', 15)}</button></div>`).join('')}</div>` : '<p class="qe-hint">No one-offs yet. Tap a date above.</p>'}`;
+  } else {
+    const added = guidePlans(g), saved = S.plans;
+    S.plans = [...saved, ...added]; const s = monthSummary(S.month), pts = runway(S.month); S.plans = saved;
+    body = `<div class="pp-kpis"><div>Income this month<b style="color:var(--success)">${vnd(s.inReal + s.inPlan)}</b></div><div>Spending this month<b style="color:var(--danger)">${vnd(s.outReal + s.outPlan)}</b></div><div>New plans<b>${added.length}</b></div><div>Projected left over<b style="color:${s.left >= 0 ? 'var(--primary)' : 'var(--danger)'}">${vnd(s.left)}</b></div></div>
+      <div class="qe-field"><span>Money left, day by day</span>${spark(pts)}</div><span class="qe-hint">${added.length ? added.map(p => `${p.name} ${k(p.amount)}`).join(' · ') : 'Nothing new selected. Go back to pick items.'}</span>`;
+  }
+  return `<div class="qe-layer" data-act="close-bg"><div class="qe-dialog" data-stop style="width:min(760px,100%)">
+    <header class="qe-d-head"><h2>${ic('sparkles', 18)} Plan your month · ${MONL[+S.month.slice(5) - 1]}</h2><button class="qe-fx" data-act="close">${ic('x', 18)}</button></header>
+    <div class="pp-steps">${GSTEPS.map((_, i) => `<span class="${i <= g.step ? 'is-on' : ''}"></span>`).join('')}</div>
+    <div class="pp-guide"><h3>${g.step + 1}. ${title}</h3><p>${help}</p>${body}</div>
+    <footer class="qe-d-foot"><div class="qe-d-actions"><button class="qe-btn is-plain" data-act="g-back" ${g.step ? '' : 'disabled'}>Back</button><span class="qe-sp"></span>
+      ${g.step < GSTEPS.length - 1 ? '<button class="qe-btn is-primary" data-act="g-next">Next</button>' : `<button class="qe-btn is-primary" data-act="g-finish">Create ${guidePlans(g).length} plan${guidePlans(g).length === 1 ? "" : "s"}</button>`}</div></footer>
+  </div></div>`;
+}
+function runway(m) {
+  const [a, b] = monthRange(m), plan = projected(a, b); let bal = 0; const pts = [];
+  for (let x = dn(a); x <= dn(b); x++) { const d = ds(x); for (const t of S.txs) if (t.date === d) bal += t.kind === 'in' ? t.amount : -t.amount; for (const o of plan) if (o.date === d) bal += o.plan.kind === 'in' ? o.amount : -o.amount; pts.push({ d, bal }); }
+  return pts;
+}
+function spark(pts) {
+  const w = 680, h = 72, v = pts.map(p => p.bal), hi = Math.max(0, ...v), lo = Math.min(0, ...v), y = x => 6 + (hi - x) / ((hi - lo) || 1) * (h - 12);
+  const ti = Math.max(0, pts.findIndex(p => p.d >= S.now.slice(0, 10))), xy = pts.map((p, i) => [i / (pts.length - 1) * w, y(p.bal)]), line = a => a.map(p => p.join(',')).join(' ');
+  return `<svg class="pp-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><line x1="0" x2="${w}" y1="${y(0)}" y2="${y(0)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><polyline points="${line(xy.slice(0, ti + 1))}" fill="none" stroke="var(--text-main)" stroke-width="2"/><polyline points="${line(xy.slice(ti))}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="6 4"/></svg>`;
+}
+
+// =====================================================================================
+// ACTIONS
+// =====================================================================================
+let toastTimer;
+function toast(msg) { S.toast = msg; clearTimeout(toastTimer); toastTimer = setTimeout(() => { S.toast = null; render(); }, 4200); }
+const plan = id => S.plans.find(p => p.id === id);
+function savePlan(d) {
+  const sure = d.sure ?? defaultSure(d), income = d.mode === 'income';
+  const base = { kind: income ? 'in' : 'out', sure, name: d.name.trim() || (income ? d.source : meta('out', d.cat).name), amount: amountOf(d), cat: income ? d.source : d.cat, time: d.time, start: d.date,
+    freq: d.repeat ? d.freq : 'once', interval: Math.max(1, +d.interval || 1), days: d.repeat && d.freq === 'weekly' ? [...d.days].sort() : [], end: d.repeat ? d.end || null : null };
+  if (d.editId) {
+    const p = plan(d.editId);
+    if (d.applyFrom && d.applyFrom > p.start) {
+      const created = { ...base, id: nid(), start: d.applyFrom, ex: {}, mt: p.mt };
+      for (const [day, e] of Object.entries(p.ex)) if (day >= d.applyFrom) { created.ex[day] = e; delete p.ex[day]; }
+      p.end = addDays(d.applyFrom, -1); S.plans.push(created);
+      return `${created.name} changes from ${nice(d.applyFrom)}; earlier days keep the old plan.`;
+    }
+    Object.assign(p, base); return `Updated ${p.name}. Past transactions are unchanged.`;
+  }
+  const dup = S.plans.find(p => p.name.toLowerCase() === base.name.toLowerCase() && p.freq === base.freq && p.kind === base.kind && nextOcc(p));
+  S.plans.push({ ...base, id: nid(), ex: {}, mt: S.now });
+  return `Planned ${base.name}: ${sure ? '' : '~'}${k(base.amount)} ₫, ${lc(describe(base))}.${dup ? ' A similar plan already exists.' : ''}`;
+}
+function act(a, el) {
+  const d = S.dialog;
+  switch (a) {
+    case 'go': {
+      const v = el.dataset.v;
+      if (v === 'analytics' || v === 'profile') { toast(`${v[0].toUpperCase() + v.slice(1)} is unchanged by this feature and not part of the prototype.`); break; }
+      // Desktop Week isn't redesigned here; show the day page, which carries the planned items.
+      S.page = v === 'week' && !isMobile() ? 'day' : v;
+      if (v === 'week') S.day = S.now.slice(0, 10);
+      S.dialog = S.guide = S.occ = null; break;
+    }
+    case 'month':
+      if (S.page === 'week' || (S.page === 'day' && isMobile())) { S.day = addDays(S.day, +el.dataset.v * 7); S.month = S.day.slice(0, 7); break; }
+      if (S.page === 'day') { S.day = addDays(S.day, +el.dataset.v); S.month = S.day.slice(0, 7); break; }
+      { const [y, mo] = S.month.split('-').map(Number); S.month = new Date(Date.UTC(y, mo - 1 + +el.dataset.v, 1)).toISOString().slice(0, 7); } break;
+    case 'week': S.day = addDays(S.day, +el.dataset.v); S.month = S.day.slice(0, 7); break;
+    case 'open-day': S.day = el.dataset.d; S.month = S.day.slice(0, 7); S.page = isMobile() ? 'week' : 'day'; S.changing = null; break;
+    case 'theme': S.theme = S.theme === 'light' ? 'dark' : 'light'; break;
+    case 'add': S.dialog = newDraft({ date: el.dataset.d, plan: !!el.dataset.plan }); break;
+    case 'close': case 'close-bg': S.dialog = S.guide = S.occ = null; S.changing = null; break;
+    case 'mode':
+      if (el.dataset.v === 'plan') { d.plan = true; if (`${d.date}T${d.time}` <= S.now && !d.repeat) { d.date = addDays(S.now.slice(0, 10), 1); d.time = '12:00'; } }
+      else { d.plan = false; d.mode = el.dataset.v; }
+      d.sure = null; break;
+    case 'kind': d.mode = el.dataset.v; d.sure = null; break;
+    case 'key': { const v = el.dataset.v; if (v === 'del') d.amount = d.amount.slice(0, -1); else if (v === '000') { if (+d.amount) d.amount = (d.amount + '000').slice(0, 13); } else d.amount = (d.amount + v).replace(/^0+/, '').slice(0, 13); break; }
+    case 'cat': d.cat = el.dataset.v; d.sure = null; break;
+    case 'source': d.source = el.dataset.v; d.sure = null; break;
+    case 'name': d.name = el.dataset.v; break;
+    case 'date': d.date = el.dataset.v; d.days = [dow(d.date)]; break;
+    case 'time': d.time = el.dataset.v === 'now' ? S.now.slice(11) : el.dataset.v; break;
+    case 'repeat': d.repeat = !d.repeat; d.days = [dow(d.date)]; break;
+    case 'freq': d.freq = el.dataset.v; break;
+    case 'wday': { const v = +el.dataset.v; d.days = d.days.includes(v) ? (d.days.length > 1 ? d.days.filter(x => x !== v) : d.days) : [...d.days, v]; break; }
+    case 'step': d.interval = Math.min(365, Math.max(1, d.interval + +el.dataset.v)); break;
+    case 'sure': d.sure = el.dataset.v === '1'; break;
+    case 'apply': d.applyFrom = el.dataset.v ? addDays(S.now.slice(0, 10), 1) : ''; break;
+    case 'save': {
+      const st = draftState(d);
+      if (!(amountOf(d) > 0)) { toast('Enter an amount on the keypad first.'); break; }
+      if (st.forced && !st.future && !d.repeat) { toast('A plan needs a future date or a repeat.'); break; }
+      let msg;
+      if (st.isPlan) msg = savePlan(d);
+      else { const income = d.mode === 'income'; S.txs.push({ id: nid(), kind: income ? 'in' : 'out', name: d.name.trim() || (income ? d.source : meta('out', d.cat).name), amount: amountOf(d), cat: income ? d.source : d.cat, date: d.date, time: d.time, planId: null, planDate: null }); msg = `Added ${d.name || (income ? d.source : meta('out', d.cat).name)}: ${income ? '+' : '−'}${k(amountOf(d))} ₫.`; }
+      toast(msg);
+      if (el.dataset.next) S.dialog = { ...newDraft({ date: d.date }), plan: d.plan, mode: d.mode, cat: d.cat, source: d.source, repeat: d.repeat, freq: d.freq, days: d.days, time: d.time };
+      else { S.dialog = null; S.month = d.date.slice(0, 7); }
+      break;
+    }
+    case 'deltx': S.txs = S.txs.filter(t => t.id !== el.dataset.id); toast('Deleted. If it came from a plan, it won’t come back.'); break;
+    case 'change': S.changing = el.dataset.key; break;
+    case 'change-cancel': S.changing = null; break;
+    case 'occ-open': S.occ = { p: el.dataset.p, d: el.dataset.d }; S.changing = null; break;
+    case 'occ-skip': plan(el.dataset.p).ex[el.dataset.d] = { skip: true }; S.occ = null; toast('Skipped for this day.'); break;
+    case 'occ-unskip': delete plan(el.dataset.p).ex[el.dataset.d]; toast('Planned again for this day.'); break;
+    case 'occ-usual': delete plan(el.dataset.p).ex[el.dataset.d]; S.occ = null; toast('Back to the usual amount.'); break;
+    case 'occ-done': {
+      const p = plan(el.dataset.p), date = el.dataset.d, o = occurrences(p, date, date)[0], today = S.now.slice(0, 10);
+      S.txs.push({ id: nid(), kind: p.kind, name: o.name, amount: o.amount, cat: p.cat, date: date <= today ? date : today, time: date < today ? o.time : S.now.slice(11), planId: p.id, planDate: date });
+      S.occ = null; toast(`${o.name} recorded as real now. The plan for ${nice(date)} is fulfilled.`); break;
+    }
+    case 'occ-series': { const p = plan(el.dataset.p), draft = draftFromPlan(p); if (p.freq !== 'once' && el.dataset.d > p.start) draft.applyFrom = el.dataset.d; S.occ = null; S.dialog = draft; break; }
+    case 'edit': S.dialog = draftFromPlan(plan(el.dataset.p)); break;
+    case 'delplan': { const p = plan(el.dataset.p); if (!confirm(`Delete “${p.name}”? Upcoming planned days disappear; past transactions are kept.`)) return; S.plans = S.plans.filter(x => x !== p); S.txs.forEach(t => { if (t.planId === p.id) t.planId = null; }); S.dialog = null; toast(`Deleted ${p.name}. Its past transactions are kept.`); break; }
+    case 'guide': S.guide = newGuide(); S.dialog = S.occ = null; break;
+    case 'g-toggle': { const it = S.guide[el.dataset.k][+el.dataset.i]; if (!it.done) it.on = !it.on; break; }
+    case 'g-next': S.guide.step++; break;
+    case 'g-back': S.guide.step--; break;
+    case 'g-date': { const g = S.guide, i = g.oneoffs.findIndex(o => o.date === el.dataset.d); if (i >= 0) g.oneoffs.splice(i, 1); else g.oneoffs.push({ date: el.dataset.d, name: '', amount: '' }); g.oneoffs.sort((x, y) => x.date.localeCompare(y.date)); break; }
+    case 'g-rm': S.guide.oneoffs.splice(+el.dataset.i, 1); break;
+    case 'g-finish': { const ps = guidePlans(S.guide); S.plans.push(...ps); S.guide = null; S.page = 'calendar'; toast(ps.length ? `Created ${ps.length} plans. The calendar now shows your whole month.` : 'Nothing new to create.'); break; }
+    default: return;
+  }
+  render();
+}
+
+// ---------- events ----------
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  e.preventDefault();
+  if (el.dataset.act === 'close-bg' && e.target.closest('[data-stop]')) return;
+  act(el.dataset.act, el);
+});
+document.addEventListener('submit', e => {
+  const f = e.target.closest('[data-form="change"]'); if (!f) return;
+  e.preventDefault();
+  const v = Math.round(+String(f.amount.value).replace(/[^\d]/g, ''));
+  if (!(v > 0)) { toast('Enter an amount above 0 ₫'); render(); return; }
+  const p = plan(f.dataset.p); p.ex[f.dataset.d] = { ...(p.ex[f.dataset.d] || {}), amount: v, skip: false };
+  S.changing = null; S.occ = null; toast(`${p.name} on ${nice(f.dataset.d)} is now ${k(v)} ₫.`); render();
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.f && S.dialog) {
+    S.dialog[t.dataset.f] = t.value;
+    if (t.dataset.f === 'query') { const pos = t.selectionStart; render(); const q = document.querySelector('[data-f="query"]'); q.focus(); q.setSelectionRange(pos, pos); return; }
+    const s = document.getElementById('pp-status'); if (s) s.innerHTML = statusHtml(S.dialog);
+    const b = document.getElementById('pp-save'); if (b) b.textContent = saveLabel(S.dialog);
+  }
+  if (t.dataset.g && S.guide) { const [key, i, f] = t.dataset.g.split(':'); S.guide[key][+i][f] = f === 'amount' ? t.value.replace(/[^\d]/g, '') : t.value; }
+});
+document.addEventListener('change', e => { if (e.target.dataset.re !== undefined && S.dialog) render(); });
+// Keypad from the hardware keyboard while the dialog is open (as in the app).
+document.addEventListener('keydown', e => {
+  if (!S.dialog) { if (e.key === 'Escape') { S.guide = S.occ = null; render(); } return; }
+  const inField = e.target.closest?.('input, select, textarea');
+  if (e.key === 'Escape') { if (inField) e.target.blur(); else { S.dialog = null; render(); } return; }
+  if (e.key === 'Enter' && !inField) { e.preventDefault(); act('save', { dataset: {} }); return; }
+  if (inField || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^\d$/.test(e.key)) act('key', { dataset: { v: e.key } });
+  else if (e.key === 'k' || e.key === 'K') act('key', { dataset: { v: '000' } });
+  else if (e.key === 'Backspace') act('key', { dataset: { v: 'del' } });
+});
+// Messages from the demo toolbar.
+window.addEventListener('message', e => {
+  const m = e.data || {};
+  if (m.cmd === 'time') {
+    S.now = addMinutes(S.now, m.min); const made = materialize();
+    S.day = S.now.slice(0, 10); S.month = S.now.slice(0, 7);
+    toast(made.length ? `${made.length} planned item${made.length > 1 ? 's' : ''} became real: ${made.slice(0, 4).map(t => `${t.name} ${t.kind === 'in' ? '+' : ''}${k(t.amount)}`).join(', ')}${made.length > 4 ? '…' : ''}` : 'Nothing planned in that time.');
+  }
+  if (m.cmd === 'reset') { Object.assign(S, seed(), { page: 'calendar', month: '2026-11', day: '2026-11-04', dialog: null, guide: null, occ: null, changing: null }); toast('Reset to Wed 4 Nov, 10:00.'); }
+  if (m.cmd === 'entry') { S.entry = m.v; if (S.dialog && m.v === 'date') S.dialog.plan = false; }
+  if (m.cmd === 'theme') S.theme = m.v;
+  render();
+});
+matchMedia('(max-width: 768px)').addEventListener('change', () => { if (isMobile() && S.page === 'day') S.page = 'week'; if (!isMobile() && S.page === 'week') S.page = 'day'; render(); });
+render();
+})();
+</script>
+</body>
+</html>
