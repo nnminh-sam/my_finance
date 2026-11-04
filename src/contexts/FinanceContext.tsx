@@ -18,7 +18,7 @@ interface FinanceContextValue {
   reload: () => Promise<void>;
   fetchWeeksSpendings: (startDate: string, endDate: string) => Promise<Spending[]>;
   updateSettings: (updates: Partial<FinanceSettings>) => Promise<void>;
-  createSpending: (input: SpendingInput) => Promise<void>;
+  createSpending: (input: SpendingInput) => Promise<Spending>;
   updateSpending: (id: string, input: SpendingInput) => Promise<void>;
   deleteSpending: (id: string) => Promise<void>;
   createIncome: (input: IncomeInput) => Promise<void>;
@@ -129,6 +129,7 @@ export function FinanceProvider({ userId, children }: { userId: string; children
   const createSpending = useCallback((input: SpendingInput) => serialize(async () => {
     const saved = await api.createSpending(input);
     if (currentAccount()) setSpendings(records => [...records.filter(record => record.id !== saved.id), saved]);
+    return saved;
   }), [serialize, currentAccount]);
 
   const updateSpending = useCallback((id: string, input: SpendingInput) => serialize(async () => {

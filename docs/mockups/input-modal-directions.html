@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick-entry directions</title>
+<style>
+:root {
+  --bg: #f4f4f5; --card: #ffffff; --card2: #eef0f3; --hover: #f1f5f9; --text: #0f172a; --muted: #64748b; --border: #e2e8f0;
+  --primary: #3b82f6; --primary-soft: rgba(59,130,246,.12); --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+  --dim: rgba(15,23,42,.38); --frame: #1f2937; --shadow: 0 18px 50px rgba(15,23,42,.18);
+  --page: #e9ebef;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #09090b; --card: #18181b; --card2: #232327; --hover: #27272a; --text: #f4f4f5; --muted: #a1a1aa; --border: #3f3f46;
+  --primary-soft: rgba(59,130,246,.2); --dim: rgba(0,0,0,.55); --frame: #000; --page: #050506; --shadow: 0 18px 50px rgba(0,0,0,.5);
+} }
+:root[data-theme="dark"] {
+  --bg: #09090b; --card: #18181b; --card2: #232327; --hover: #27272a; --text: #f4f4f5; --muted: #a1a1aa; --border: #3f3f46;
+  --primary-soft: rgba(59,130,246,.2); --dim: rgba(0,0,0,.55); --frame: #000; --page: #050506; --shadow: 0 18px 50px rgba(0,0,0,.5);
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page); color: var(--text); -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button { background: none; border: 0; cursor: pointer; padding: 0; }
+input, select { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; min-height: 40px; width: 100%; outline: none; }
+input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+code { font-size: .9em; background: var(--card2); padding: 1px 5px; border-radius: 5px; }
+.wrap { max-width: 1440px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 20px 8px; }
+.eyebrow { color: var(--primary); font-weight: 700; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+h1.page { font-size: 34px; margin: 6px 0 8px; letter-spacing: -.02em; line-height: 1.15; }
+.lede { max-width: 900px; color: var(--muted); margin: 0 0 6px; }
+.muted { color: var(--muted); }
+.controls { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+.controls .wrap { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; }
+.jump { display: flex; gap: 6px; flex-wrap: wrap; }
+.jump a { text-decoration: none; color: var(--text); background: var(--card); border: 1px solid var(--border); padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.ctl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.segc { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 2px; }
+.segc button { padding: 4px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.segc button.on { background: var(--primary); color: #fff; }
+
+.block { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 20px 22px; margin: 20px 0; }
+.block h2 { margin: 0 0 6px; font-size: 22px; }
+.feat { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 12px; }
+.feat div { background: var(--card2); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.feat b { display: block; margin-bottom: 2px; }
+
+.dir { margin: 28px 0 40px; }
+.dir-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.dir-head h2 { margin: 0; font-size: 26px; letter-spacing: -.01em; }
+.letter { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 800; margin-right: 10px; font-size: 18px; vertical-align: 3px; }
+.pitch { max-width: 980px; margin: 8px 0 14px; }
+.stages { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 1100px) { .stages { grid-template-columns: 1fr; } .stage-m { justify-self: center; } }
+.stage-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 6px 4px; }
+.notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 14px; }
+.notes div { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+.notes h4 { margin: 0 0 4px; font-size: 14px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 14px; }
+.cmp th, .cmp td { border-top: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+.cmp th { width: 190px; color: var(--muted); font-weight: 600; }
+.cmp thead th { color: var(--text); border-top: 0; }
+
+/* ================= devices ================= */
+.inst { position: relative; color: var(--text); font-size: 13px; line-height: 1.35; -webkit-tap-highlight-color: transparent; }
+.inst :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.phone { width: 360px; height: 760px; border-radius: 46px; border: 10px solid var(--frame); background: var(--bg); overflow: hidden; box-shadow: var(--shadow); }
+.phone .notch { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 96px; height: 26px; background: #000; border-radius: 14px; z-index: 60; }
+.phone .sb { height: 40px; display: flex; justify-content: space-between; align-items: center; padding: 6px 26px 0; font-size: 12px; font-weight: 600; }
+.phone .screen { position: absolute; top: 40px; left: 0; right: 0; bottom: 64px; display: flex; flex-direction: column; overflow: hidden; }
+.tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; display: grid; grid-template-columns: repeat(5, 1fr); align-items: start; padding-top: 6px; background: color-mix(in srgb, var(--card) 92%, transparent); border-top: 1px solid var(--border); z-index: 5; }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; color: var(--muted); }
+.tab svg { width: 20px; height: 20px; }
+.tab.on { color: var(--primary); font-weight: 700; }
+.tab.plus span { width: 44px; height: 44px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; margin-top: -16px; box-shadow: 0 6px 16px rgba(59,130,246,.45), 0 0 0 4px var(--bg); }
+.browser { height: 760px; border-radius: 14px; border: 1px solid var(--border); background: var(--bg); overflow: hidden; box-shadow: var(--shadow); display: flex; flex-direction: column; min-width: 0; }
+.chrome { height: 38px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--card2); border-bottom: 1px solid var(--border); }
+.chrome i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.chrome .url { flex: 1; max-width: 460px; margin-left: 12px; background: var(--card); border-radius: 8px; padding: 3px 12px; font-size: 12px; color: var(--muted); }
+.wscreen { position: relative; flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* --- mobile base (F week) --- */
+.m-nav { display: flex; justify-content: space-between; align-items: flex-end; padding: 6px 16px 6px; }
+.m-nav small { color: var(--muted); }
+.m-nav h3 { margin: 0; font-size: 26px; letter-spacing: -.02em; line-height: 1.1; }
+.m-wnav { display: flex; gap: 4px; }
+.m-wnav span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--card); border: 1px solid var(--border); }
+.m-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 10px 3px; }
+.m-bars div { height: 34px; display: flex; align-items: flex-end; justify-content: center; }
+.m-bars span { width: 62%; border-radius: 4px 4px 2px 2px; background: var(--primary); opacity: .45; }
+.m-bars span.today { background: var(--warning); opacity: 1; }
+.m-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 10px 6px; }
+.m-strip span { border-radius: 11px; border: 1px solid var(--border); background: var(--card); display: flex; flex-direction: column; align-items: center; padding: 3px 0; font-weight: 700; }
+.m-strip span small { color: var(--muted); font-weight: 400; font-size: 10px; }
+.m-strip span.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.m-strip span.on small { color: rgba(255,255,255,.85); }
+.m-ledger { flex: 1; min-height: 0; overflow: auto; padding: 0 12px 8px; scrollbar-width: none; }
+.m-ledger-h { display: flex; justify-content: space-between; padding: 2px 4px 6px; }
+.m-ledger-h b { font-size: 16px; }
+.list { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; min-height: 50px; }
+.row + .row { border-top: 1px solid var(--border); }
+.ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex: none; color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
+.ic svg { width: 16px; height: 16px; }
+.rt { flex: 1; min-width: 0; }
+.rt b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rt small { color: var(--muted); }
+.amt { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dimmer { position: absolute; inset: 0; background: var(--dim); z-index: 20; animation: fade .2s; }
+@keyframes fade { from { opacity: 0; } }
+
+/* --- web base (current desktop) --- */
+.w-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--card) 85%, transparent); border-radius: 0 0 16px 16px; }
+.w-brand { display: flex; align-items: center; gap: 10px; }
+.w-logo { width: 36px; height: 36px; border-radius: 11px; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 800; }
+.w-brand b { display: block; font-size: 16px; }
+.w-brand small { color: var(--muted); }
+.w-nav { display: flex; gap: 4px; background: var(--card2); padding: 3px; border-radius: 12px; }
+.w-nav span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 9px; color: var(--muted); font-weight: 600; font-size: 13px; }
+.w-nav span.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.w-actions { display: flex; gap: 6px; }
+.w-actions span { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; border: 1px solid var(--border); background: var(--card); }
+.w-actions span.add { background: var(--primary); color: #fff; border-color: var(--primary); cursor: pointer; }
+.w-week { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; padding: 16px 20px; min-height: 0; }
+.w-day { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.w-day.today { border-color: #38bdf8; box-shadow: 0 0 0 1px rgba(56,189,248,.45); }
+.w-day h5 { margin: 0; display: flex; justify-content: space-between; font-size: 13px; }
+.w-day h5 small { color: var(--muted); font-weight: 500; }
+.w-tx { font-size: 11.5px; background: var(--card2); border-radius: 8px; padding: 5px 7px; display: flex; justify-content: space-between; gap: 4px; }
+.w-tx span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ================= shared input pieces ================= */
+.seg { display: flex; background: var(--card2); border-radius: 10px; padding: 2px; }
+.seg button { flex: 1; padding: 5px 10px; border-radius: 8px; font-weight: 600; color: var(--muted); min-height: 30px; white-space: nowrap; }
+.seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.seg.mode button.on[data-v="spending"] { background: var(--primary); color: #fff; }
+.seg.mode button.on[data-v="income"] { background: var(--success); color: #fff; }
+.seg.small button { min-height: 26px; padding: 3px 8px; font-size: 12px; }
+.amount { text-align: center; font-size: 30px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.amount small { font-size: .55em; color: var(--muted); font-weight: 600; }
+.amount.zero { color: var(--muted); }
+.amount.income { color: var(--success); }
+.amount.shake { animation: shake .12s linear 3; }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+.chips::-webkit-scrollbar { display: none; }
+.chips.wrap { flex-wrap: wrap; overflow: visible; }
+.chip { flex: none; min-height: 34px; border-radius: 11px; border: 1.5px solid var(--border); display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; font-weight: 500; background: var(--card); }
+.chip svg { color: var(--c); width: 15px; height: 15px; }
+.chip.on { border-color: var(--c, var(--primary)); background: color-mix(in srgb, var(--c, var(--primary)) 15%, var(--card)); }
+.keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.keys button { min-height: 40px; border-radius: 10px; background: var(--card2); font-size: 19px; font-weight: 500; display: grid; place-items: center; }
+.keys button:active { background: var(--border); }
+.keys .ok { grid-row: span 2; background: var(--primary); color: #fff; font-size: 14px; font-weight: 700; line-height: 1.2; }
+.keys .ok.income { background: var(--success); }
+.keys .next { font-size: 12.5px; font-weight: 700; color: var(--primary); background: var(--primary-soft); line-height: 1.1; }
+.keys .wide { grid-column: span 2; }
+.dchips { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; }
+.dchip { flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 9px; border-radius: 999px; background: var(--card2); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.dchip svg { width: 14px; height: 14px; color: var(--muted); }
+.dchip.set { background: var(--primary-soft); color: var(--primary); }
+.dchip.set svg { color: var(--primary); }
+.dchip.open { outline: 2px solid var(--primary); }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field > span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.frow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.panel { display: flex; flex-direction: column; gap: 9px; }
+.panel-h { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+.link { color: var(--primary); font-weight: 600; }
+.link.danger { color: var(--danger); }
+.btn { min-height: 40px; border-radius: 11px; font-weight: 700; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn.primary { background: var(--primary); color: #fff; }
+.btn.income { background: var(--success); color: #fff; }
+.btn.ghost { background: var(--primary-soft); color: var(--primary); }
+.btn.plain { border: 1px solid var(--border); background: var(--card); }
+.btn:disabled { opacity: .45; cursor: default; }
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.days button { min-height: 32px; border-radius: 9px; background: var(--card2); font-weight: 600; font-size: 12px; }
+.days button.on { background: var(--primary); color: #fff; }
+.stepper { display: inline-flex; align-items: center; gap: 4px; }
+.stepper button { width: 32px; height: 32px; border-radius: 9px; background: var(--card2); font-weight: 700; font-size: 16px; }
+.stepper b { min-width: 28px; text-align: center; }
+.switch { width: 40px; height: 24px; border-radius: 12px; background: var(--border); position: relative; display: inline-block; transition: .2s; flex: none; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.switch.on { background: var(--success); }
+.switch.on::after { left: 18px; }
+.trow { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 36px; width: 100%; text-align: left; }
+.queue { background: var(--card2); border-radius: 12px; overflow: hidden; }
+.qh { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; font-weight: 700; font-size: 12.5px; }
+.qrow { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--border); font-size: 12.5px; }
+.qrow .rt small { font-size: 11px; }
+.qrow .x { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); }
+.qrow.cur { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.toast { position: absolute; left: 12px; right: 12px; top: 10px; z-index: 80; background: var(--text); color: var(--bg); border-radius: 12px; padding: 9px 12px; font-size: 12.5px; display: flex; justify-content: space-between; gap: 8px; animation: drop .22s ease-out; }
+@keyframes drop { from { transform: translateY(-14px); opacity: 0; } }
+.toast button { color: var(--primary); font-weight: 700; filter: brightness(1.3); }
+.alert-layer { position: absolute; inset: 0; z-index: 90; background: var(--dim); display: grid; place-items: center; }
+.alert { width: 260px; background: var(--card); border-radius: 16px; text-align: center; overflow: hidden; box-shadow: var(--shadow); }
+.alert .ab { padding: 16px 14px 12px; }
+.alert p { margin: 4px 0 0; color: var(--muted); }
+.alert .abtn { display: flex; border-top: 1px solid var(--border); }
+.alert .abtn button { flex: 1; padding: 11px; color: var(--primary); }
+.alert .abtn button + button { border-left: 1px solid var(--border); color: var(--danger); font-weight: 700; }
+.search { position: relative; }
+.search svg { position: absolute; left: 10px; top: 11px; color: var(--muted); width: 16px; height: 16px; }
+.search input { padding-left: 32px; }
+.cgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.cgrid .chip { justify-content: flex-start; min-height: 38px; overflow: hidden; }
+.cgrid .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kbd { font-size: 11px; color: var(--muted); }
+.kbd b { display: inline-block; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; font-weight: 600; background: var(--card); color: var(--text); }
+.hint { color: var(--muted); font-size: 11.5px; }
+.edit-banner { background: color-mix(in srgb, var(--warning) 16%, transparent); color: color-mix(in srgb, var(--warning) 70%, var(--text)); border-radius: 10px; padding: 6px 10px; font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; }
+
+/* ---------- A: keypad dock + detail chips ---------- */
+.a-dock { flex: none; background: var(--card); border-top: 1px solid var(--border); padding: 6px 10px 8px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 -8px 24px rgba(0,0,0,.06); }
+.a-dock-h { display: flex; align-items: center; gap: 8px; }
+.a-dock-h .to { flex: 1; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--card2); flex: none; }
+.a-tray { display: flex; align-items: center; justify-content: space-between; gap: 6px; background: var(--primary-soft); color: var(--primary); border-radius: 10px; padding: 5px 10px; font-weight: 700; font-size: 12px; }
+.a-panel { background: var(--card2); border-radius: 12px; padding: 10px; max-height: 300px; overflow: auto; }
+.a-panel input, .a-panel select { background: var(--card); }
+.a-dialog { position: absolute; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(860px, calc(100% - 40px)); max-height: calc(100% - 40px); background: var(--card); border-radius: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; animation: pop .18s ease-out; }
+@keyframes pop { from { transform: translate(-50%, -48%) scale(.98); opacity: 0; } }
+.d-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.d-head h4 { margin: 0; font-size: 17px; flex: 1; }
+.d-body { flex: 1; min-height: 0; overflow: auto; }
+.d-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
+.d-foot .sp { flex: 1; }
+.a-cols { display: grid; grid-template-columns: 290px minmax(0, 1fr); }
+.a-left { padding: 16px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; background: color-mix(in srgb, var(--card2) 45%, var(--card)); }
+.a-right { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.a-sec { display: flex; flex-direction: column; gap: 6px; }
+.a-sec > b { font-size: 12px; color: var(--muted); }
+.a-rep { border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------- B: step sheet ---------- */
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--card); border-radius: 20px 20px 0 0; box-shadow: 0 -10px 30px rgba(0,0,0,.18); display: flex; flex-direction: column; max-height: 94%; animation: rise .26s cubic-bezier(.2,.8,.2,1); }
+@keyframes rise { from { transform: translateY(40%); opacity: .3; } }
+.grab { width: 38px; height: 5px; border-radius: 3px; background: var(--border); margin: 7px auto 2px; flex: none; }
+.s-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 14px 6px; gap: 8px; }
+.s-head b { font-size: 15px; }
+.s-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 14px 10px; display: flex; flex-direction: column; gap: 10px; }
+.s-foot { flex: none; display: flex; gap: 8px; padding: 8px 14px 12px; border-top: 1px solid var(--border); }
+.s-foot .btn { flex: 1; }
+.dots { display: flex; gap: 5px; justify-content: center; }
+.dots span { width: 7px; height: 7px; border-radius: 4px; background: var(--border); transition: .2s; }
+.dots span.on { width: 20px; background: var(--primary); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile { border: 1.5px solid var(--border); border-radius: 14px; min-height: 76px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 6px; text-align: center; font-weight: 600; font-size: 12px; background: var(--card); }
+.tile .ic { width: 36px; height: 36px; }
+.tile.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--card)); }
+.summary { display: flex; align-items: center; gap: 10px; background: var(--card2); border-radius: 12px; padding: 8px 10px; }
+.summary b { font-size: 17px; }
+.glist { background: var(--card2); border-radius: 12px; overflow: hidden; }
+.gi { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; }
+.gi + .gi { border-top: 1px solid var(--border); }
+.gi > .trow > span:first-child { font-weight: 600; }
+.gi input, .gi select { background: var(--card); }
+.b-dialog { position: absolute; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(820px, calc(100% - 40px)); height: min(560px, calc(100% - 40px)); background: var(--card); border-radius: 18px; box-shadow: var(--shadow); display: grid; grid-template-columns: 230px minmax(0, 1fr); overflow: hidden; animation: pop .18s ease-out; }
+.b-rail { background: color-mix(in srgb, var(--card2) 55%, var(--card)); border-right: 1px solid var(--border); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+.b-rail h4 { margin: 0 6px 10px; font-size: 16px; }
+.b-step { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: 12px; text-align: left; width: 100%; }
+.b-step .n { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; background: var(--card2); flex: none; border: 1px solid var(--border); }
+.b-step.done .n { background: var(--success); color: #fff; border-color: var(--success); }
+.b-step.on { background: var(--card); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.b-step.on .n { background: var(--primary); color: #fff; border-color: var(--primary); }
+.b-step b { display: block; font-size: 13px; }
+.b-step small { color: var(--muted); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.b-main { display: flex; flex-direction: column; min-width: 0; }
+.b-content { flex: 1; min-height: 0; overflow: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; }
+.b-big { font-size: 46px; font-weight: 800; letter-spacing: -.03em; text-align: center; padding: 18px 0 6px; font-variant-numeric: tabular-nums; }
+.b-big small { font-size: .45em; color: var(--muted); }
+.quick { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.quick button { padding: 5px 11px; border-radius: 999px; background: var(--card2); font-weight: 600; font-size: 12.5px; }
+.rtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rtable td, .rtable th { padding: 7px 8px; border-top: 1px solid var(--border); text-align: left; }
+.rtable th { color: var(--muted); font-weight: 600; font-size: 12px; border-top: 0; }
+.rtable td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.rtable tr.cur td { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+
+/* ---------- C: sentence + receipt ---------- */
+.receipt { background: var(--card2); border-radius: 12px; padding: 4px 0; font-variant-numeric: tabular-nums; }
+.rline { display: flex; align-items: center; gap: 8px; padding: 5px 10px; width: 100%; text-align: left; font-size: 12.5px; }
+.rline .rt small { font-size: 11px; }
+.rline.cur { background: color-mix(in srgb, var(--primary) 10%, transparent); border-left: 3px solid var(--primary); padding-left: 7px; }
+.rtotal { display: flex; justify-content: space-between; padding: 6px 10px 4px; border-top: 1px dashed var(--border); margin-top: 2px; font-weight: 800; }
+.sentence { font-size: 17px; line-height: 2.05; font-weight: 500; }
+.tok { display: inline; border-radius: 8px; padding: 3px 7px; background: var(--primary-soft); color: var(--primary); font-weight: 700; box-decoration-break: clone; -webkit-box-decoration-break: clone; white-space: nowrap; }
+.tok.empty { background: transparent; color: var(--muted); border: 1.5px dashed var(--border); font-weight: 500; }
+.tok.on { background: var(--primary); color: #fff; }
+.tok.inc { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.tok.inc.on { background: var(--success); color: #fff; }
+.picker { background: var(--card2); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.picker input, .picker select { background: var(--card); }
+.recent { display: flex; flex-wrap: wrap; gap: 5px; }
+.recent button { padding: 4px 10px; border-radius: 999px; background: var(--card); border: 1px solid var(--border); font-size: 12px; }
+.c-dialog { position: absolute; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(900px, calc(100% - 40px)); height: min(570px, calc(100% - 40px)); background: var(--card); border-radius: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; animation: pop .18s ease-out; }
+.c-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 290px; }
+.c-main { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+.c-side { border-left: 1px solid var(--border); padding: 14px; display: flex; flex-direction: column; gap: 10px; background: color-mix(in srgb, var(--card2) 45%, var(--card)); overflow: auto; }
+.c-dialog .sentence { font-size: 22px; line-height: 2.1; }
+.picker .keys button { background: var(--card); }
+.picker .keys .ok { background: var(--primary); }
+.picker .keys .ok.income { background: var(--success); }
+.picker .b-big { font-size: 34px; white-space: nowrap; padding: 26px 0 6px; }
+</style>
+</head>
+<body>
+
+<header class="wrap hero">
+  <div class="eyebrow">MyFinance · Quick entry for web and phone</div>
+  <h1 class="page">Three directions for one keypad-first input</h1>
+  <p class="lede">The phone's keypad dock (amount → category → ✓) becomes the input everywhere, and it grows to cover everything the current <b>Add Transaction</b> dialog does: description, date, time, repeat rules, the “Add more” queue, editing, and income. Each direction is shown twice, on the new phone UI (direction F) and on the current desktop web app. All of them are clickable.</p>
+  <p class="muted">Try it: type an amount (the web frames accept the keyboard too), pick a category, open the details, press <b>+ Next</b> to queue, then save. Switch to <b>Income</b> in each one. Nothing is saved anywhere.</p>
+</header>
+
+<nav class="controls" aria-label="Preview controls">
+  <div class="wrap">
+    <div class="jump"><a href="#features">Features</a><a href="#dir-A">A · Keypad + chips</a><a href="#dir-B">B · Steps</a><a href="#dir-C">C · Sentence</a><a href="#compare">Compare</a></div>
+    <div class="ctl">Theme <span class="segc" id="theme"><button data-v="system" class="on">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></span></div>
+    <div class="ctl">Opens as <span class="segc" id="edit"><button data-v="new" class="on">New</button><button data-v="edit">Edit existing</button></span></div>
+  </div>
+</nav>
+
+<main class="wrap">
+  <section class="block" id="features">
+    <h2>What every direction must cover</h2>
+    <p class="muted">Taken from the current <code>ExpenseModal</code>. The keypad dock today only does amount, category and ✓.</p>
+    <div class="feat">
+      <div><b>Spending / Income</b>One input for both kinds of entry.</div>
+      <div><b>Amount</b>Digits, <code>000</code>, backspace. On the web, typing too (including <code>k</code> = ×1000).</div>
+      <div><b>Category</b>Your categories, searchable once there are many (you have 13).</div>
+      <div><b>Description</b>Optional. Defaults to the category name; recent ones suggested.</div>
+      <div><b>Date &amp; time</b>Defaults to the selected day and now; Yesterday / Today / Tomorrow shortcuts.</div>
+      <div><b>Repeat</b>Every N days, weekdays, weekly on chosen days, monthly; forever, N times, or until a date.</div>
+      <div><b>Add more (queue)</b>Stage several expenses, edit or remove any of them, save all at once.</div>
+      <div><b>Edit &amp; delete</b>The same input opens an existing expense, with Delete.</div>
+      <div><b>Income</b>Source (Salary, Freelance, Bonus…), name, amount, one-time / daily / weekly / monthly / yearly, start and end date.</div>
+      <div><b>Guard</b>Closing with unsaved input asks Keep editing / Discard.</div>
+    </div>
+  </section>
+
+  <section class="dir" id="dir-A">
+    <div class="dir-head"><h2><span class="letter">A</span>Keypad + detail chips</h2></div>
+    <p class="pitch">The dock you have now, plus a row of <b>detail chips</b> under the amount (Date · Time · Note · Repeat). A chip swaps the keypad for its panel; <b>Done</b> brings the keypad back. The free key next to <b>0</b> becomes <b>+ Next</b>, which queues the entry and clears the amount. On the web the same pieces sit side by side in one dialog: keypad on the left, every field on the right, the queue at the bottom.</p>
+    <div class="stages">
+      <div class="stage-m"><div class="stage-label">Phone · Week tab</div><div class="inst phone" data-v="A" data-p="m"></div></div>
+      <div><div class="stage-label">Web · current desktop, + in the header</div><div class="inst browser" data-v="A" data-p="w"></div></div>
+    </div>
+    <div class="notes">
+      <div><h4>Strengths</h4><ul><li>Smallest change from what you just shipped; the 3-tap path is untouched.</li><li>Every field is one tap away and shows its value on the chip.</li><li>Web dialog shows everything at once, good for batch entry.</li></ul></div>
+      <div><h4>Weaknesses</h4><ul><li>The dock gets taller (chips row + tray) and covers more of the day's list.</li><li>Repeat options are dense inside a phone panel.</li><li>The web dialog is wide; it needs a fallback layout under ~820 px.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="dir-B">
+    <div class="dir-head"><h2><span class="letter">B</span>Step sheet</h2></div>
+    <p class="pitch">Entry as three short steps: <b>Amount → Category → Details</b>. Picking a category moves on by itself, so a plain expense is still amount, tap, ✓. Details is a grouped list (description, date, time, repeat) ending in <b>Add another</b> or <b>Save</b>. On the web the steps become a left rail that shows each answer, like a checkout, plus a <b>Review</b> step for the queue.</p>
+    <div class="stages">
+      <div class="stage-m"><div class="stage-label">Phone · sheet over Week</div><div class="inst phone" data-v="B" data-p="m"></div></div>
+      <div><div class="stage-label">Web · stepper dialog</div><div class="inst browser" data-v="B" data-p="w"></div></div>
+    </div>
+    <div class="notes">
+      <div><h4>Strengths</h4><ul><li>Each screen does one thing; large targets, easiest to make accessible.</li><li>Room for big category tiles, even with 13+ categories.</li><li>Review step makes the queue explicit before saving.</li></ul></div>
+      <div><h4>Weaknesses</h4><ul><li>A sheet over Week hides the day's list while you enter.</li><li>Changing one field means stepping back.</li><li>On the web, steps feel slower than a single form for power users.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="dir-C">
+    <div class="dir-head"><h2><span class="letter">C</span>Sentence + receipt</h2></div>
+    <p class="pitch">The entry reads as a sentence: “Spent <b>45.000 ₫</b> on <b>Breakfast &amp; Lunch</b> for <b>Breakfast</b>, <b>today at 08:30</b>, <b>once</b>.” Every bold part is a token; tap one and the area below becomes its picker (keypad for the amount). Queued entries stack above as receipt lines with a running total. On the web the sentence is large and keyboard-first (<b>Tab</b> moves between tokens) with the receipt in a side column.</p>
+    <div class="stages">
+      <div class="stage-m"><div class="stage-label">Phone · sheet over Week</div><div class="inst phone" data-v="C" data-p="m"></div></div>
+      <div><div class="stage-label">Web · composer dialog</div><div class="inst browser" data-v="C" data-p="w"></div></div>
+    </div>
+    <div class="notes">
+      <div><h4>Strengths</h4><ul><li>The whole entry is readable at a glance before saving.</li><li>Repeat and income read naturally (“every month from 10 Nov”).</li><li>Receipt makes batch entry feel like one shopping trip.</li></ul></div>
+      <div><h4>Weaknesses</h4><ul><li>Most novel pattern; needs a short first-run hint.</li><li>Sentence grammar must be translated carefully if the app is localised.</li><li>Tokens wrap unpredictably at large text sizes.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="block" id="compare">
+    <h2>Side by side</h2>
+    <table class="cmp">
+      <thead><tr><th></th><th>A · Keypad + chips</th><th>B · Step sheet</th><th>C · Sentence + receipt</th></tr></thead>
+      <tbody>
+        <tr><th>Fastest plain expense</th><td>Amount, category, ✓ (3 taps)</td><td>Amount, Next, category, Save (4)</td><td>Amount, category token, category, Save (4)</td></tr>
+        <tr><th>Day's list while entering (phone)</th><td>Visible above the dock</td><td>Hidden by the sheet</td><td>Hidden by the sheet</td></tr>
+        <tr><th>Queue</th><td>+ Next key, tray above keypad</td><td>Add another, Review step</td><td>Receipt lines with total</td></tr>
+        <tr><th>Repeat</th><td>Panel behind a chip</td><td>Row in Details</td><td>“once / every …” token</td></tr>
+        <tr><th>Income</th><td>Same dock, source chips</td><td>Same steps, source tiles</td><td>“Received … from …” sentence</td></tr>
+        <tr><th>Web shape</th><td>One wide two-column dialog</td><td>Stepper dialog with rail</td><td>Composer with receipt column</td></tr>
+        <tr><th>Build effort</th><td>Low: extends the shipped dock</td><td>Medium</td><td>Medium–high</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+(() => {
+  // ---------------- data ----------------
+  const pad = n => String(n).padStart(2, '0');
+  const TODAY = new Date(2026, 10, 4);
+  const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const TODAY_ISO = iso(TODAY);
+  const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const wdi = d => (d.getDay() + 6) % 7;
+  const fmt = n => Number(n || 0).toLocaleString('vi-VN') + ' ₫';
+  const dayName = s => {
+    if (s === TODAY_ISO) return 'Today';
+    if (s === iso(addDays(TODAY, -1))) return 'Yesterday';
+    if (s === iso(addDays(TODAY, 1))) return 'Tomorrow';
+    const d = parse(s); return `${WD[wdi(d)]} ${d.getDate()} ${MON[d.getMonth()]}`;
+  };
+  const longDay = s => { const d = parse(s); return `${dayName(s)}${['Today', 'Yesterday', 'Tomorrow'].includes(dayName(s)) ? `, ${d.getDate()} ${MON[d.getMonth()]}` : ''}`; };
+  const ordinal = n => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+
+  const P = {
+    utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+    car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
+    film: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18M3 7.5h4M3 12h18M3 16.5h4M17 3v18M17 7.5h4M17 16.5h4"/>',
+    bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+    receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+    dollar: '<circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/>',
+    coffee: '<path d="M10 2v2M14 2v2M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/>',
+    home: '<path d="M3 10.2 12 3l9 7.2V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    heart: '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/>',
+    briefcase: '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
+    gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
+    trend: '<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>',
+    cal: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    note: '<path d="M12 20h9"/><path d="M16.4 3.6a2 2 0 0 1 2.9 2.9L7 18.8l-4 1 1-4Z"/>',
+    repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+    stop: '<circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/>',
+    down: '<path d="m6 9 6 6 6-6"/>', left: '<path d="m15 18-6-6 6-6"/>', right: '<path d="m9 18 6-6-6-6"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>', del: '<path d="M10 5a2 2 0 0 0-1.3.5L3 12l5.7 6.5A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path d="m12 9 6 6M18 9l-6 6"/>',
+    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>', plus: '<path d="M12 5v14M5 12h14"/>', check: '<path d="M20 6 9 17l-5-5"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    list: '<path d="M3 6h18M3 12h18M3 18h18"/>', chart: '<path d="M3 3v18h18"/><path d="M7 16v-5M12 16V8M17 16v-3"/>',
+    refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/>', moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/>',
+  };
+  const svg = (n, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24">${P[n] || P.dollar}</svg>`;
+
+  const CATS = [
+    { id: 'bl', name: 'Breakfast & Lunch', c: '#eab308', i: 'utensils' },
+    { id: 'gas', name: 'Gas', c: '#3b82f6', i: 'car' },
+    { id: 'sub', name: 'Subscription', c: '#8b5cf6', i: 'film' },
+    { id: 'shop', name: 'Shopping', c: '#f97316', i: 'bag' },
+    { id: 'bills', name: 'Bills', c: '#10b981', i: 'receipt' },
+    { id: 'eat', name: 'Eat out', c: '#ef4444', i: 'dollar' },
+    { id: 'coffee', name: 'Coffee', c: '#a16207', i: 'coffee' },
+    { id: 'home', name: 'Home', c: '#06b6d4', i: 'home' },
+    { id: 'health', name: 'Health', c: '#ec4899', i: 'heart' },
+    { id: 'ai', name: 'AI Subscription', c: '#f59e0b', i: 'dollar' },
+    { id: 'gift', name: 'Gifts', c: '#e11d48', i: 'gift' },
+    { id: 'work', name: 'Work', c: '#64748b', i: 'briefcase' },
+    { id: 'other', name: 'Other', c: '#71717a', i: 'dollar' },
+  ];
+  const cat = id => CATS.find(c => c.id === id) || CATS[0];
+  const SOURCES = [
+    { id: 'Salary', c: '#10b981', i: 'briefcase' }, { id: 'Freelance', c: '#3b82f6', i: 'note' }, { id: 'Bonus', c: '#f59e0b', i: 'gift' },
+    { id: 'Allowance', c: '#8b5cf6', i: 'heart' }, { id: 'Gift', c: '#ec4899', i: 'gift' }, { id: 'Investment', c: '#06b6d4', i: 'trend' }, { id: 'Other', c: '#71717a', i: 'dollar' },
+  ];
+  const src = id => SOURCES.find(s => s.id === id) || SOURCES[0];
+  const RECENT = ['Breakfast', 'Phở bò', 'Grab', 'Xăng', 'Cà phê', 'Netflix'];
+  const INC_FREQ = [['once', 'One time'], ['daily', 'Daily'], ['weekly', 'Weekly'], ['monthly', 'Monthly'], ['yearly', 'Yearly']];
+  const REP_FREQ = [['daily', 'Every N days'], ['weekdays', 'Weekdays'], ['weekly', 'Weekly'], ['monthly', 'Monthly']];
+  const EXISTING = { mode: 'spending', amt: '42000', cat: 'gas', desc: 'Xăng', date: iso(addDays(TODAY, -1)), time: '18:20' };
+
+  // ---------------- state ----------------
+  function fresh(edit) {
+    const s = {
+      mode: 'spending', amt: '', cat: 'bl', desc: '', date: TODAY_ISO, time: '08:30',
+      rep: { on: false, freq: 'daily', interval: 1, days: [wdi(TODAY)], end: 'never', count: 10, until: '2026-12-31' },
+      inc: { source: 'Salary', name: '', freq: 'monthly', start: TODAY_ISO, end: '' },
+      queue: [], panel: null, step: 1, tok: 'amount', open: true, shake: false, toast: null, alert: null, search: '', editing: !!edit,
+    };
+    if (edit) Object.assign(s, EXISTING);
+    return s;
+  }
+  const amount = s => Number(s.amt || 0);
+  const repSummary = r => {
+    if (!r.on) return 'Once';
+    let t = r.freq === 'daily' ? (r.interval === 1 ? 'Every day' : `Every ${r.interval} days`)
+      : r.freq === 'weekdays' ? 'Weekdays'
+      : r.freq === 'weekly' ? `Weekly · ${r.days.length ? r.days.slice().sort().map(d => WD[d]).join(', ') : 'pick days'}`
+      : 'Monthly';
+    if (r.end === 'count') t += ` · ${r.count}×`;
+    if (r.end === 'until') t += ` · until ${dayName(r.until)}`;
+    return t;
+  };
+  const repSentence = (r, s) => {
+    if (!r.on) return 'once';
+    let t = r.freq === 'daily' ? (r.interval === 1 ? 'every day' : `every ${r.interval} days`)
+      : r.freq === 'weekdays' ? 'every weekday'
+      : r.freq === 'weekly' ? `every ${r.days.slice().sort().map(d => WD[d]).join(' & ') || '…'}`
+      : `monthly on the ${ordinal(parse(s.date).getDate())}`;
+    if (r.end === 'count') t += `, ${r.count} times`;
+    if (r.end === 'until') t += ` until ${dayName(r.until)}`;
+    return t;
+  };
+  const incFreqLabel = f => INC_FREQ.find(x => x[0] === f)[1];
+  const incSummary = s => s.inc.freq === 'once' ? `On ${dayName(s.inc.start)}` : `${incFreqLabel(s.inc.freq)} from ${dayName(s.inc.start)}${s.inc.end ? ` to ${dayName(s.inc.end)}` : ''}`;
+  const snapshot = s => s.mode === 'spending'
+    ? { mode: 'spending', amt: s.amt, cat: s.cat, desc: s.desc || cat(s.cat).name, date: s.date, time: s.time, rep: { ...s.rep, days: [...s.rep.days] } }
+    : { mode: 'income', amt: s.amt, inc: { ...s.inc } };
+  const lineTitle = q => q.mode === 'spending' ? q.desc : `${q.inc.source}${q.inc.name ? ' · ' + q.inc.name : ''}`;
+  const lineSub = q => q.mode === 'spending' ? `${cat(q.cat).name} · ${dayName(q.date)} ${q.time}${q.rep.on ? ' · ↻ ' + repSummary(q.rep) : ''}` : incSummary({ inc: q.inc });
+  const lineIcon = q => q.mode === 'spending' ? `<span class="ic" style="--c:${cat(q.cat).c}">${svg(cat(q.cat).i)}</span>` : `<span class="ic" style="--c:${src(q.inc.source).c}">${svg(src(q.inc.source).i)}</span>`;
+  const queueTotal = s => s.queue.reduce((a, q) => a + Number(q.amt) * (q.mode === 'spending' ? 1 : 0), 0);
+  const isDirty = s => amount(s) > 0 || s.queue.length > 0;
+
+  // ---------------- shared fragments ----------------
+  const modeSeg = (s, cls = '') => `<div class="seg mode ${cls}" role="tablist">${[['spending', 'Spending'], ['income', 'Income']].map(([v, l]) => `<button data-a="mode" data-v="${v}" class="${s.mode === v ? 'on' : ''}" role="tab" aria-selected="${s.mode === v}">${l}</button>`).join('')}</div>`;
+  const amountView = (s, cls = 'amount') => `<div class="${cls}${amount(s) ? '' : ' zero'}${s.mode === 'income' && amount(s) ? ' income' : ''}${s.shake ? ' shake' : ''}" aria-live="polite">${s.mode === 'income' && amount(s) ? '+' : ''}${amount(s).toLocaleString('vi-VN')} <small>₫</small></div>`;
+  const catChips = (s, wrap) => `<div class="chips${wrap ? ' wrap' : ''}" role="radiogroup" aria-label="Category">${CATS.map(c => `<button class="chip${c.id === s.cat ? ' on' : ''}" style="--c:${c.c}" data-a="cat" data-v="${c.id}" role="radio" aria-checked="${c.id === s.cat}">${svg(c.i)}${c.name}</button>`).join('')}</div>`;
+  const srcChips = (s, wrap) => `<div class="chips${wrap ? ' wrap' : ''}" role="radiogroup" aria-label="Source">${SOURCES.map(c => `<button class="chip${c.id === s.inc.source ? ' on' : ''}" style="--c:${c.c}" data-a="src" data-v="${c.id}">${svg(c.i)}${c.id}</button>`).join('')}</div>`;
+  const catGrid = s => {
+    const q = s.search.trim().toLowerCase();
+    const list = CATS.filter(c => !q || c.name.toLowerCase().includes(q));
+    return `<div class="search">${svg('search')}<input data-f="search" value="${s.search}" placeholder="Search ${CATS.length} categories"></div>
+      <div class="cgrid">${list.map(c => `<button class="chip${c.id === s.cat ? ' on' : ''}" style="--c:${c.c}" data-a="cat" data-v="${c.id}">${svg(c.i)}<span>${c.name}</span></button>`).join('') || '<span class="hint">No matching categories</span>'}</div>`;
+  };
+  const keypad = (s, { okLabel, next = true } = {}) => {
+    const keys = ['1', '2', '3', 'del', '4', '5', '6', 'ok', '7', '8', '9', '000', '0', 'next'];
+    const label = okLabel || (s.queue.length ? `Save ${s.queue.length + (amount(s) ? 1 : 0)}` : s.editing ? 'Save' : 'Add');
+    return `<div class="keys">${keys.map(k => k === 'ok' ? `<button class="ok${s.mode === 'income' ? ' income' : ''}" data-a="save" aria-label="${label}">✓<br>${label}</button>`
+      : k === 'del' ? `<button data-a="key" data-v="del" aria-label="Delete digit">${svg('del')}</button>`
+      : k === 'next' ? (next && !s.editing ? `<button class="next" data-a="queue" aria-label="Queue this and start the next">+ Next</button>` : '<span></span>')
+      : `<button data-a="key" data-v="${k}"${k === '0' ? ' class="wide"' : ''}>${k}</button>`).join('')}</div>`;
+  };
+  const dateChips = (s, key = 'date') => { const v = key === 'date' ? s.date : s.inc[key]; return `<div class="chips">${[-1, 0, 1].map(o => { const d = iso(addDays(TODAY, o)); return `<button class="chip${v === d ? ' on' : ''}" data-a="setdate" data-k="${key}" data-v="${d}">${dayName(d)}</button>`; }).join('')}</div>`; };
+  const datePanel = s => `<div class="panel">${dateChips(s)}<label class="field"><span>Date</span><input type="date" data-f="date" value="${s.date}"></label></div>`;
+  const timePanel = s => `<div class="panel"><div class="chips"><button class="chip" data-a="now">Now</button><button class="chip" data-a="settime" data-v="08:00">Morning</button><button class="chip" data-a="settime" data-v="12:30">Lunch</button><button class="chip" data-a="settime" data-v="19:00">Evening</button></div><label class="field"><span>Time</span><input type="time" data-f="time" value="${s.time}"></label></div>`;
+  const notePanel = s => `<div class="panel"><label class="field"><span>Description</span><input data-f="desc" value="${s.desc}" placeholder="${cat(s.cat).name} (default)"></label><div class="recent">${RECENT.map(r => `<button data-a="desc" data-v="${r}">${r}</button>`).join('')}</div></div>`;
+  const repeatPanel = s => {
+    const r = s.rep;
+    let body = `<button class="trow" data-a="rep-on"><span>Repeat this spending</span><span class="switch${r.on ? ' on' : ''}"></span></button>`;
+    if (r.on) {
+      body += `<div class="seg small">${REP_FREQ.map(([v, l]) => `<button data-a="rep-freq" data-v="${v}" class="${r.freq === v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+      if (r.freq === 'daily') body += `<div class="trow"><span>Every</span><span class="stepper"><button data-a="rep-int" data-v="-1" aria-label="Fewer days">−</button><b>${r.interval}</b><button data-a="rep-int" data-v="1" aria-label="More days">+</button> day${r.interval > 1 ? 's' : ''}</span></div>`;
+      if (r.freq === 'weekly') body += `<div class="days">${WD.map((w, i) => `<button data-a="rep-day" data-v="${i}" class="${r.days.includes(i) ? 'on' : ''}" aria-pressed="${r.days.includes(i)}">${w[0]}${w[1]}</button>`).join('')}</div>`;
+      if (r.freq === 'monthly') body += `<span class="hint">On the ${ordinal(parse(s.date).getDate())} of each month (from the date).</span>`;
+      body += `<div class="field"><span>Ends</span><div class="seg small">${[['never', 'Never'], ['count', 'After N times'], ['until', 'On a date']].map(([v, l]) => `<button data-a="rep-end" data-v="${v}" class="${r.end === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>`;
+      if (r.end === 'count') body += `<div class="trow"><span>Repeats (1–100)</span><span class="stepper"><button data-a="rep-count" data-v="-1">−</button><b>${r.count}</b><button data-a="rep-count" data-v="1">+</button></span></div>`;
+      if (r.end === 'until') body += `<label class="field"><span>Until</span><input type="date" data-f="until" value="${r.until}"></label>`;
+    }
+    return `<div class="panel">${body}</div>`;
+  };
+  const incPanel = (s, what) => {
+    if (what === 'freq') return `<div class="panel"><div class="seg small">${INC_FREQ.map(([v, l]) => `<button data-a="inc-freq" data-v="${v}" class="${s.inc.freq === v ? 'on' : ''}">${l}</button>`).join('')}</div><span class="hint">${s.inc.freq === 'once' ? 'Paid once on the start date.' : 'Paid on the start date, then every ' + ({ daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' }[s.inc.freq]) + '.'}</span></div>`;
+    if (what === 'start') return `<div class="panel">${dateChips(s, 'start')}<label class="field"><span>${s.inc.freq === 'once' ? 'Paid on' : 'Starts'}</span><input type="date" data-f="start" value="${s.inc.start}"></label></div>`;
+    if (what === 'end') return `<div class="panel">${s.inc.freq === 'once' ? '<span class="hint">One-time income has no end date.</span>' : `<label class="field"><span>Ends (optional)</span><input type="date" data-f="end" value="${s.inc.end}"></label><button class="link" data-a="inc-noend">No end date</button>`}</div>`;
+    return `<div class="panel"><label class="field"><span>Name (employer, client…)</span><input data-f="name" value="${s.inc.name}" placeholder="e.g., Performance bonus, freelance"></label></div>`;
+  };
+  const incFields = s => `<div class="a-sec"><b>Source</b>${srcChips(s, true)}</div>
+    <label class="field"><span>Name</span><input data-f="name" value="${s.inc.name}" placeholder="e.g., Performance bonus, freelance"></label>
+    <div class="a-sec"><b>Frequency</b><div class="seg small">${INC_FREQ.map(([v, l]) => `<button data-a="inc-freq" data-v="${v}" class="${s.inc.freq === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <div class="frow"><label class="field"><span>${s.inc.freq === 'once' ? 'Paid on' : 'Starts'}</span><input type="date" data-f="start" value="${s.inc.start}"></label>
+    <label class="field"><span>Ends</span><input type="date" data-f="end" value="${s.inc.end}" ${s.inc.freq === 'once' ? 'disabled' : ''}></label></div>`;
+  const queueList = (s, { current = false } = {}) => {
+    if (!s.queue.length && !current) return '';
+    const rows = s.queue.map((q, i) => `<div class="qrow">${lineIcon(q)}<span class="rt"><b>${lineTitle(q)}</b><small>${lineSub(q)}</small></span><span class="amt">${q.mode === 'income' ? '+' : '−'}${fmt(q.amt)}</span><button class="x" data-a="q-edit" data-v="${i}" aria-label="Edit">${svg('note')}</button><button class="x" data-a="q-del" data-v="${i}" aria-label="Remove">${svg('x')}</button></div>`).join('');
+    return `<div class="queue"><div class="qh"><span>Queued · ${s.queue.length}</span><span>${fmt(queueTotal(s))}</span></div>${rows}</div>`;
+  };
+  const toast = s => s.toast ? `<div class="toast" role="status"><span>${s.toast}</span><button data-a="toast-x">OK</button></div>` : '';
+  const alertBox = s => s.alert ? `<div class="alert-layer"><div class="alert" role="alertdialog"><div class="ab"><b>Discard this entry?</b><p>${s.queue.length ? `${s.queue.length} queued and ` : ''}${amount(s) ? fmt(s.amt) + ' ' : ''}not saved yet.</p></div><div class="abtn"><button data-a="alert-keep">Keep editing</button><button data-a="alert-discard">Discard</button></div></div></div>` : '';
+  const editBanner = s => s.editing ? `<div class="edit-banner"><span>Editing “${s.desc || cat(s.cat).name}” · ${dayName(s.date)}</span><button class="link danger" data-a="delete">${svg('trash')} Delete</button></div>` : '';
+
+  // ---------------- bases ----------------
+  const ledger = [{ c: 'bl', d: 'Breakfast', t: '08:00', a: 15000 }, { c: 'coffee', d: 'Cà phê', t: '10:15', a: 29000 }];
+  const mobileBase = (s, extraLedger = '') => {
+    const days = [...Array(7)].map((_, i) => addDays(addDays(TODAY, -wdi(TODAY)), i));
+    const h = [30, 45, 70, 55, 10, 10, 10];
+    return `<div class="m-nav"><div><small>2 Nov – 8 Nov · 65.000 ₫</small><h3>This week</h3></div><div class="m-wnav"><span>${svg('left')}</span><span>${svg('right')}</span></div></div>
+      <div class="m-bars">${days.map((d, i) => `<div><span class="${iso(d) === TODAY_ISO ? 'today' : ''}" style="height:${h[i]}%"></span></div>`).join('')}</div>
+      <div class="m-strip">${days.map(d => `<span class="${iso(d) === TODAY_ISO ? 'on' : ''}"><small>${WD[wdi(d)]}</small>${d.getDate()}</span>`).join('')}</div>
+      <div class="m-ledger"><div class="m-ledger-h"><span class="muted">Today, 4 Nov</span><b>44.000 ₫</b></div>
+      <div class="list">${ledger.map(e => `<div class="row"><span class="ic" style="--c:${cat(e.c).c}">${svg(cat(e.c).i)}</span><span class="rt"><b>${e.d}</b><small>${cat(e.c).name} · ${e.t}</small></span><span class="amt">−${fmt(e.a)}</span></div>`).join('')}</div>${extraLedger}</div>`;
+  };
+  const tabbar = () => `<nav class="tabbar">${[['cal', 'Month'], ['list', 'Week', 1], ['+'], ['chart', 'Analytics'], ['user', 'Profile']].map(([i, l, on]) => i === '+' ? `<button class="tab plus" data-a="open" aria-label="Add"><span>${svg('plus')}</span></button>` : `<span class="tab${on ? ' on' : ''}">${svg(i)}<span>${l}</span></span>`).join('')}</nav>`;
+  const phone = (inner, overlay = '') => `<div class="notch"></div><div class="sb"><span>9:41</span><span>●●● 5G ▮</span></div><div class="screen">${inner}</div>${tabbar()}${overlay}`;
+  const webBase = () => {
+    const days = [...Array(7)].map((_, i) => addDays(addDays(TODAY, -wdi(TODAY)), i));
+    const tx = { 0: [['Grab', 42000], ['Cơm tấm', 55000]], 1: [['Netflix', 260000]], 2: [['Breakfast', 15000], ['Cà phê', 29000]], 3: [['Xăng', 50000]] };
+    return `<header class="w-head"><div class="w-brand"><span class="w-logo">₫</span><span><b>MyFinance</b><small>November 2026</small></span></div>
+      <nav class="w-nav"><span>${svg('grid')}Calendar</span><span class="on">${svg('list')}Week</span><span>${svg('chart')}Analytics</span><span>${svg('user')}Profile</span></nav>
+      <div class="w-actions"><span>${svg('left')}</span><span>${svg('right')}</span><span class="add" data-a="open" title="Add expense">${svg('plus')}</span><span>${svg('refresh')}</span><span>${svg('moon')}</span></div></header>
+      <div class="w-week">${days.map((d, i) => `<div class="w-day${iso(d) === TODAY_ISO ? ' today' : ''}"><h5>${WD[i]} ${d.getDate()}<small>${tx[i] ? fmt(tx[i].reduce((a, t) => a + t[1], 0)).replace(' ₫', '') : ''}</small></h5>${(tx[i] || []).map(t => `<div class="w-tx"><span>${t[0]}</span><span>${(t[1] / 1000)}k</span></div>`).join('')}</div>`).join('')}</div>`;
+  };
+  const browser = (inner, overlay, url) => `<div class="chrome"><i style="background:#ef4444"></i><i style="background:#f59e0b"></i><i style="background:#10b981"></i><span class="url">localhost:5173${url}</span></div><div class="wscreen">${inner}${overlay}</div>`;
+
+  // ---------------- A: keypad + detail chips ----------------
+  function A_m(s) {
+    if (!s.open) return phone(mobileBase(s, `<button class="btn ghost" style="width:100%;margin-top:10px" data-a="open">+ Add expense</button>`), toast(s) + alertBox(s));
+    const chip = (key, icon, label, set) => `<button class="dchip${set ? ' set' : ''}${s.panel === key ? ' open' : ''}" data-a="panel" data-v="${key}">${svg(icon)}${label}</button>`;
+    const chipsRow = s.mode === 'spending'
+      ? chip('date', 'cal', dayName(s.date), s.date !== TODAY_ISO) + chip('time', 'clock', s.time, false) + chip('note', 'note', s.desc || 'Note', !!s.desc) + chip('repeat', 'repeat', repSummary(s.rep), s.rep.on)
+      : chip('freq', 'repeat', incFreqLabel(s.inc.freq), true) + chip('start', 'cal', (s.inc.freq === 'once' ? 'On ' : 'From ') + dayName(s.inc.start), true) + chip('end', 'stop', s.inc.end ? 'To ' + dayName(s.inc.end) : 'No end', !!s.inc.end) + chip('name', 'note', s.inc.name || 'Name', !!s.inc.name);
+    const panelBody = !s.panel ? '' : s.mode === 'spending'
+      ? { date: datePanel, time: timePanel, note: notePanel, repeat: repeatPanel }[s.panel](s)
+      : incPanel(s, s.panel);
+    const dock = `<div class="a-dock">
+      <div class="a-dock-h">${modeSeg(s, 'small')}<span class="to">${s.editing ? 'Edit expense' : s.mode === 'spending' ? 'to ' + longDay(s.date) : 'Income'}</span><button class="fx" data-a="close" aria-label="Hide keypad">${svg('down')}</button></div>
+      ${editBanner(s)}
+      ${s.queue.length ? `<button class="a-tray" data-a="panel" data-v="queue"><span>${s.queue.length} queued · ${fmt(queueTotal(s))}</span><span>Review ›</span></button>` : ''}
+      ${amountView(s)}
+      ${s.mode === 'spending' ? catChips(s) : srcChips(s)}
+      <div class="dchips">${chipsRow}</div>
+      ${s.panel ? `<div class="a-panel"><div class="panel-h" style="margin-bottom:8px"><span>${{ date: 'Date', time: 'Time', note: 'Description', repeat: 'Repeat', queue: 'Queued', freq: 'Frequency', start: 'Start date', end: 'End date', name: 'Name' }[s.panel]}</span><button class="link" data-a="panel" data-v="">Done</button></div>${s.panel === 'queue' ? queueList(s) : panelBody}</div>` : keypad(s)}
+    </div>`;
+    return phone(mobileBase(s) + dock, toast(s) + alertBox(s));
+  }
+  function A_w(s) {
+    if (!s.open) return browser(webBase(), toast(s), '/week?date=2026-11-04');
+    const right = s.mode === 'spending' ? `
+      <div class="a-sec"><b>Category</b>${catGrid(s)}</div>
+      <label class="field"><span>Description</span><input data-f="desc" value="${s.desc}" placeholder="${cat(s.cat).name} (default)"></label>
+      <div class="frow"><div class="field"><span>Date</span><div style="display:flex;gap:6px"><input type="date" data-f="date" value="${s.date}"></div>${dateChips(s)}</div>
+        <label class="field"><span>Time</span><input type="time" data-f="time" value="${s.time}"></label></div>
+      <div class="a-rep">${repeatPanel(s)}</div>` : incFields(s);
+    const dialog = `<div class="a-dialog" role="dialog" aria-label="Add transaction">
+      <div class="d-head"><h4>${s.editing ? 'Edit transaction' : 'Add transaction'}</h4><div style="width:240px">${modeSeg(s)}</div><button class="fx" data-a="close" aria-label="Close">${svg('x')}</button></div>
+      <div class="d-body"><div class="a-cols">
+        <div class="a-left">${amountView(s)}${keypad(s)}<p class="kbd" style="margin:0">Type digits · <b>k</b> ×1000 · <b>⌫</b> · <b>Enter</b> save · <b>⇧ Enter</b> next</p>${queueList(s)}</div>
+        <div class="a-right">${editBanner(s)}${right}</div>
+      </div></div>
+      <div class="d-foot"><button class="btn plain" data-a="close">Cancel</button><span class="sp"></span>${s.editing ? '' : `<button class="btn ghost" data-a="queue">+ Add &amp; next</button>`}<button class="btn ${s.mode === 'income' ? 'income' : 'primary'}" data-a="save">${s.queue.length ? `Save ${s.queue.length + (amount(s) ? 1 : 0)}` : s.editing ? 'Save changes' : 'Add'}</button></div>
+    </div>`;
+    return browser(webBase(), `<div class="dimmer" data-a="close"></div>${dialog}${toast(s)}${alertBox(s)}`, '/week?date=2026-11-04');
+  }
+
+  // ---------------- B: step sheet ----------------
+  const B_steps = s => s.mode === 'spending' ? ['Amount', 'Category', 'Details'] : ['Amount', 'Source', 'Details'];
+  function B_detail(s, web) {
+    if (s.mode === 'income') return `<div class="glist">
+      <div class="gi"><span style="font-weight:600">Frequency</span><div class="seg small">${INC_FREQ.map(([v, l]) => `<button data-a="inc-freq" data-v="${v}" class="${s.inc.freq === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+      <div class="gi"><div class="frow"><label class="field"><span>${s.inc.freq === 'once' ? 'Paid on' : 'Starts'}</span><input type="date" data-f="start" value="${s.inc.start}"></label><label class="field"><span>Ends</span><input type="date" data-f="end" value="${s.inc.end}" ${s.inc.freq === 'once' ? 'disabled' : ''}></label></div></div>
+      <div class="gi"><label class="field"><span>Name</span><input data-f="name" value="${s.inc.name}" placeholder="e.g., Performance bonus, freelance"></label></div></div>`;
+    return `<div class="glist">
+      <div class="gi"><label class="field"><span>Description</span><input data-f="desc" value="${s.desc}" placeholder="${cat(s.cat).name} (default)"></label><div class="recent">${RECENT.slice(0, web ? 6 : 4).map(r => `<button data-a="desc" data-v="${r}">${r}</button>`).join('')}</div></div>
+      <div class="gi"><span style="font-weight:600">Date</span>${dateChips(s)}<div class="frow"><input type="date" data-f="date" value="${s.date}"><input type="time" data-f="time" value="${s.time}"></div></div>
+      <div class="gi">${repeatPanel(s)}</div></div>`;
+  }
+  function B_m(s) {
+    if (!s.open) return phone(mobileBase(s), toast(s) + alertBox(s));
+    const steps = B_steps(s);
+    let body = '', foot = '';
+    if (s.step === 1) {
+      body = `${modeSeg(s)}${editBanner(s)}${amountView(s, 'b-big')}<div class="quick">${[20000, 50000, 100000, 200000].map(v => `<button data-a="quick" data-v="${v}">${v / 1000}k</button>`).join('')}</div><div style="flex:1"></div>${keypad(s, { okLabel: 'Next', next: false })}`;
+    } else if (s.step === 2) {
+      const items = s.mode === 'spending' ? CATS.map(c => [c.id, c.name, c.c, c.i, s.cat === c.id, 'cat']) : SOURCES.map(c => [c.id, c.id, c.c, c.i, s.inc.source === c.id, 'src']);
+      body = `<div class="summary"><b>${fmt(s.amt)}</b><span class="muted">${s.mode === 'spending' ? 'Pick a category' : 'Where is it from?'}</span></div><div class="tiles">${items.map(([id, n, c, i, on, a]) => `<button class="tile${on ? ' on' : ''}" style="--c:${c}" data-a="${a}" data-v="${id}" data-next="1"><span class="ic">${svg(i)}</span>${n}</button>`).join('')}</div>`;
+    } else {
+      const head = s.mode === 'spending' ? `<span class="ic" style="--c:${cat(s.cat).c}">${svg(cat(s.cat).i)}</span><span class="rt"><b>${fmt(s.amt)}</b><small>${cat(s.cat).name}</small></span>` : `<span class="ic" style="--c:${src(s.inc.source).c}">${svg(src(s.inc.source).i)}</span><span class="rt"><b style="color:var(--success)">+${fmt(s.amt)}</b><small>${s.inc.source}</small></span>`;
+      body = `<button class="summary" data-a="step" data-v="1" style="text-align:left">${head}<span class="link">Change</span></button>${B_detail(s)}${queueList(s)}`;
+      foot = `<div class="s-foot">${s.editing ? `<button class="btn plain" data-a="delete" style="color:var(--danger)">Delete</button>` : `<button class="btn ghost" data-a="queue">Add another</button>`}<button class="btn ${s.mode === 'income' ? 'income' : 'primary'}" data-a="save">${s.queue.length ? `Save ${s.queue.length + 1}` : 'Save'}</button></div>`;
+    }
+    const sheet = `<div class="sheet" role="dialog"><div class="grab"></div>
+      <div class="s-head">${s.step > 1 ? `<button class="link" data-a="step" data-v="${s.step - 1}">‹ Back</button>` : `<button class="link" data-a="close">Cancel</button>`}<b>${steps[s.step - 1]}</b><span class="dots">${steps.map((_, i) => `<span class="${i + 1 === s.step ? 'on' : ''}"></span>`).join('')}</span></div>
+      ${s.queue.length && s.step < 3 ? `<div style="padding:0 14px 4px"><div class="a-tray"><span>${s.queue.length} waiting · ${fmt(queueTotal(s))}</span><span>saved together</span></div></div>` : ''}
+      <div class="s-body">${body}</div>${foot}</div>`;
+    return phone(mobileBase(s), `<div class="dimmer" data-a="close"></div>${sheet}${toast(s)}${alertBox(s)}`);
+  }
+  function B_w(s) {
+    if (!s.open) return browser(webBase(), toast(s), '/week?date=2026-11-04');
+    const names = [...B_steps(s), 'Review'];
+    const done = i => (i === 0 && amount(s) > 0) || (i === 1 && s.step > 2) || (i === 2 && s.step > 3);
+    const val = i => i === 0 ? (amount(s) ? fmt(s.amt) : '—') : i === 1 ? (s.mode === 'spending' ? cat(s.cat).name : s.inc.source) : i === 2 ? (s.mode === 'spending' ? `${dayName(s.date)} ${s.time} · ${repSummary(s.rep)}` : incSummary(s)) : `${s.queue.length + (amount(s) ? 1 : 0)} entr${s.queue.length + (amount(s) ? 1 : 0) === 1 ? 'y' : 'ies'}`;
+    let content = '';
+    if (s.step === 1) content = `${editBanner(s)}${amountView(s, 'b-big')}<div class="quick">${[20000, 50000, 100000, 200000, 500000].map(v => `<button data-a="quick" data-v="${v}">${v / 1000}k</button>`).join('')}</div><div style="max-width:320px;margin:8px auto 0;width:100%">${keypad(s, { okLabel: 'Next', next: false })}</div><p class="kbd" style="text-align:center;margin:0">Type the amount · <b>Enter</b> next</p>`;
+    else if (s.step === 2) content = s.mode === 'spending' ? `<h4 style="margin:0">Category for ${fmt(s.amt)}</h4>${catGrid(s)}` : `<h4 style="margin:0">Source</h4><div class="tiles">${SOURCES.map(c => `<button class="tile${s.inc.source === c.id ? ' on' : ''}" style="--c:${c.c}" data-a="src" data-v="${c.id}" data-next="1"><span class="ic">${svg(c.i)}</span>${c.id}</button>`).join('')}</div>`;
+    else if (s.step === 3) content = `<h4 style="margin:0">Details</h4>${B_detail(s, true)}`;
+    else {
+      const rows = [...s.queue.map((q, i) => ({ q, i })), ...(amount(s) ? [{ q: snapshot(s), cur: true }] : [])];
+      content = `<h4 style="margin:0">Review</h4><table class="rtable"><thead><tr><th></th><th>Entry</th><th>When</th><th style="text-align:right">Amount</th><th></th></tr></thead><tbody>${rows.map(({ q, i, cur }) => `<tr class="${cur ? 'cur' : ''}"><td>${lineIcon(q)}</td><td><b>${lineTitle(q)}</b>${cur ? ' <span class="hint">(this one)</span>' : ''}</td><td class="muted">${lineSub(q)}</td><td class="num">${q.mode === 'income' ? '+' : '−'}${fmt(q.amt)}</td><td>${cur ? '' : `<button class="link" data-a="q-edit" data-v="${i}">Edit</button> <button class="link danger" data-a="q-del" data-v="${i}">Remove</button>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Nothing to save yet.</td></tr>'}</tbody></table>`;
+    }
+    const dialog = `<div class="b-dialog" role="dialog"><div class="b-rail"><h4>${s.editing ? 'Edit transaction' : 'New transaction'}</h4>${modeSeg(s, 'small')}<div style="height:10px"></div>
+      ${names.map((n, i) => `<button class="b-step${s.step === i + 1 ? ' on' : done(i) ? ' done' : ''}" data-a="step" data-v="${i + 1}"><span class="n">${done(i) && s.step !== i + 1 ? '✓' : i + 1}</span><span><b>${n}</b><small>${val(i)}</small></span></button>`).join('')}
+      <div style="flex:1"></div><p class="kbd" style="margin:0 6px">Enter next · Esc close</p></div>
+      <div class="b-main"><div class="b-content">${content}</div><div class="d-foot"><button class="btn plain" data-a="close">Cancel</button>${s.editing ? `<button class="btn plain" data-a="delete" style="color:var(--danger)">Delete</button>` : ''}<span class="sp"></span>
+        ${s.step === 3 && !s.editing ? '<button class="btn ghost" data-a="queue">Add another</button>' : ''}
+        ${s.step < 4 && !(s.step === 3 && s.editing) ? `<button class="btn ${s.mode === 'income' ? 'income' : 'primary'}" data-a="step" data-v="${s.step + 1}">Next ›</button>` : `<button class="btn ${s.mode === 'income' ? 'income' : 'primary'}" data-a="save">${s.editing ? 'Save changes' : `Save ${s.queue.length + (amount(s) ? 1 : 0) || ''}`}</button>`}</div></div></div>`;
+    return browser(webBase(), `<div class="dimmer" data-a="close"></div>${dialog}${toast(s)}${alertBox(s)}`, '/week?date=2026-11-04');
+  }
+
+  // ---------------- C: sentence + receipt ----------------
+  function C_sentence(s) {
+    const t = (key, label, empty) => `<button class="tok${s.mode === 'income' ? ' inc' : ''}${s.tok === key ? ' on' : ''}${empty ? ' empty' : ''}" data-a="tok" data-v="${key}">${label}</button>`;
+    if (s.mode === 'income') return `Received ${t('amount', amount(s) ? fmt(s.amt) : 'amount', !amount(s))} from ${t('src', s.inc.source)} · ${t('name', s.inc.name || 'add a name', !s.inc.name)}, ${t('freq', s.inc.freq === 'once' ? 'one time' : incFreqLabel(s.inc.freq).toLowerCase())} ${t('start', (s.inc.freq === 'once' ? 'on ' : 'from ') + dayName(s.inc.start).toLowerCase())}${s.inc.freq === 'once' ? '' : ' ' + t('end', s.inc.end ? 'to ' + dayName(s.inc.end) : 'with no end', !s.inc.end)}.`;
+    return `Spent ${t('amount', amount(s) ? fmt(s.amt) : 'amount', !amount(s))} on ${t('cat', cat(s.cat).name)} for ${t('desc', s.desc || 'what?', !s.desc)}, ${t('when', `${dayName(s.date).toLowerCase()} at ${s.time}`)}, ${t('repeat', repSentence(s.rep, s), !s.rep.on)}.`;
+  }
+  function C_picker(s, web) {
+    const k = s.tok;
+    if (k === 'amount') return web ? `<div style="display:grid;grid-template-columns:1fr 260px;gap:14px;align-items:start"><div>${amountView(s, 'b-big')}<p class="kbd" style="text-align:center">Just type · <b>k</b> ×1000 · <b>Tab</b> next token · <b>Enter</b> add line</p></div><div>${keypad(s, { okLabel: 'Add', next: false })}</div></div>` : keypad(s, { okLabel: 'Line', next: false });
+    if (k === 'cat') return web ? catGrid(s) : catChips(s, true);
+    if (k === 'desc') return notePanel(s);
+    if (k === 'when') return `${datePanel(s)}${timePanel(s)}`;
+    if (k === 'repeat') return repeatPanel(s);
+    if (k === 'src') return srcChips(s, true);
+    return incPanel(s, k);
+  }
+  const C_receipt = s => {
+    const cur = snapshot(s);
+    const all = [...s.queue, cur];
+    const total = all.reduce((a, q) => a + (q.mode === 'income' ? 0 : Number(q.amt || 0)), 0);
+    const income = all.reduce((a, q) => a + (q.mode === 'income' ? Number(q.amt || 0) : 0), 0);
+    return `<div class="receipt">${s.queue.map((q, i) => `<div class="rline">${lineIcon(q)}<span class="rt"><b>${lineTitle(q)}</b><small>${lineSub(q)}</small></span><span class="amt">${q.mode === 'income' ? '+' : '−'}${fmt(q.amt)}</span><button class="x" data-a="q-edit" data-v="${i}" aria-label="Edit line">${svg('note')}</button><button class="x" data-a="q-del" data-v="${i}" aria-label="Remove line">${svg('x')}</button></div>`).join('')}
+      <div class="rline cur">${lineIcon(cur)}<span class="rt"><b>${lineTitle(cur)}</b><small>editing now</small></span><span class="amt">${amount(s) ? (s.mode === 'income' ? '+' : '−') + fmt(s.amt) : '—'}</span></div>
+      ${total || !income ? `<div class="rtotal"><span>Total spent</span><span>${fmt(total)}</span></div>` : ''}${income ? `<div class="rtotal" style="color:var(--success)"><span>Total income</span><span>+${fmt(income)}</span></div>` : ''}</div>`;
+  };
+  function C_m(s) {
+    if (!s.open) return phone(mobileBase(s), toast(s) + alertBox(s));
+    const sheet = `<div class="sheet" role="dialog"><div class="grab"></div>
+      <div class="s-head"><button class="link" data-a="close">Cancel</button><div style="width:170px">${modeSeg(s, 'small')}</div><button class="link" data-a="save" style="font-weight:800">${s.editing ? 'Save' : `Save${s.queue.length ? ' ' + (s.queue.length + (amount(s) ? 1 : 0)) : ''}`}</button></div>
+      <div class="s-body">${editBanner(s)}${s.queue.length ? C_receipt(s) : ''}<div class="sentence">${C_sentence(s)}</div>
+      <div class="picker">${C_picker(s)}</div>
+      ${s.editing ? '' : `<button class="btn ghost" data-a="queue">+ Add line to receipt</button>`}</div></div>`;
+    return phone(mobileBase(s), `<div class="dimmer" data-a="close"></div>${sheet}${toast(s)}${alertBox(s)}`);
+  }
+  function C_w(s) {
+    if (!s.open) return browser(webBase(), toast(s), '/week?date=2026-11-04');
+    const dialog = `<div class="c-dialog" role="dialog"><div class="d-head"><h4>${s.editing ? 'Edit transaction' : 'Quick entry'}</h4><div style="width:240px">${modeSeg(s)}</div><button class="fx" data-a="close" aria-label="Close">${svg('x')}</button></div>
+      <div class="c-cols"><div class="c-main">${editBanner(s)}<div class="sentence">${C_sentence(s)}</div><div class="picker">${C_picker(s, true)}</div></div>
+      <div class="c-side"><b>Receipt</b>${C_receipt(s)}<p class="hint" style="margin:0">Each <b>Add line</b> keeps the date and category, clears the amount.</p></div></div>
+      <div class="d-foot"><button class="btn plain" data-a="close">Cancel</button>${s.editing ? `<button class="btn plain" data-a="delete" style="color:var(--danger)">Delete</button>` : ''}<span class="sp"></span>${s.editing ? '' : '<button class="btn ghost" data-a="queue">+ Add line <span class="kbd">⇧↵</span></button>'}<button class="btn ${s.mode === 'income' ? 'income' : 'primary'}" data-a="save">${s.editing ? 'Save changes' : `Save receipt (${s.queue.length + (amount(s) ? 1 : 0)})`}</button></div></div>`;
+    return browser(webBase(), `<div class="dimmer" data-a="close"></div>${dialog}${toast(s)}${alertBox(s)}`, '/week?date=2026-11-04');
+  }
+
+  const VIEWS = { A: { m: A_m, w: A_w }, B: { m: B_m, w: B_w }, C: { m: C_m, w: C_w } };
+  const C_TOKENS = s => s.mode === 'spending' ? ['amount', 'cat', 'desc', 'when', 'repeat'] : ['amount', 'src', 'name', 'freq', 'start', 'end'];
+
+  // ---------------- behaviour ----------------
+  const instances = [];
+  let editMode = false;
+  function mount(el) {
+    const inst = { el, v: el.dataset.v, p: el.dataset.p, s: fresh(editMode) };
+    instances.push(inst);
+    render(inst);
+    el.tabIndex = -1;
+    el.addEventListener('click', e => { const t = e.target.closest('[data-a]'); if (t && el.contains(t)) act(inst, t.dataset.a, t.dataset.v, t); });
+    el.addEventListener('input', e => { const f = e.target.dataset.f; if (f) field(inst, f, e.target.value, e.type); });
+    el.addEventListener('change', e => { const f = e.target.dataset.f; if (f && f !== 'search' && f !== 'desc' && f !== 'name') render(inst); });
+    el.addEventListener('pointerenter', () => { active = inst; });
+    el.addEventListener('focusin', () => { active = inst; });
+  }
+  let active = null;
+  function field(inst, f, val) {
+    const s = inst.s;
+    if (f === 'search') { s.search = val; render(inst, '[data-f="search"]'); return; }
+    if (f === 'desc') s.desc = val;
+    else if (f === 'date') s.date = val || s.date;
+    else if (f === 'time') s.time = val || s.time;
+    else if (f === 'until') s.rep.until = val;
+    else if (f === 'name') s.inc.name = val;
+    else if (f === 'start') s.inc.start = val || s.inc.start;
+    else if (f === 'end') s.inc.end = val;
+    if (inst.v === 'C' || inst.v === 'B' && inst.p === 'w') { const sel = `[data-f="${f}"]`; render(inst, sel); }
+  }
+  function render(inst, keepFocus) {
+    const caret = keepFocus && document.activeElement && document.activeElement.matches(keepFocus) ? document.activeElement.selectionStart : null;
+    inst.el.innerHTML = VIEWS[inst.v][inst.p](inst.s);
+    if (keepFocus && caret !== null) { const n = inst.el.querySelector(keepFocus); if (n) { n.focus(); try { n.setSelectionRange(caret, caret); } catch { /* date inputs */ } } }
+    if (inst.s.shake) setTimeout(() => { inst.s.shake = false; }, 400);
+  }
+  function flash(inst, msg) {
+    inst.s.toast = msg; render(inst);
+    clearTimeout(inst.tt); inst.tt = setTimeout(() => { inst.s.toast = null; render(inst); }, 2800);
+  }
+  function resetEntry(s, keep = true) {
+    const k = keep ? { cat: s.cat, date: s.date, time: s.time, mode: s.mode, inc: { ...s.inc, name: '' } } : {};
+    const f = fresh(false);
+    Object.assign(s, { amt: '', desc: '', rep: f.rep, panel: null, step: 1, tok: 'amount', editing: false }, k);
+  }
+  function needAmount(inst) { inst.s.shake = true; inst.s.tok = 'amount'; inst.s.step = 1; inst.s.panel = null; render(inst); }
+  function act(inst, a, v, el) {
+    const s = inst.s;
+    switch (a) {
+      case 'key':
+        if (v === 'del') s.amt = s.amt.slice(0, -1);
+        else { const n = (s.amt + v).replace(/^0+/, ''); if (n.length <= 12) s.amt = n; }
+        break;
+      case 'quick': s.amt = v; break;
+      case 'mode': s.mode = v; s.panel = null; s.tok = 'amount'; if (s.step > 1) s.step = 1; break;
+      case 'cat': s.cat = v; if (el.dataset.next) s.step = 3; if (inst.v === 'C' && inst.p === 'm') s.tok = 'desc'; break;
+      case 'src': s.inc.source = v; if (el.dataset.next) s.step = 3; break;
+      case 'panel': s.panel = v && s.panel !== v ? v : null; break;
+      case 'tok': s.tok = v; break;
+      case 'setdate': if (el.dataset.k === 'date') s.date = v; else s.inc[el.dataset.k] = v; break;
+      case 'now': { const d = new Date(); s.time = `${pad(d.getHours())}:${pad(d.getMinutes())}`; break; }
+      case 'settime': s.time = v; break;
+      case 'desc': s.desc = v; break;
+      case 'rep-on': s.rep.on = !s.rep.on; break;
+      case 'rep-freq': s.rep.freq = v; break;
+      case 'rep-int': s.rep.interval = Math.min(99, Math.max(1, s.rep.interval + Number(v))); break;
+      case 'rep-day': { const d = Number(v); s.rep.days = s.rep.days.includes(d) ? s.rep.days.filter(x => x !== d) : [...s.rep.days, d]; break; }
+      case 'rep-end': s.rep.end = v; break;
+      case 'rep-count': s.rep.count = Math.min(100, Math.max(1, s.rep.count + Number(v))); break;
+      case 'inc-freq': s.inc.freq = v; if (v === 'once') s.inc.end = ''; break;
+      case 'inc-noend': s.inc.end = ''; break;
+      case 'step': {
+        const n = Number(v);
+        if (n > 1 && !amount(s)) return needAmount(inst);
+        s.step = n; break;
+      }
+      case 'queue':
+        if (!amount(s)) return needAmount(inst);
+        s.queue.push(snapshot(s));
+        resetEntry(s);
+        if (inst.v === 'B') s.step = 1;
+        return flash(inst, `Queued · ${s.queue.length} waiting`);
+      case 'q-del': s.queue.splice(Number(v), 1); break;
+      case 'q-edit': {
+        const [q] = s.queue.splice(Number(v), 1);
+        if (amount(s)) s.queue.push(snapshot(s));
+        s.mode = q.mode; s.amt = q.amt;
+        if (q.mode === 'spending') Object.assign(s, { cat: q.cat, desc: q.desc === cat(q.cat).name ? '' : q.desc, date: q.date, time: q.time, rep: q.rep });
+        else s.inc = { ...q.inc };
+        s.panel = null; s.tok = 'amount'; s.step = inst.v === 'B' && inst.p === 'w' ? 1 : s.step === 3 ? 3 : 1;
+        break;
+      }
+      case 'save': {
+        if (inst.v === 'B' && inst.p === 'm' && s.step < 3) { if (!amount(s)) return needAmount(inst); s.step = s.step + 1; break; }
+        if (inst.v === 'C' && inst.p === 'm' && s.tok === 'amount' && el.classList.contains('ok')) { if (!amount(s)) return needAmount(inst); s.queue.push(snapshot(s)); resetEntry(s); return flash(inst, 'Line added'); }
+        if (inst.v === 'B' && inst.p === 'w' && s.step === 1 && el.classList.contains('ok')) { if (!amount(s)) return needAmount(inst); s.step = 2; break; }
+        if (!amount(s) && !s.queue.length) return needAmount(inst);
+        const items = [...s.queue, ...(amount(s) ? [snapshot(s)] : [])];
+        const total = items.reduce((t, q) => t + Number(q.amt), 0);
+        const msg = s.editing ? 'Changes saved' : items.length > 1 ? `Saved ${items.length} entries · ${fmt(total)}` : `${items[0].mode === 'income' ? 'Income' : 'Expense'} saved · ${fmt(total)}`;
+        s.queue = []; resetEntry(s);
+        if (inst.p === 'w' || inst.v !== 'A') s.open = inst.v === 'A' && inst.p === 'm';
+        return flash(inst, msg);
+      }
+      case 'delete': s.queue = []; resetEntry(s, false); s.open = inst.v === 'A' && inst.p === 'm'; return flash(inst, 'Deleted “Xăng” · Undo');
+      case 'open': if (!s.open) { s.open = true; s.step = 1; s.tok = 'amount'; } break;
+      case 'close': if (isDirty(s)) { s.alert = true; break; } s.open = false; s.panel = null; break;
+      case 'alert-keep': s.alert = null; break;
+      case 'alert-discard': s.alert = null; s.queue = []; resetEntry(s, false); s.open = false; break;
+      case 'toast-x': s.toast = null; break;
+      default: return;
+    }
+    render(inst);
+  }
+
+  // Hardware keyboard for the frame under the pointer (web frames especially).
+  document.addEventListener('keydown', e => {
+    if (!active || e.metaKey || e.ctrlKey || e.altKey) return;
+    const inst = active, s = inst.s;
+    if (!s.open || s.alert) return;
+    const typing = e.target.closest && e.target.closest('input, select, textarea');
+    if (typing) { if (e.key === 'Escape') e.target.blur(); return; }
+    const amountActive = inst.v === 'A' ? !s.panel : inst.v === 'B' ? s.step === 1 : s.tok === 'amount';
+    if (/^\d$/.test(e.key) && amountActive) { e.preventDefault(); act(inst, 'key', e.key); }
+    else if ((e.key === 'k' || e.key === 'K') && amountActive && s.amt) { e.preventDefault(); act(inst, 'key', '000'); }
+    else if (e.key === 'Backspace' && amountActive) { e.preventDefault(); act(inst, 'key', 'del'); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) act(inst, 'queue');
+      else if (inst.v === 'B' && s.step < 4 && !(s.step === 3 && s.editing)) act(inst, 'step', String(s.step + 1));
+      else act(inst, 'save', null, document.createElement('span'));
+    } else if (e.key === 'Tab' && inst.v === 'C' && inst.p === 'w') {
+      e.preventDefault();
+      const toks = C_TOKENS(s), i = toks.indexOf(s.tok);
+      act(inst, 'tok', toks[(i + (e.shiftKey ? -1 : 1) + toks.length) % toks.length]);
+    } else if (e.key === 'Escape') act(inst, 'close');
+  });
+
+  document.querySelectorAll('.inst').forEach(mount);
+
+  // ---------------- page controls ----------------
+  document.querySelectorAll('#theme button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#theme button').forEach(x => x.classList.toggle('on', x === b));
+    if (b.dataset.v === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = b.dataset.v;
+  });
+  document.querySelectorAll('#edit button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#edit button').forEach(x => x.classList.toggle('on', x === b));
+    editMode = b.dataset.v === 'edit';
+    instances.forEach(inst => { inst.s = fresh(editMode); render(inst); });
+  });
+})();
+</script>
+</body>
+</html>

@@ -22,7 +22,7 @@ Welcome to the architecture documentation suite for **MyFinance**, a full-stack 
 1. **Unified Next.js 15 App Router Architecture**:
    - The application combines the React 19 frontend UI and backend API routes in a single unified project root, eliminating monorepo cross-package linking complexity.
    - Route groups separate concerns cleanly: `src/app/(auth)` handles guest authentication views (`/login`, `/signup`), while `src/app/(finance)` wraps financial views (`/calendar`, `/cycle`, `/week`, `/day`, `/analytics`, `/profile`) inside a **persistent layout shell** (`src/app/(finance)/layout.tsx`).
-   - The persistent finance shell keeps `FinanceProvider`, `SettingsProvider`, header navigation, and global modals (`ExpenseModal`, `MonthlyIncomeModal`) mounted across client transitions via `next/link`, preventing redundant data re-fetching and preserving UI state.
+   - The persistent finance shell keeps `FinanceProvider`, `SettingsProvider`, header navigation, and global modals (`QuickEntryDialog`, `MonthlyIncomeModal`) mounted across client transitions via `next/link`, preventing redundant data re-fetching and preserving UI state.
    - Synchronous inline theme initialization prevents light/dark mode flash, and bfcache (`pageshow`) guards revalidate stale authentication state on browser history navigation.
 
 2. **Web Standard API Route Handlers**:

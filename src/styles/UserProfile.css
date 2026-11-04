@@ -334,3 +334,35 @@
   .user-profile .income-form-foot { padding-inline: 16px; }
   .user-profile .income-form-foot .profile-button { flex: 1; }
 }
+
+/* Phone layout (direction F): a grouped list that pushes one section at a time. */
+.user-profile .profile-m-home,
+.user-profile .profile-m-back { display: none; }
+
+@media (max-width: 768px) {
+  .user-profile { padding: 0 0 24px; gap: 0; }
+  .user-profile.is-m-list .profile-identity,
+  .user-profile.is-m-list .profile-shell { display: none; }
+  .user-profile.is-m-list .profile-m-home { display: block; }
+  .user-profile.is-m-detail .profile-identity,
+  .user-profile.is-m-detail .profile-rail { display: none; }
+  .user-profile.is-m-detail .profile-shell { padding: 0 12px; }
+  .user-profile.is-m-detail .profile-m-back { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; padding: 8px 12px 0; color: var(--primary); font-weight: 500; font-size: 1rem; }
+
+  .profile-m-title { font-size: 1.95rem; letter-spacing: -0.02em; line-height: 1.1; padding: 14px 16px 6px; margin: 0; }
+  .profile-m-who { display: flex; align-items: center; gap: 12px; padding: 4px 16px 14px; }
+  .profile-m-who .profile-avatar { width: 56px; height: 56px; flex: none; }
+  .profile-m-who b { font-size: 1.1rem; }
+  .profile-m-who > div { min-width: 0; }
+  .profile-m-who .profile-m-muted { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .profile-m-muted { color: var(--text-muted); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 4px; }
+  .profile-m-gtitle { color: var(--text-muted); font-size: 0.78rem; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; padding: 14px 16px 6px; margin: 0; }
+  .profile-m-group { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; margin: 0 12px; overflow: hidden; }
+  .profile-m-group button { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px; padding: 0 14px; min-height: 48px; text-align: left; font-size: 0.98rem; color: var(--text-main); }
+  .profile-m-group button + button { border-top: 1px solid var(--border-color); }
+  .profile-m-group button:active { background: var(--bg-card-hover); }
+  .profile-m-group button > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+  .profile-m-signout { margin-top: 24px; }
+  .profile-m-signout button { color: var(--danger); }
+  .user-profile .profile-m-home .profile-error { padding: 8px 16px; }
+}
