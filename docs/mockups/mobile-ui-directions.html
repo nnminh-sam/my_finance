@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile UI Directions</title>
+<meta name="description" content="Five design directions for the MyFinance Expo app, each solving UI/UX problems U1–U12 from docs/08-mobile-port-analysis.md, with clickable phone mockups.">
+<style>
+:root {
+  --bg: #f4f4f5; --card: #ffffff; --card2: #f1f5f9; --text: #0f172a; --muted: #64748b; --border: #e2e8f0;
+  --primary: #3b82f6; --primary-soft: rgba(59,130,246,.12); --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+  --frame: #1f2937; --shadow: 0 20px 50px rgba(15,23,42,.18); --dim: rgba(15,23,42,.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #09090b; --card: #18181b; --card2: #27272a; --text: #f4f4f5; --muted: #a1a1aa; --border: #3f3f46;
+    --primary-soft: rgba(59,130,246,.2); --frame: #000; --shadow: 0 20px 50px rgba(0,0,0,.6); --dim: rgba(0,0,0,.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #09090b; --card: #18181b; --card2: #27272a; --text: #f4f4f5; --muted: #a1a1aa; --border: #3f3f46;
+  --primary-soft: rgba(59,130,246,.2); --frame: #000; --shadow: 0 20px 50px rgba(0,0,0,.6); --dim: rgba(0,0,0,.55);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+a { color: var(--primary); }
+code { font: 0.86em ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--card2); padding: 1px 5px; border-radius: 5px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+
+/* ---------- page ---------- */
+.hero { padding: 40px 0 8px; }
+.eyebrow { color: var(--primary); font-weight: 600; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+h1.page { font-size: clamp(26px, 4vw, 38px); line-height: 1.15; margin: 6px 0 12px; letter-spacing: -0.02em; }
+.lede { font-size: 17px; max-width: 760px; margin: 0 0 6px; }
+.muted { color: var(--muted); }
+.controls { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+.controls .wrap { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding-top: 10px; padding-bottom: 10px; }
+.jump { display: flex; gap: 6px; flex-wrap: wrap; }
+.jump a { text-decoration: none; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 3px 11px; font-size: 13px; font-weight: 600; }
+.ctl { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.segc { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+.segc button { padding: 3px 9px; border-radius: 6px; font-size: 12.5px; color: var(--muted); }
+.segc button.on { background: var(--primary); color: #fff; }
+section.block { padding: 34px 0 6px; }
+h2 { font-size: 24px; letter-spacing: -0.01em; margin: 0 0 6px; }
+h3 { font-size: 17px; margin: 18px 0 6px; }
+.problems { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 14px; }
+.prob { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; }
+.prob b { display: block; font-size: 14px; }
+.sev { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 0 6px; margin-left: 4px; vertical-align: 1px; }
+.sev.blocker { background: rgba(239,68,68,.15); color: var(--danger); }
+.sev.high { background: rgba(245,158,11,.18); color: #b45309; }
+:root[data-theme="dark"] .sev.high { color: var(--warning); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sev.high { color: var(--warning); } }
+.sev.medium { background: var(--primary-soft); color: var(--primary); }
+.sev.low { background: var(--card2); color: var(--muted); }
+.found { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-top: 14px; }
+.fcard { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+.fcard h4 { margin: 0 0 4px; font-size: 15px; }
+.fcard p { margin: 0; font-size: 14px; }
+.tag { display: inline-block; font-size: 11.5px; font-weight: 700; color: var(--primary); background: var(--primary-soft); border-radius: 6px; padding: 0 6px; margin-right: 3px; }
+
+.dir { display: grid; grid-template-columns: 340px 1fr; gap: 34px; align-items: start; padding: 40px 0 10px; border-top: 1px solid var(--border); margin-top: 30px; }
+.dir .stage { position: sticky; top: 64px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.dir .letter { font-size: 13px; font-weight: 700; color: #fff; background: var(--primary); border-radius: 8px; padding: 1px 8px; margin-right: 8px; vertical-align: 3px; }
+.dir h2 { font-size: 26px; }
+.pitch { font-size: 16px; margin: 4px 0 14px; }
+.try { background: var(--primary-soft); border-radius: 12px; padding: 10px 14px; font-size: 14px; margin: 0 0 14px; }
+.try b { color: var(--primary); }
+.try ul { margin: 4px 0 0; padding-left: 18px; }
+table.how { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+table.how th, table.how td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.how th { width: 112px; font-weight: 600; white-space: nowrap; }
+table.how tr:last-child td, table.how tr:last-child th { border-bottom: 0; }
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.pc div { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+.pc h4 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+.pc .pro h4 { color: var(--success); } .pc .con h4 { color: var(--danger); }
+.pc ul { margin: 0; padding-left: 18px; }
+
+.matrix-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
+table.matrix { border-collapse: collapse; font-size: 13px; min-width: 980px; width: 100%; }
+table.matrix th, table.matrix td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+table.matrix thead th { background: var(--card2); font-size: 13px; position: sticky; top: 0; }
+table.matrix tbody th { white-space: nowrap; font-weight: 600; }
+table.matrix td.shared { color: var(--muted); }
+.dots { letter-spacing: 2px; color: var(--primary); white-space: nowrap; }
+.dots i { font-style: normal; color: var(--border); }
+.rec { background: var(--card); border: 2px solid var(--primary); border-radius: 16px; padding: 16px 20px; margin-top: 14px; }
+.rec ol { margin: 6px 0 0; padding-left: 20px; }
+footer { padding: 40px 0 60px; font-size: 13px; color: var(--muted); }
+@media (max-width: 700px) { .controls { position: static; } }
+@media (max-width: 880px) {
+  .dir { grid-template-columns: 1fr; gap: 18px; }
+  .dir .stage { position: static; }
+  .pc { grid-template-columns: 1fr; }
+}
+
+/* ---------- phone ---------- */
+.phone { --ts: 1; width: 320px; height: 660px; border-radius: 46px; border: 10px solid var(--frame); background: var(--bg); position: relative; overflow: hidden; box-shadow: var(--shadow); font-size: calc(12.5px * var(--ts)); line-height: 1.35; user-select: none; -webkit-user-select: none; }
+@media (max-width: 352px) { .phone { transform: scale(.9); transform-origin: top center; margin-bottom: -60px; } }
+.phone.buzz { animation: buzz .16s linear 2; }
+@keyframes buzz { 25% { transform: translateX(-1.5px); } 75% { transform: translateX(1.5px); } }
+.notch { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 92px; height: 25px; background: #000; border-radius: 14px; z-index: 40; }
+.sb { position: absolute; top: 0; left: 0; right: 0; height: 40px; display: flex; justify-content: space-between; align-items: center; padding: 6px 24px 0; font-size: 12px; z-index: 30; background: var(--bg); }
+.sb span { font-size: 10px; letter-spacing: 1px; }
+.offline-bar { display: none; position: absolute; top: 40px; left: 0; right: 0; background: var(--warning); color: #111; font-size: 11px; font-weight: 600; text-align: center; padding: 3px; z-index: 29; }
+body.offline .offline-bar { display: block; }
+.screens { position: absolute; top: 40px; left: 0; right: 0; bottom: 66px; }
+body.offline .screens { top: 60px; }
+.scr { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; display: none; background: var(--bg); scrollbar-width: none; }
+.scr::-webkit-scrollbar { display: none; }
+.scr.on { display: block; }
+.scr.flex.on { display: flex; flex-direction: column; overflow: hidden; }
+.scr.push { animation: push .22s ease-out; }
+@keyframes push { from { transform: translateX(40%); opacity: .4; } }
+.nav { display: flex; align-items: flex-end; justify-content: space-between; padding: 6px 16px 8px; gap: 8px; }
+.nav h1 { font-size: 1.95em; margin: 0; letter-spacing: -0.02em; line-height: 1.1; }
+.nav .sub { color: var(--muted); font-size: .95em; }
+.nav .act { color: var(--primary); font-weight: 600; font-size: 1em; padding: 6px 0; }
+.back { color: var(--primary); font-weight: 500; padding: 8px 16px 0; display: block; }
+.pad { padding: 0 12px 16px; }
+.card { background: var(--card); border-radius: 14px; padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); }
+.card h5 { margin: 0 0 6px; font-size: 1.05em; display: flex; justify-content: space-between; align-items: center; }
+.info { width: 26px; height: 26px; border-radius: 50%; color: var(--primary); font-weight: 700; font-size: 1em; display: inline-grid; place-items: center; }
+.info:active { background: var(--primary-soft); }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.kpi { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; }
+.kpi small { color: var(--muted); display: block; }
+.kpi b { font-size: 1.25em; letter-spacing: -0.01em; }
+.empty { color: var(--muted); text-align: center; padding: 18px 0; margin: 0; }
+
+/* tab bar */
+.tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 66px; display: flex; align-items: flex-start; justify-content: space-around; padding: 6px 4px 0; background: var(--card); border-top: 1px solid var(--border); z-index: 10; }
+.tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: .78em; color: var(--muted); min-height: 44px; }
+.tab svg { width: 22px; height: 22px; }
+.tab.on { color: var(--primary); }
+.tab.plus { flex: 0 0 56px; }
+.tab.plus span { width: 46px; height: 46px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; margin-top: -14px; box-shadow: 0 6px 16px rgba(59,130,246,.45); }
+.tab.plus svg { width: 24px; height: 24px; }
+.hb { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 110px; height: 4px; border-radius: 3px; background: var(--text); opacity: .7; z-index: 11; }
+svg.i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* calendar weeks (A, E) */
+.wkhead { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 8px 4px; font-size: .8em; color: var(--muted); text-align: center; position: sticky; top: 0; background: var(--bg); z-index: 3; }
+.mlabel { position: sticky; top: 18px; z-index: 2; background: var(--bg); font-weight: 700; font-size: 1.05em; padding: 8px 14px 4px; }
+.wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; padding: 0 8px 3px; }
+.dc { height: 50px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.dc b { font-size: 1em; font-weight: 600; }
+.dc i { font-style: normal; font-size: .76em; color: var(--muted); min-height: 1em; }
+.dc.today { border: 2px solid var(--primary); }
+.dc.today b { color: var(--primary); }
+.dc.future { opacity: .45; }
+.dc.other { background: transparent; }
+.dc:active { transform: scale(.94); }
+.phone.big .dc i { font-size: 0; }
+.phone.big .dc i:not(:empty)::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); display: inline-block; }
+
+/* rows + swipe */
+.list { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.swipe { position: relative; overflow: hidden; max-height: 80px; transition: max-height .25s ease, opacity .2s; }
+.swipe.gone { max-height: 0; opacity: 0; }
+.swipe + .swipe .row { border-top: 1px solid var(--border); }
+.del { position: absolute; inset: 0 0 0 auto; width: 84px; background: var(--danger); color: #fff; font-weight: 600; display: grid; place-items: center; }
+.row { position: relative; background: var(--card); display: flex; align-items: center; gap: 10px; padding: 9px 12px; min-height: 52px; touch-action: pan-y; transition: transform .2s; }
+.row.drag { transition: none; }
+.ic { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--c) 18%, transparent); font-size: 1.1em; flex: none; }
+.rt { flex: 1; min-width: 0; }
+.rt b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rt small { color: var(--muted); font-size: .85em; }
+.amt { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hint { color: var(--muted); font-size: .82em; text-align: center; margin: 6px 0 0; }
+.btn { display: block; width: 100%; min-height: 44px; border-radius: 12px; font-weight: 600; margin-top: 10px; }
+.btn.primary { background: var(--primary); color: #fff; }
+.btn.ghost { background: var(--primary-soft); color: var(--primary); }
+.daytotal { font-size: 1.7em; font-weight: 700; letter-spacing: -0.02em; padding: 0 16px 10px; }
+
+/* overlays */
+.ov { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+.dim { position: absolute; inset: 0; background: var(--dim); opacity: 0; transition: opacity .2s; }
+.ov.sheet-on .dim, .ov.alert-on .dim { opacity: 1; pointer-events: auto; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92%; overflow-y: auto; background: var(--card); border-radius: 18px 18px 0 0; padding: 8px 14px 26px; transform: translateY(105%); transition: transform .28s cubic-bezier(.2,.8,.2,1); pointer-events: auto; scrollbar-width: none; }
+.ov.sheet-on .sheet { transform: none; }
+.grab { width: 38px; height: 5px; border-radius: 3px; background: var(--border); margin: 0 auto 8px; }
+.sheet-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.sheet-h b { font-size: 1.1em; }
+.link { color: var(--primary); padding: 8px 2px; min-width: 44px; }
+.link.strong { font-weight: 700; text-align: right; }
+.alert-wrap { position: absolute; inset: 0; display: none; place-items: center; pointer-events: none; }
+.ov.alert-on .alert-wrap { display: grid; }
+.alert { width: 250px; background: var(--card); border-radius: 16px; text-align: center; overflow: hidden; pointer-events: auto; box-shadow: var(--shadow); animation: pop .18s ease-out; }
+@keyframes pop { from { transform: scale(1.1); opacity: 0; } }
+.alert .ab-body { padding: 16px 16px 12px; }
+.alert b { font-size: 1.1em; }
+.alert p { margin: 4px 0 0; color: var(--muted); font-size: .95em; }
+.alert input { width: 100%; margin-top: 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); }
+.alert .err { color: var(--danger); font-size: .9em; min-height: 1.2em; margin-top: 4px; }
+.alert .ab { display: flex; border-top: 1px solid var(--border); }
+.alert .ab button { flex: 1; padding: 11px; color: var(--primary); }
+.alert .ab button + button { border-left: 1px solid var(--border); }
+.alert .ab button.destructive { color: var(--danger); font-weight: 600; }
+.toast { position: absolute; left: 12px; right: 12px; bottom: 76px; background: var(--text); color: var(--bg); border-radius: 12px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .95em; transform: translateY(20px); opacity: 0; transition: .22s; pointer-events: none; }
+.toast.on { transform: none; opacity: 1; pointer-events: auto; }
+/* When a keypad is docked, toasts drop from the top so they never cover keys. */
+.phone[data-dir="F"]:has(.scr[data-s="week"].on [data-fdock]:not([hidden])) .toast, .phone[data-dir="B"]:has(.scr[data-s="home"].on) .toast { bottom: auto; top: 48px; transform: translateY(-20px); }
+.phone[data-dir="F"]:has(.scr[data-s="week"].on [data-fdock]:not([hidden])) .toast.on, .phone[data-dir="B"]:has(.scr[data-s="home"].on) .toast.on { transform: none; }
+.toast button { color: var(--primary); font-weight: 700; filter: brightness(1.3); }
+
+/* form sheet */
+.seg { display: flex; background: var(--card2); border-radius: 10px; padding: 2px; margin-bottom: 10px; }
+.seg button { flex: 1; padding: 6px; border-radius: 8px; font-weight: 600; color: var(--muted); min-height: 32px; }
+.seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.big-amt { display: flex; align-items: baseline; justify-content: center; gap: 6px; margin: 6px 0 12px; }
+.big-amt input { width: 190px; border: 0; background: transparent; font-size: 2.6em; font-weight: 700; text-align: right; outline: none; letter-spacing: -0.02em; }
+.big-amt span { font-size: 1.6em; color: var(--muted); font-weight: 600; }
+.big-amt.shake { animation: buzz .12s linear 3; }
+.chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+.chips.scroll { display: flex; overflow-x: auto; scrollbar-width: none; }
+.chips.scroll .chip { flex: none; }
+.chip { min-height: 44px; border-radius: 12px; border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 5px; padding: 0 10px; font-weight: 500; }
+.chip.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+.glist { background: var(--card2); border-radius: 12px; overflow: hidden; }
+.gi { display: flex; justify-content: space-between; align-items: center; padding: 0 12px; min-height: 44px; }
+.gi + .gi { border-top: 1px solid var(--border); }
+.gi span { color: var(--muted); }
+.gi span.danger, .gi.danger { color: var(--danger); }
+.switch { width: 40px; height: 24px; border-radius: 12px; background: var(--border); position: relative; display: inline-block; transition: .2s; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.switch.on { background: var(--success); }
+.switch.on::after { left: 18px; }
+
+/* keypad */
+.kp { background: var(--card); border-top: 1px solid var(--border); padding: 8px 10px 8px; }
+.kp-amt { text-align: center; font-size: 1.9em; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+.kp-amt small { color: var(--muted); font-size: .6em; }
+.kp .chips { margin-bottom: 6px; gap: 5px; }
+.kp .chip { min-height: 36px; font-size: .92em; padding: 0 9px; }
+.keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.keys button { min-height: 40px; border-radius: 10px; background: var(--card2); font-size: 1.25em; font-weight: 500; }
+.keys button:active { background: var(--border); }
+.keys .ok { grid-row: span 2; background: var(--primary); color: #fff; font-size: 1.05em; font-weight: 700; }
+.kp.pulse { animation: kp 0.6s ease-out; }
+@keyframes kp { 30% { box-shadow: inset 0 0 0 3px var(--primary); } }
+
+/* week list */
+.wrow { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0 12px; min-height: 48px; text-align: left; }
+.wrow + .wrow { border-top: 1px solid var(--border); }
+.wrow > span:first-child { width: 54px; }
+.wrow .wbar { flex: 1; height: 8px; background: var(--card2); border-radius: 4px; overflow: hidden; }
+.wrow .wbar span { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
+.wrow b { width: 50px; text-align: right; font-variant-numeric: tabular-nums; }
+.wrow.future { opacity: .45; }
+.wnav { display: flex; gap: 4px; }
+.wnav button { width: 36px; height: 36px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); font-size: 1.1em; }
+
+/* charts */
+.readout { font-size: .95em; min-height: 2.6em; }
+.readout b { font-size: 1.15em; display: block; }
+svg.scrub { width: 100%; height: auto; display: block; touch-action: none; cursor: crosshair; }
+.axis { display: flex; justify-content: space-between; font-size: .78em; color: var(--muted); }
+.bars { display: flex; flex-direction: column; gap: 4px; }
+.bar { display: flex; align-items: center; gap: 8px; min-height: 34px; border-radius: 8px; padding: 0 4px; text-align: left; }
+.bar.sel { background: var(--card2); }
+.bar .bl { width: 98px; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar .bt { flex: 1; height: 12px; background: var(--card2); border-radius: 6px; overflow: hidden; }
+.bar .bt span { display: block; height: 100%; border-radius: 6px; }
+.legend { margin-top: 6px; padding: 8px 10px; background: var(--card2); border-radius: 10px; font-size: .95em; min-height: 2.5em; }
+.heat { display: grid; gap: 3px; }
+.heat .hl { font-size: .78em; color: var(--muted); display: flex; align-items: center; }
+.heat .hh { font-size: .78em; color: var(--muted); text-align: center; }
+.heat button { aspect-ratio: 1; border-radius: 7px; background: var(--primary); min-height: 28px; }
+.heat button:active { outline: 2px solid var(--text); }
+.cols { display: flex; align-items: flex-end; gap: 2px; height: 80px; }
+.cols button { flex: 1; background: var(--primary); opacity: .55; border-radius: 3px 3px 0 0; min-width: 4px; }
+.cols button.sel { opacity: 1; }
+
+/* B */
+.strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 10px 8px; }
+.strip button { border-radius: 12px; padding: 5px 0; background: var(--card); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; min-height: 52px; }
+.strip button small { color: var(--muted); font-size: .76em; }
+.strip button b { font-size: 1.05em; }
+.strip button i { font-style: normal; font-size: .72em; color: var(--muted); }
+.strip button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.strip button.on small, .strip button.on i { color: rgba(255,255,255,.85); }
+.strip button.future { opacity: .45; }
+.ledger { flex: 1; overflow-y: auto; padding: 0 12px 10px; scrollbar-width: none; }
+.ledger-h { display: flex; justify-content: space-between; align-items: baseline; padding: 2px 4px 6px; }
+.ledger-h b { font-size: 1.25em; }
+.more { color: var(--primary); font-size: .9em; font-weight: 600; }
+
+/* month grid (B, D) */
+.mhead { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px 6px; }
+.mhead b { font-size: 1.25em; }
+.mgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; padding: 0 8px; touch-action: pan-y; }
+.mgrid .wd { font-size: .78em; color: var(--muted); text-align: center; padding-bottom: 2px; }
+.mgrid .dc { height: 46px; }
+.mgrid .dc.sel { outline: 2.5px solid var(--text); outline-offset: -1px; }
+.mgrid.heat-on .dc { border: 0; }
+.heat-legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; padding: 6px 12px 0; font-size: .78em; color: var(--muted); }
+.heat-legend span { width: 14px; height: 10px; border-radius: 3px; background: var(--primary); }
+
+/* D bottom sheet */
+.bs { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: var(--card); border-radius: 18px 18px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.18); transition: height .26s cubic-bezier(.2,.8,.2,1); display: flex; flex-direction: column; z-index: 5; }
+.bs.drag { transition: none; }
+.bs-top { padding: 8px 14px 6px; cursor: grab; touch-action: none; }
+.bs-top .grab { margin-bottom: 6px; }
+.bs-top .row2 { display: flex; justify-content: space-between; align-items: baseline; }
+.bs-top b { font-size: 1.15em; }
+.bs-c { flex: 1; overflow-y: auto; padding: 0 12px 12px; scrollbar-width: none; }
+
+/* F: plain month + daily-spend bars; B-style week with closable keypad */
+.dir.pick { border-top: 3px solid var(--primary); }
+.pickbadge { display: inline-block; font-size: 12px; font-weight: 700; color: var(--success); background: rgba(16,185,129,.14); border-radius: 6px; padding: 1px 8px; margin-left: 8px; vertical-align: 5px; }
+.fbars { display: flex; align-items: flex-end; gap: 2px; height: 50px; padding: 0 12px; }
+.fbars button { flex: 1; min-height: 3px; border-radius: 3px; background: var(--primary); }
+.fbars button.today { background: var(--warning); }
+.fbars button.future { opacity: .2; }
+.faxis { display: flex; justify-content: space-between; padding: 3px 12px 10px; font-size: .75em; color: var(--muted); }
+.mgrid.plain .dc { border: 0; background: transparent; height: 42px; }
+.mgrid.plain .dc b { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 500; }
+.mgrid.plain .dc.today { border: 0; }
+.mgrid.plain .dc.today b { background: var(--primary); color: #fff; font-weight: 700; }
+.mgrid.plain .dc:not(.future):active b { background: var(--card2); }
+.wbars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 10px 4px; }
+.wbars > div { height: 40px; display: flex; align-items: flex-end; justify-content: center; }
+.wbars button { width: 62%; min-height: 4px; border-radius: 4px 4px 2px 2px; background: var(--primary); opacity: .45; transition: height .25s; }
+.wbars button.sel { opacity: 1; }
+.wbars button.today { background: var(--warning); opacity: 1; }
+.wbars button.future { opacity: .15; }
+.strip.plain button { min-height: 46px; justify-content: center; }
+.strip.plain button.today:not(.on) b { color: var(--primary); }
+.fdock { flex: none; background: var(--card); border-top: 1px solid var(--border); }
+.fdock[hidden] { display: none; }
+.dock-h { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px 0; font-size: .9em; color: var(--muted); }
+.fx { width: 30px; height: 30px; border-radius: 50%; background: var(--card2); font-size: 1.1em; line-height: 1; }
+.fdock .kp { border-top: 0; padding-top: 2px; }
+.fdock .keys button { min-height: 36px; }
+
+/* C */
+.hstrip { display: flex; align-items: flex-end; gap: 2px; height: 46px; padding: 0 12px; margin-bottom: 6px; }
+.hstrip button { flex: 1; border-radius: 3px; background: var(--primary); min-height: 3px; }
+.hstrip button.today { background: var(--warning); }
+.feed { flex: 1; overflow-y: auto; position: relative; padding: 0 12px 12px; scrollbar-width: none; }
+.fh { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 10px 2px 6px; display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 8px; }
+.fh .bud { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--card2); overflow: hidden; }
+.fh .bud span { display: block; height: 100%; background: var(--success); }
+.fh .bud span.over { background: var(--danger); }
+.stories { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 10px; padding: 4px 16px 6px; scrollbar-width: none; }
+.story { flex: 0 0 86%; scroll-snap-align: center; background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 16px 14px; display: flex; flex-direction: column; align-self: flex-start; }
+.story .kicker { color: var(--primary); font-weight: 700; font-size: .82em; text-transform: uppercase; letter-spacing: .05em; }
+.story h4 { font-size: 1.5em; line-height: 1.15; margin: 6px 0 8px; letter-spacing: -0.01em; }
+.story p { color: var(--muted); margin: 0 0 12px; }
+.story .grow { margin-top: 4px; }
+.sdots { display: flex; justify-content: center; gap: 6px; padding: 6px 0 12px; }
+.sdots span { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
+.sdots span.on { background: var(--primary); width: 18px; border-radius: 4px; }
+
+/* E */
+.ringcard { display: flex; align-items: center; gap: 14px; }
+.ringcard svg { width: 104px; height: 104px; flex: none; }
+.ringcard .big { font-size: 1.5em; font-weight: 700; letter-spacing: -0.02em; }
+.prog { height: 10px; background: var(--card2); border-radius: 5px; overflow: hidden; margin: 8px 0 4px; }
+.prog span { display: block; height: 100%; background: var(--primary); border-radius: 5px; }
+.prof-h { display: flex; align-items: center; gap: 12px; padding: 4px 16px 14px; }
+.avatar { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 1.3em; }
+.gtitle { color: var(--muted); font-size: .82em; text-transform: uppercase; letter-spacing: .04em; padding: 10px 16px 4px; }
+.group { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin: 0 12px; overflow: hidden; }
+.group button { display: flex; width: 100%; justify-content: space-between; align-items: center; padding: 0 12px; min-height: 44px; text-align: left; }
+.group button + button { border-top: 1px solid var(--border); }
+.group button span { color: var(--muted); }
+.group button.danger { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header class="wrap hero">
+  <div class="eyebrow">MyFinance · Mobile port (MYFIN-M4) · UI/UX</div>
+  <h1 class="page">Five design directions for the Expo app</h1>
+  <p class="lede">Each direction below solves all twelve UI/UX problems (U1–U12) from <code>docs/08-mobile-port-analysis.md</code> §4. They share one technical foundation and differ in <b>how the app is organised and how expenses are entered</b>. The phones are clickable: switch tabs, tap days, drag charts, swipe rows left to delete, press +.</p>
+  <p class="muted"><b>Your pick:</b> <a href="#dir-F">F · Ledger Month</a> — a plain calendar with a daily-spending chart, and B's week ledger with a keypad you can close. A–E follow as the alternatives it was built from.</p>
+</header>
+
+<nav class="controls" aria-label="Preview controls">
+  <div class="wrap">
+    <div class="jump"><a href="#problems">Problems</a><a href="#foundation">Foundation</a><a href="#dir-F">F ★</a><a href="#dir-A">A</a><a href="#dir-B">B</a><a href="#dir-C">C</a><a href="#dir-D">D</a><a href="#dir-E">E</a><a href="#compare">Compare</a></div>
+    <div class="ctl">Theme <span class="segc" id="theme"><button data-v="system" class="on">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></span></div>
+    <div class="ctl">Text size <span class="segc" id="ts"><button data-v="1" class="on">100%</button><button data-v="1.15">115%</button><button data-v="1.3">130%</button></span></div>
+    <div class="ctl">Network <span class="segc" id="net"><button data-v="on" class="on">Online</button><button data-v="off">Offline</button></span></div>
+  </div>
+</nav>
+
+<main class="wrap">
+  <section class="block" id="problems">
+    <h2>The twelve problems</h2>
+    <p class="muted">From §4 of the port analysis. Severity as rated there.</p>
+    <div class="problems">
+      <div class="prob"><b>U1 · Rendering model <span class="sev blocker">Blocker</span></b>No DOM or CSS; 3,400 lines of CSS, hover states and <code>.hide-mobile</code> must become native views.</div>
+      <div class="prob"><b>U2 · Calendar scroll engine <span class="sev high">High</span></b>Relies on <code>offsetTop</code>, <code>ResizeObserver</code>, wheel and hand-written swipe; none exist natively.</div>
+      <div class="prob"><b>U3 · Charts <span class="sev high">High</span></b>Tooltips appear on hover only, so most chart detail is unreachable by touch.</div>
+      <div class="prob"><b>U4 · Expense entry <span class="sev high">High</span></b>The most frequent flow is an 890-line web form with date/time inputs and a combobox.</div>
+      <div class="prob"><b>U5 · Analytics dashboard <span class="sev high">High</span></b>~12 desktop-grid cards, jargon subtitles, <code>title=</code> tooltips, a 168-cell heatmap at 12 pt per cell.</div>
+      <div class="prob"><b>U6 · Navigation shell <span class="sev medium">Medium</span></b>URL state, global modals and text loading gates; Android back and iOS swipe-back unhandled.</div>
+      <div class="prob"><b>U7 · Unsaved-changes guard <span class="sev medium">Medium</span></b><code>beforeunload</code> and <code>window.confirm</code> don't exist on mobile.</div>
+      <div class="prob"><b>U8 · Profile <span class="sev medium">Medium</span></b>Seven tabs don't fit a phone; avatar is a URL field.</div>
+      <div class="prob"><b>U9 · Theme <span class="sev low">Low</span></b>localStorage + <code>matchMedia</code> + inline script → native colour scheme without a flash.</div>
+      <div class="prob"><b>U10 · Data freshness <span class="sev medium">Medium</span></b>Window focus and bfcache reloads; no pull-to-refresh.</div>
+      <div class="prob"><b>U11 · Shared library <span class="sev medium">Medium</span></b><code>salaryCycle.ts</code> uses localStorage; VND formatting duplicated inline.</div>
+      <div class="prob"><b>U12 · Platform conventions <span class="sev medium">Medium</span></b>Safe areas, 44 pt targets, Dynamic Type, haptics, gestures, offline.</div>
+    </div>
+  </section>
+
+  <section class="block" id="foundation">
+    <h2>Shared foundation (identical in all five)</h2>
+    <p class="muted">These parts of the problems have one right answer regardless of the visual direction, so every direction gets them. Use the controls above to try theme, text size and offline in the phones.</p>
+    <div class="found">
+      <div class="fcard"><h4><span class="tag">U1</span>Tokens + primitives first</h4><p>Typed theme tokens (colour, spacing, radius, type) in <code>packages/core/theme</code>, then <code>Card</code>, <code>Row</code>, <code>Amount</code>, <code>Sheet</code>, <code>Chip</code>. Pressed states replace hover. Amounts are never hidden on phones.</p></div>
+      <div class="fcard"><h4><span class="tag">U6</span><span class="tag">U7</span>expo-router shell + guard</h4><p>Tabs with a custom centre <b>+</b>; <code>day/[date]</code> pushed; <code>readPageDate</code> validates params. Splash for session restore, skeletons for data. <code>beforeRemove</code> + <code>Alert</code> guards unsaved forms on back, swipe-back and Android back.</p></div>
+      <div class="fcard"><h4><span class="tag">U9</span>Theme without flash</h4><p><code>useColorScheme()</code> for System; override persisted in MMKV (synchronous read); tokens via ThemeProvider; StatusBar and navigation theme follow.</p></div>
+      <div class="fcard"><h4><span class="tag">U10</span>Freshness</h4><p>TanStack Query keyed by week batch; refetch on <code>AppState → active</code> and <code>useFocusEffect</code>; pull-to-refresh on every list screen. bfcache logic removed.</p></div>
+      <div class="fcard"><h4><span class="tag">U11</span>Platform-neutral core</h4><p>One <code>formatVnd()</code> in <code>packages/core</code> (checked on Hermes for both OSes); <code>salaryCycle.ts</code> split into pure maths + injected storage; pay cycle moved to server <code>finance_settings</code> so web and phone agree.</p></div>
+      <div class="fcard"><h4><span class="tag">U12</span>Platform polish</h4><p>Safe-area insets on every screen; ≥ 44 pt targets; font scale respected (calendar cells switch amounts to dots at large sizes); <code>expo-haptics</code> on save, delete and selection; read-only offline cache with writes blocked; app-switcher blur.</p></div>
+    </div>
+  </section>
+
+  <!-- F -->
+  <section class="dir pick" id="dir-F">
+    <div class="stage"><div class="phone-slot" data-dir="F"></div></div>
+    <div>
+      <h2><span class="letter">F</span>Ledger Month<span class="pickbadge">Your pick · B + D</span></h2>
+      <p class="pitch">Dates stay dates and amounts live in charts. <b>Month</b> is a plain calendar under a daily-spending bar chart (today in amber). <b>Week</b> is B's ledger: a seven-bar chart over the day strip, that day's expenses, and the keypad (amount → category → ✓). Close the keypad to see the day's expenses on the whole screen.</p>
+      <div class="try"><b>Try it:</b><ul>
+        <li>Month: tap a date or a bar → that day opens in Week. ‹ › changes month.</li>
+        <li>Week: tap a day (pill or bar), type an amount, pick a category, ✓. The row appears and that day's bar grows.</li>
+        <li>Press the <b>chevron</b> beside “Add to …” to close the keypad; the list fills the screen. “+ Add expense” or the <b>+</b> tab brings it back.</li>
+        <li>Type an amount, then close the keypad → you're asked before it's discarded. Esc stands in for Android back.</li>
+        <li>‹ › or a swipe on the strip moves a week; it stops at the current week.</li>
+      </ul></div>
+      <table class="how">
+        <tr><th>U2 Calendar</th><td>Month is a static 6×7 grid of dates with no per-day content, so cells stay readable at large text sizes. Week reuses the existing week-batch loader as is; the month chart needs one month of daily totals.</td></tr>
+        <tr><th>U3 Charts</th><td>Spending is read from bar charts, not from the dates: 28–31 bars in Month, 7 in Week. Every bar is a tap target that opens its day. Analytics as in D.</td></tr>
+        <tr><th>U4 Entry</th><td>B's keypad, for the day selected in Week; the date is never typed. Time, note and repeat sit behind “More…” (not in this mock).</td></tr>
+        <tr><th>U5 Analytics</th><td>As D: Overview / Categories / Patterns, ≤ 4 cards each.</td></tr>
+        <tr><th>U6 Navigation</th><td>Month · Week · <b>+</b> · Analytics · Profile. A day in Month switches to Week; <b>+</b> opens Week with the keypad for the selected day. Android back closes the keypad first.</td></tr>
+        <tr><th>U7 Guard</th><td>Closing the keypad with an amount not yet added asks Keep editing / Discard.</td></tr>
+        <tr><th>U8 Profile</th><td>Same grouped list as A.</td></tr>
+      </table>
+      <div class="pc"><div class="pro"><h4>Strengths</h4><ul><li>A calm, readable calendar; amounts are compared in charts, where they're easier to compare.</li><li>Three-tap entry, and the full day list one tap away.</li><li>Week keeps the existing loader; no collapsing grid or drag gestures.</li></ul></div><div class="con"><h4>Weaknesses</h4><ul><li>Month shows no amounts on dates; a bar must be tapped to read a value.</li><li>Month-chart bars are ~8 pt wide: fine as a picture, tight as tap targets. Tapping a date is the precise route.</li><li>The custom keypad needs its own screen-reader support.</li></ul></div></div>
+    </div>
+  </section>
+
+  <!-- A -->
+  <section class="dir" id="dir-A">
+    <div class="stage"><div class="phone-slot" data-dir="A"></div></div>
+    <div>
+      <h2><span class="letter">A</span>Platform Native</h2>
+      <p class="pitch">Follow iOS and Android conventions exactly: continuous week-scroll calendar, a form sheet for entry, a single-column analytics list and an iOS-Settings-style profile. The least invention, and the closest match to the milestone spec and the open decisions in §7.</p>
+      <div class="try"><b>Try it:</b><ul><li>Tap a day → the Day screen is pushed; swipe an expense left to delete, then Undo.</li><li>Press <b>+</b>, type an amount, then Cancel → the discard guard (U7).</li><li>Analytics: press and drag on the forecast chart; tap a category bar or heatmap cell; tap ⓘ.</li><li>Profile → Delete account (the A5 endpoint you just shipped).</li></ul></div>
+      <table class="how">
+        <tr><th>U2 Calendar</th><td>FlashList of fixed-height week rows: <code>initialScrollIndex</code> opens on this week, no measuring; <code>onViewableItemsChanged</code> drives the existing <code>getNextWeeksToFetch</code>. Tap a day → push Day; long-press → preview sheet.</td></tr>
+        <tr><th>U3 Charts</th><td>Skia line chart with a press-and-drag scrubber and readout above; bars and heat cells tap-to-select into a fixed legend row.</td></tr>
+        <tr><th>U4 Entry</th><td>Form sheet: large number-pad amount with live thousands separators, 3×2 category chips, native date/time pickers, Repeat as a <code>Switch</code>, “Save &amp; add another” for batches.</td></tr>
+        <tr><th>U5 Analytics</th><td>One column in priority order: KPIs → forecast → categories → when you spend → daily. Heatmap aggregated to 4 time-of-day buckets × 7 days (44 pt cells). ⓘ opens plain-language explanations.</td></tr>
+        <tr><th>U6 Navigation</th><td>Calendar · Week · <b>+</b> · Analytics · Profile — exactly the milestone spec.</td></tr>
+        <tr><th>U8 Profile</th><td>Grouped list; each former tab is a pushed screen. MCP shows “Manage on web”. Delete account in its own group.</td></tr>
+      </table>
+      <div class="pc"><div class="pro"><h4>Strengths</h4><ul><li>Lowest risk and effort; every piece is a stock component.</li><li>Reuses the week-batch loader unchanged.</li><li>Feels at home on both platforms.</li></ul></div><div class="con"><h4>Weaknesses</h4><ul><li>Adding an expense is still 4–5 taps.</li><li>Looks generic; no at-a-glance month picture.</li></ul></div></div>
+    </div>
+  </section>
+
+  <!-- B -->
+  <section class="dir" id="dir-B">
+    <div class="stage"><div class="phone-slot" data-dir="B"></div></div>
+    <div>
+      <h2><span class="letter">B</span>Quick Ledger</h2>
+      <p class="pitch">Entry first. The home screen is the selected day's ledger with a keypad always docked at the bottom: amount → category → ✓ in three taps, date taken from the week strip. History and analytics are secondary.</p>
+      <div class="try"><b>Try it:</b><ul><li>Type 45000 on the keypad, pick a category, press ✓ — the row appears; Undo in the toast.</li><li>Tap another weekday in the strip, then add an expense to that day.</li><li>Month tab: ‹ › to page months; tap a day.</li></ul></div>
+      <table class="how">
+        <tr><th>U2 Calendar</th><td>A paged week strip on Today plus a paged Month tab. No long continuous list to virtualise, but it drops today's continuous-scroll model; the week loader is called per page.</td></tr>
+        <tr><th>U3 Charts</th><td>Insights uses tap-to-select bars and one scrubbable chart; the rest behind “See all”.</td></tr>
+        <tr><th>U4 Entry</th><td>Custom keypad dock covers the 90 % case with no keyboard; “More…” opens the full sheet (time, note, repeat). Every ✓ appends to the list, so batch entry is just typing again.</td></tr>
+        <tr><th>U5 Analytics</th><td>Trimmed to KPIs and categories; the full dashboard is one tap deeper.</td></tr>
+        <tr><th>U6 Navigation</th><td>Today · Month · <b>+</b> · Insights · Profile (differs from the spec's tab order). + focuses the keypad.</td></tr>
+        <tr><th>U8 Profile</th><td>Same grouped list as A.</td></tr>
+      </table>
+      <div class="pc"><div class="pro"><h4>Strengths</h4><ul><li>Fastest daily entry; works one-handed.</li><li>No system keyboard covering fields.</li></ul></div><div class="con"><h4>Weaknesses</h4><ul><li>Keypad takes ~40 % of the screen; browsing history is weaker.</li><li>A custom keypad must implement VoiceOver/TalkBack itself.</li><li>Changes the agreed tab layout.</li></ul></div></div>
+    </div>
+  </section>
+
+  <!-- C -->
+  <section class="dir" id="dir-C">
+    <div class="stage"><div class="phone-slot" data-dir="C"></div></div>
+    <div>
+      <h2><span class="letter">C</span>Timeline Feed</h2>
+      <p class="pitch">The calendar becomes a reverse-chronological feed of days with sticky headers and a budget bar per day — the shape FlashList is best at. A month heat strip on top jumps to any day. Analytics become swipeable insight cards, each one plain-language sentence with one chart.</p>
+      <div class="try"><b>Try it:</b><ul><li>Tap a bar in the heat strip to jump to that day; scroll and watch headers stick.</li><li>Swipe an expense left to delete it.</li><li>Stories tab: swipe between cards; drag on the forecast.</li><li>Press + for the quick-add keypad sheet.</li></ul></div>
+      <table class="how">
+        <tr><th>U2 Calendar</th><td>FlashList with <code>stickyHeaderIndices</code>; the heat strip calls <code>scrollToIndex</code>; scrolling back loads older week batches with the existing loader.</td></tr>
+        <tr><th>U3 Charts</th><td>One chart per card; scrubber on the forecast card; tap on bars.</td></tr>
+        <tr><th>U4 Entry</th><td>+ opens B's keypad as a sheet, defaulting to today; “Add” on a day header pre-fills that date.</td></tr>
+        <tr><th>U5 Analytics</th><td>The dense grid is rewritten as 5–6 story cards with sentences like “Weekends cost 32 % more”, replacing jargon subtitles and <code>title=</code> tooltips.</td></tr>
+        <tr><th>U6 Navigation</th><td>Feed · Week · <b>+</b> · Stories · Profile.</td></tr>
+        <tr><th>U8 Profile</th><td>Same grouped list as A.</td></tr>
+      </table>
+      <div class="pc"><div class="pro"><h4>Strengths</h4><ul><li>Scanning, editing and swipe-to-delete feel natural.</li><li>Best scroll performance; the list is the app.</li><li>Easiest analytics to understand.</li></ul></div><div class="con"><h4>Weaknesses</h4><ul><li>No month grid, so “which days were heavy” needs the strip.</li><li>Story cards hide detail that power users want.</li></ul></div></div>
+    </div>
+  </section>
+
+  <!-- D -->
+  <section class="dir" id="dir-D">
+    <div class="stage"><div class="phone-slot" data-dir="D"></div></div>
+    <div>
+      <h2><span class="letter">D</span>Month Grid + Peek Sheet</h2>
+      <p class="pitch">The iOS Calendar convention: paged months with heat-coloured days, and a draggable bottom sheet that peeks the selected day (peek → half → full). Month overview and day detail share one screen. Analytics are split into three segments.</p>
+      <div class="try"><b>Try it:</b><ul><li>Tap days: the sheet updates. Drag the sheet's handle up and down; it snaps.</li><li>Swipe the grid left/right (or ‹ ›) to change month.</li><li>Press + : the sheet expands into the entry form for the selected day.</li><li>Analytics: switch Overview / Categories / Patterns.</li></ul></div>
+      <table class="how">
+        <tr><th>U2 Calendar</th><td>Horizontally paged months (<code>pagingEnabled</code>), each a static 6×7 grid — no measuring at all. Fetching moves from week batches to whole months (loader adaptation needed).</td></tr>
+        <tr><th>U3 Charts</th><td>Scrubber and tap-to-select inside each segment.</td></tr>
+        <tr><th>U4 Entry</th><td>+ expands the sheet to full height with the form; the date is the selected day, so it is never typed.</td></tr>
+        <tr><th>U5 Analytics</th><td>Overview / Categories / Patterns, ≤ 4 cards each, so fewer Skia charts are mounted at once (better on mid-range Android).</td></tr>
+        <tr><th>U6 Navigation</th><td>Month · Week · <b>+</b> · Analytics · Profile.</td></tr>
+        <tr><th>U8 Profile</th><td>Same grouped list as A.</td></tr>
+      </table>
+      <div class="pc"><div class="pro"><h4>Strengths</h4><ul><li>Best at-a-glance picture of the month.</li><li>Day detail without leaving the calendar.</li></ul></div><div class="con"><h4>Weaknesses</h4><ul><li>Most gesture engineering: sheet drag vs. month swipe vs. list scroll.</li><li>Reverses the §7 decision (continuous scroll) and changes the loader.</li></ul></div></div>
+    </div>
+  </section>
+
+  <!-- E -->
+  <section class="dir" id="dir-E">
+    <div class="stage"><div class="phone-slot" data-dir="E"></div></div>
+    <div>
+      <h2><span class="letter">E</span>Insight Home</h2>
+      <p class="pitch">The app opens on a dashboard that answers “am I OK today?”: today's spend against the daily budget, pay-cycle progress, a scrubbable forecast and recent expenses. The calendar is the second tab.</p>
+      <div class="try"><b>Try it:</b><ul><li>Drag on the forecast; swipe a recent expense to delete it — the ring updates.</li><li>Press + and save an expense for today; watch the ring.</li><li>Analytics: the heatmap is transposed (hours as rows) and scrolls.</li></ul></div>
+      <table class="how">
+        <tr><th>U2 Calendar</th><td>Same FlashList week rows as A, on the Calendar tab.</td></tr>
+        <tr><th>U3 Charts</th><td>Scrubbable forecast on Home; transposed heatmap with 2-hour rows × 7 days, tap for detail.</td></tr>
+        <tr><th>U4 Entry</th><td>Same form sheet as A.</td></tr>
+        <tr><th>U5 Analytics</th><td>The three most useful metrics are promoted to Home; the Analytics tab keeps the full set in one column, charts mounted lazily.</td></tr>
+        <tr><th>U6 Navigation</th><td>Home · Calendar · <b>+</b> · Analytics · Profile.</td></tr>
+        <tr><th>U8 Profile</th><td>Same grouped list; pay cycle is prominent, so syncing it server-side (U11) becomes a prerequisite.</td></tr>
+      </table>
+      <div class="pc"><div class="pro"><h4>Strengths</h4><ul><li>Motivating; budget status is the first thing seen.</li><li>Puts analytics to daily use.</li></ul></div><div class="con"><h4>Weaknesses</h4><ul><li>Home computes analytics on every cold start.</li><li>Calendar entry is one tab further away.</li><li>Depends on pay-cycle sync landing first.</li></ul></div></div>
+    </div>
+  </section>
+
+  <section class="block" id="compare">
+    <h2>How each direction handles U1–U12</h2>
+    <p class="muted">Grey cells are the shared foundation; only the differences are spelled out.</p>
+    <div class="matrix-wrap"><table class="matrix">
+      <thead><tr><th>Problem</th><th>A · Platform Native</th><th>B · Quick Ledger</th><th>C · Timeline Feed</th><th>D · Month + Peek</th><th>E · Insight Home</th><th>F · Ledger Month ★</th></tr></thead>
+      <tbody>
+        <tr><th>U1 Rendering</th><td class="shared">Tokens + Card/Row/Amount/Sheet/Chip</td><td>+ Keypad primitive</td><td>+ sticky feed header</td><td>+ BottomSheet (gorhom)</td><td>+ Ring, Progress</td><td>+ Keypad, bar strip, closable dock</td></tr>
+        <tr><th>U2 Calendar</th><td>Continuous week rows, FlashList</td><td>Paged week strip + paged months</td><td>Day feed, sticky headers</td><td>Paged month grids</td><td>As A (2nd tab)</td><td>Plain month grid + B-style week</td></tr>
+        <tr><th>U3 Charts</th><td>Scrub + tap legend</td><td>Tap bars; one scrub chart</td><td>One chart per card</td><td>Scrub + tap, per segment</td><td>Scrub on Home; transposed heatmap</td><td>Month + week bar charts; D's analytics</td></tr>
+        <tr><th>U4 Entry</th><td>Form sheet</td><td>Docked keypad, 3 taps</td><td>Keypad sheet</td><td>Sheet expands to form</td><td>Form sheet</td><td>B's keypad, closable to show the day</td></tr>
+        <tr><th>U5 Analytics</th><td>Single column, ⓘ sheets</td><td>Trimmed + “See all”</td><td>Story cards, plain sentences</td><td>3 segments, ≤ 4 cards</td><td>Top 3 on Home + full list</td><td>As D</td></tr>
+        <tr><th>U6 Navigation</th><td>Spec tab order</td><td>Today-first tabs</td><td>Feed-first tabs</td><td>Month-first tabs</td><td>Home-first tabs</td><td>Month · Week tabs; back closes keypad</td></tr>
+        <tr><th>U7 Unsaved guard</th><td class="shared">beforeRemove + Alert</td><td>Draft kept in dock (no discard)</td><td class="shared">beforeRemove + Alert</td><td>Alert when collapsing a dirty sheet</td><td class="shared">beforeRemove + Alert</td><td>Alert when closing the keypad with an amount</td></tr>
+        <tr><th>U8 Profile</th><td class="shared">Grouped list, pushed screens</td><td class="shared">Same</td><td class="shared">Same</td><td class="shared">Same</td><td>Same; pay cycle surfaced</td><td class="shared">Same</td></tr>
+        <tr><th>U9 Theme</th><td class="shared" colspan="6">useColorScheme + MMKV override + ThemeProvider (all six)</td></tr>
+        <tr><th>U10 Freshness</th><td class="shared">Query cache, AppState, pull-to-refresh</td><td class="shared">Same</td><td class="shared">Same</td><td>Same, keyed by month</td><td>Same; Home refetches on focus</td><td class="shared">Same</td></tr>
+        <tr><th>U11 Shared lib</th><td class="shared">formatVnd, storage adapter, synced pay cycle</td><td class="shared">Same</td><td class="shared">Same</td><td>+ month-range fetch helper</td><td>Synced pay cycle required first</td><td>+ month daily totals for the chart</td></tr>
+        <tr><th>U12 Platform</th><td class="shared">Safe areas, 44 pt, font scale, haptics, offline read-only</td><td>+ keypad accessibility</td><td>+ swipe gestures on every row</td><td>+ gesture conflict handling</td><td class="shared">Same</td><td>+ keypad accessibility</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Scores</h3>
+    <p class="muted">1–5, higher is better. Judgement calls for discussion, not measurements.</p>
+    <div class="matrix-wrap"><table class="matrix" id="scores"></table></div>
+  </section>
+
+  <section class="block" id="rec">
+    <h2>Chosen direction: F · Ledger Month</h2>
+    <div class="rec">
+      <p style="margin:0"><b>F pairs the fastest entry with a clean calendar.</b> Moving amounts out of the dates and into charts also removed the riskiest parts of the previous F (collapsing grid, drag-to-close), so it now scores close to A on build risk. (Before your pick I had recommended A.)</p>
+      <ol>
+        <li><b>Update the analysis:</b> §7 “Calendar model” becomes a plain month grid plus a week ledger; U2/U3 describe the two bar charts.</li>
+        <li><b>Data:</b> Week reuses the week-batch loader. The month chart needs daily totals for one month, which can come from the same spendings fetch or a small aggregate endpoint.</li>
+        <li><b>Accessibility:</b> each bar needs a label (“Tue 24 Nov, 132,000 ₫”); keypad keys need labels, the amount must be announced as it changes, and ✓ must say which day it adds to.</li>
+        <li><b>Check on a device:</b> month-bar tap accuracy at ~8 pt wide, and keypad latency on a mid-range Android.</li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">Source: <code>docs/08-mobile-port-analysis.md</code> §4 (U1–U12), §7 (open decisions); milestone MYFIN-M4. Sample data is generated; “today” is fixed to Tue 24 Nov 2026. Mockups are web approximations of native components.</footer>
+
+<script>
+(() => {
+  // ---------- data ----------
+  const CATS = {
+    Food: { c: '#10b981', e: '🍜', d: ['Phở bò', 'Cà phê', 'Cơm tấm', 'Bánh mì', 'Bún chả', 'Trà sữa'] },
+    Transport: { c: '#3b82f6', e: '🚗', d: ['Grab', 'Xăng', 'Gửi xe'] },
+    Entertainment: { c: '#8b5cf6', e: '🎬', d: ['CGV', 'Spotify', 'Board game'] },
+    Shopping: { c: '#f59e0b', e: '🛍️', d: ['Shopee', 'Uniqlo', 'Tiki'] },
+    Bills: { c: '#ef4444', e: '🧾', d: ['Điện', 'Internet', 'Nước'] },
+    Other: { c: '#6b7280', e: '💸', d: ['Quà', 'Cắt tóc'] },
+  };
+  const RANGE = { Food: [25, 180], Transport: [15, 120], Entertainment: [80, 350], Shopping: [120, 900], Bills: [250, 1200], Other: [50, 400] };
+  const TODAY = new Date(2026, 10, 24);
+  const DAILY_BUDGET = 500000, CYCLE_BUDGET = 18000000;
+  const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const WDF = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const MONF = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  let seed = 20261124;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const pick = a => a[Math.floor(rand() * a.length)];
+  const pad = n => String(n).padStart(2, '0');
+  const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const wdi = d => (d.getDay() + 6) % 7;
+  const monday = d => addDays(d, -wdi(d));
+  const TODAY_ISO = iso(TODAY);
+  const fmt = n => n.toLocaleString('vi-VN') + ' ₫';
+  const k = n => !n ? '' : n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : Math.round(n / 1000) + 'k';
+  const label = s => { const d = parse(s); return `${WD[wdi(d)]} ${d.getDate()} ${MON[d.getMonth()]}`; };
+  const longLabel = s => { const d = parse(s); return s === TODAY_ISO ? `Today, ${d.getDate()} ${MON[d.getMonth()]}` : `${WDF[wdi(d)]}, ${d.getDate()} ${MON[d.getMonth()]}`; };
+
+  const DATA = {};
+  let NEXT = 1;
+  const weights = weekend => [['Food', 5], ['Transport', 3], ['Entertainment', weekend ? 3 : 0.8], ['Shopping', weekend ? 2 : 1], ['Bills', 0.4], ['Other', 0.5]];
+  for (let d = new Date(2026, 8, 28); d <= TODAY; d = addDays(d, 1)) {
+    const weekend = wdi(d) >= 5;
+    const n = 1 + Math.floor(rand() * 3) + (weekend ? 1 : 0);
+    const arr = [];
+    for (let i = 0; i < n; i++) {
+      const w = weights(weekend), sum = w.reduce((a, [, x]) => a + x, 0);
+      let r = rand() * sum, cat = 'Food';
+      for (const [c, x] of w) { if ((r -= x) <= 0) { cat = c; break; } }
+      const [lo, hi] = RANGE[cat];
+      const amt = Math.round(lo + (hi - lo) * rand() * rand() + 0.5) * 1000;
+      const h = 7 + Math.floor(rand() * 16), m = pick([0, 15, 30, 45]);
+      arr.push({ id: NEXT++, cat, desc: pick(CATS[cat].d), amt, time: `${pad(h)}:${pad(m)}` });
+    }
+    arr.sort((a, b) => a.time.localeCompare(b.time));
+    DATA[iso(d)] = arr;
+  }
+  // A fixed, typical "today" so the home ring and budget read sensibly.
+  DATA[TODAY_ISO] = [
+    { id: NEXT++, cat: 'Food', desc: 'Cà phê', amt: 35000, time: '08:10' },
+    { id: NEXT++, cat: 'Transport', desc: 'Grab', amt: 42000, time: '08:40' },
+    { id: NEXT++, cat: 'Food', desc: 'Cơm tấm', amt: 55000, time: '12:15' },
+  ];
+  const total = s => (DATA[s] || []).reduce((a, e) => a + e.amt, 0);
+  const monthDays = (y, m) => { const out = []; for (let d = new Date(y, m, 1); d.getMonth() === m; d = addDays(d, 1)) out.push(iso(d)); return out; };
+  const maxDay = () => Math.max(...Object.keys(DATA).map(total), 1);
+
+  // ---------- icons ----------
+  const P = {
+    cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    week: '<path d="M3 6h18M3 12h18M3 18h18"/>',
+    chart: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+    home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+    feed: '<path d="M4 6h16M4 12h10M4 18h13"/>',
+    spark: '<path d="M12 3l2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+  };
+  const icon = n => `<svg class="i" viewBox="0 0 24 24">${P[n]}</svg>`;
+
+  // ---------- fragments ----------
+  const entryRow = (e, d) => { const c = CATS[e.cat]; return `<div class="swipe" data-id="${e.id}" data-d="${d}"><button class="del">Delete</button><div class="row"><span class="ic" style="--c:${c.c}">${c.e}</span><div class="rt"><b>${e.desc}</b><small>${e.cat} · ${e.time}</small></div><span class="amt">−${fmt(e.amt)}</span></div></div>`; };
+  const rowsHTML = d => (DATA[d] || []).map(e => entryRow(e, d)).join('') || '<p class="empty">No expenses yet.</p>';
+  const listHTML = d => `<div class="list" data-list="${d}">${rowsHTML(d)}</div>`;
+  const tot = (d, f = 'full') => `<span data-total="${d}" data-fmt="${f}">${f === 'k' ? k(total(d)) : fmt(total(d))}</span>`;
+  const info = key => `<button class="info" data-info="${key}" aria-label="About this chart">ⓘ</button>`;
+  const INFO = {
+    forecast: ['Spending forecast', 'Where this month will probably end if you keep spending at your current pace. The shaded band is the likely range. Press and drag on the chart to read any day.'],
+    cats: ['By category', 'How this month\'s spending splits across your categories. Tap a bar to see the exact amount and share.'],
+    heat: ['When you spend', 'Each cell adds up expenses by weekday and time of day over the last eight weeks. Darker means more. Tap a cell for details.'],
+    daily: ['Daily spending', 'One bar per day this month. Tap a bar to see that day\'s total.'],
+  };
+
+  function catChips(sel = 'Food', scroll = false) {
+    return `<div class="chips${scroll ? ' scroll' : ''}">${Object.entries(CATS).map(([n, c]) => `<button class="chip${n === sel ? ' on' : ''}" data-chip="${n}" style="--c:${c.c}">${c.e} ${n}</button>`).join('')}</div>`;
+  }
+
+  function weekRows() {
+    let html = `<div class="wkhead">${WD.map(w => `<span>${w[0]}</span>`).join('')}</div>`;
+    let start = monday(new Date(2026, 9, 1));
+    const end = monday(new Date(2026, 11, 6));
+    let lastMonth = -1;
+    for (let w = start; w <= end; w = addDays(w, 7)) {
+      const days = [...Array(7)].map((_, i) => addDays(w, i));
+      const first = days.find(d => d.getDate() === 1);
+      if (first && first.getMonth() !== lastMonth) { html += `<div class="mlabel">${MONF[first.getMonth()]} ${first.getFullYear()}</div>`; lastMonth = first.getMonth(); }
+      html += `<div class="wk"${days.some(d => iso(d) === TODAY_ISO) ? ' data-todaywk' : ''}>` + days.map(d => {
+        const s = iso(d), cls = ['dc', s === TODAY_ISO && 'today', d > TODAY && 'future'].filter(Boolean).join(' ');
+        return `<button class="${cls}" data-day="${s}"><b>${d.getDate()}</b><i data-total="${s}" data-fmt="k">${k(total(s))}</i></button>`;
+      }).join('') + '</div>';
+    }
+    return html;
+  }
+
+  const heatBg = (t, max = maxDay()) => t ? `color-mix(in srgb, var(--primary) ${Math.round(12 + 70 * t / max)}%, var(--card))` : '';
+
+  // F · Month: a plain calendar, with daily spending shown only in the bar chart above it.
+  function fMonthBars(y, m) {
+    const days = monthDays(y, m), max = Math.max(...days.map(total), 1);
+    return days.map(d => {
+      const future = parse(d) > TODAY;
+      return `<button data-fday="${d}" class="${d === TODAY_ISO ? 'today' : ''}${future ? ' future' : ''}" style="height:${future ? 6 : Math.max(6, 100 * total(d) / max)}%" aria-label="${label(d)}: ${fmt(total(d))}"></button>`;
+    }).join('');
+  }
+  const fMonth = (y = 2026, m = 10) => `<div class="nav" style="padding-bottom:2px"><h1>${MONF[m]}</h1><span class="sub">${y}</span></div>
+    <div class="mhead"><button data-mon="-1" aria-label="Previous month"><span style="font-size:1.4em;padding:0 8px">‹</span></button><span class="muted">Daily spending</span><button data-mon="1" aria-label="Next month"><span style="font-size:1.4em;padding:0 8px">›</span></button></div>
+    <div class="fbars" data-fmonthbars data-m="${m}">${fMonthBars(y, m)}</div>
+    <div class="faxis"><span>1 ${MON[m]}</span><span>${new Date(y, m + 1, 0).getDate()} ${MON[m]}</span></div>
+    ${monthGrid(y, m, false, true)}
+    <p class="hint">Tap a date or a bar to open that day in Week</p>`;
+
+  // F · Week: B's layout — week chart, day strip, the day's expenses, and a closable keypad.
+  const fWeek = () => `<div class="nav" style="padding-bottom:6px"><div><div class="sub" data-fwk-sub></div><h1 data-fwk-title>This week</h1></div><div class="wnav"><button data-fwk="-1" aria-label="Previous week">‹</button><button data-fwk="1" aria-label="Next week">›</button></div></div>
+    <div class="wbars" data-fwbars></div>
+    <div class="strip plain" data-fstrip></div>
+    <div class="ledger"><div class="ledger-h"><span class="muted" data-ledger-title></span><b data-ledger-total></b></div><div data-ledger></div><button class="btn ghost" data-act="fkpopen" data-kpopen hidden>+ Add expense</button></div>
+    <div class="fdock" data-fdock><div class="dock-h"><span data-dock-title></span><button class="fx" data-act="fkpclose" aria-label="Hide keypad"><svg class="i" viewBox="0 0 24 24" style="width:18px;height:18px;vertical-align:middle"><path d="M6 9l6 6 6-6"/></svg></button></div>${keypad(TODAY_ISO, false)}</div>`;
+
+  function monthGrid(y, m, heat, plain) {
+    const first = new Date(y, m, 1), lead = wdi(first), max = maxDay();
+    let html = WD.map(w => `<span class="wd">${w[0]}</span>`).join('');
+    for (let i = 0; i < lead; i++) html += '<span></span>';
+    for (const s of monthDays(y, m)) {
+      const d = parse(s), t = total(s), future = d > TODAY;
+      const style = heat && t ? ` style="background:${heatBg(t, max)}"` : '';
+      html += `<button class="dc${s === TODAY_ISO ? ' today' : ''}${future ? ' future' : ''}" data-day="${s}"${style}><b>${d.getDate()}</b>${plain ? '' : `<i data-total="${s}" data-fmt="k">${k(t)}</i>`}</button>`;
+    }
+    return `<div class="mgrid${heat ? ' heat-on' : ''}${plain ? ' plain' : ''}">${html}</div>`;
+  }
+
+  function weekScreen(offset = 0) {
+    const mon = addDays(monday(TODAY), offset * 7);
+    const days = [...Array(7)].map((_, i) => iso(addDays(mon, i)));
+    const max = Math.max(...days.map(total), 1);
+    const sum = days.reduce((a, d) => a + total(d), 0);
+    const end = addDays(mon, 6);
+    return `<div class="nav"><div><div class="sub">${mon.getDate()} ${MON[mon.getMonth()]} – ${end.getDate()} ${MON[end.getMonth()]}</div><h1>${offset === 0 ? 'This week' : offset === -1 ? 'Last week' : `${-offset} weeks ago`}</h1></div><div class="wnav"><button data-wk="-1" aria-label="Previous week">‹</button><button data-wk="1" aria-label="Next week"${offset >= 0 ? ' disabled style="opacity:.4"' : ''}>›</button></div></div>
+      <div class="daytotal">${fmt(sum)}</div>
+      <div class="pad"><div class="list">${days.map(d => `<button class="wrow${parse(d) > TODAY ? ' future' : ''}" data-day="${d}"><span>${label(d).split(' ').slice(0, 2).join(' ')}</span><span class="wbar"><span style="width:${100 * total(d) / max}%"></span></span><b>${tot(d, 'k')}</b></button>`).join('')}</div>
+      <p class="hint">Tap a day to open it · pull down to refresh</p></div>`;
+  }
+
+  function lineChart() {
+    const days = monthDays(2026, 10), W = 280, H = 120, n = days.length;
+    let cum = 0;
+    const act = [];
+    days.forEach((d, i) => { if (parse(d) <= TODAY) { cum += total(d); act.push(cum); } });
+    const lastI = act.length - 1, pace = cum / act.length;
+    const sd = Math.sqrt(days.slice(0, act.length).reduce((a, d) => a + (total(d) - pace) ** 2, 0) / act.length);
+    const fc = days.map((_, i) => i <= lastI ? null : cum + pace * (i - lastI));
+    const band = days.map((_, i) => i <= lastI ? 0 : 1.96 * sd * Math.sqrt(i - lastI));
+    const top = (fc[n - 1] + band[n - 1]) * 1.05;
+    const X = i => 6 + (W - 12) * i / (n - 1), Y = v => H - 6 - (H - 14) * v / top;
+    const pts = days.map((d, i) => i <= lastI
+      ? { x: X(i), y: Y(act[i]), t: `${d.split('-')[2]} Nov · spent so far`, v: fmt(act[i]) }
+      : { x: X(i), y: Y(fc[i]), t: `${d.split('-')[2]} Nov · forecast`, v: `~${k(Math.round(fc[i] / 1e5) * 1e5)} ₫ (±${k(Math.round(band[i] / 1e5) * 1e5)})` });
+    const line = act.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+    const fl = fc.map((v, i) => v === null ? '' : `${i === lastI + 1 ? `M${X(lastI)},${Y(cum)}L` : 'L'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+    const bandP = `M${X(lastI)},${Y(cum)}` + fc.map((v, i) => v === null ? '' : `L${X(i).toFixed(1)},${Y(v + band[i]).toFixed(1)}`).join('') + [...fc.keys()].reverse().map(i => fc[i] === null ? '' : `L${X(i).toFixed(1)},${Y(fc[i] - band[i]).toFixed(1)}`).join('') + 'Z';
+    const last = pts[n - 1];
+    return `<div class="chart"><div class="readout" data-readout><b>${last.v}</b><span class="muted">${last.t}</span></div>
+      <svg class="scrub" viewBox="0 0 ${W} ${H}" data-pts='${JSON.stringify(pts.map(p => [Math.round(p.x), Math.round(p.y), p.t, p.v]))}'>
+        <path d="${bandP}" fill="var(--primary)" opacity=".13"/>
+        <path d="${line}" fill="none" stroke="var(--primary)" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="${fl}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="4 4"/>
+        <line class="sl" x1="${last.x}" x2="${last.x}" y1="4" y2="${H - 4}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
+        <circle class="sd" cx="${last.x}" cy="${last.y}" r="4.5" fill="var(--primary)" stroke="var(--card)" stroke-width="2"/>
+      </svg><div class="axis"><span>1 Nov</span><span>today</span><span>30 Nov</span></div></div>`;
+  }
+
+  function catBars() {
+    const days = monthDays(2026, 10), sums = {};
+    days.forEach(d => (DATA[d] || []).forEach(e => sums[e.cat] = (sums[e.cat] || 0) + e.amt));
+    const all = Object.values(sums).reduce((a, b) => a + b, 0), max = Math.max(...Object.values(sums));
+    return `<div class="bars">${Object.entries(sums).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<button class="bar" data-sel="${c}|${fmt(v)}|${Math.round(100 * v / all)}"><span class="bl">${CATS[c].e} ${c}</span><span class="bt"><span style="width:${100 * v / max}%;background:${CATS[c].c}"></span></span></button>`).join('')}</div><div class="legend" data-legend><span class="muted">Tap a bar to see the amount</span></div>`;
+  }
+
+  function heatData(buckets) {
+    const m = buckets.map(() => Array(7).fill(0)), cnt = buckets.map(() => Array(7).fill(0));
+    Object.entries(DATA).forEach(([d, arr]) => arr.forEach(e => {
+      const h = Number(e.time.slice(0, 2)), b = buckets.findIndex(([lo, hi]) => h >= lo && h < hi);
+      if (b >= 0) { m[b][wdi(parse(d))] += e.amt; cnt[b][wdi(parse(d))]++; }
+    }));
+    return { m, cnt, max: Math.max(...m.flat(), 1) };
+  }
+  function heatGrid(transposed) {
+    const buckets = transposed ? [...Array(9)].map((_, i) => [6 + 2 * i, 8 + 2 * i]) : [[6, 11], [11, 14], [14, 18], [18, 24]];
+    const names = transposed ? buckets.map(([a]) => `${pad(a)}h`) : ['Morning', 'Midday', 'Afternoon', 'Evening'];
+    const { m, cnt, max } = heatData(buckets);
+    let html = `<span></span>${WD.map(w => `<span class="hh">${w[0]}</span>`).join('')}`;
+    m.forEach((row, b) => {
+      html += `<span class="hl">${names[b]}</span>` + row.map((v, w) => `<button data-heat="${WDF[w]}|${transposed ? names[b] + '–' + pad(buckets[b][1]) + 'h' : names[b].toLowerCase()}|${v}|${cnt[b][w]}" style="opacity:${(0.12 + 0.88 * v / max).toFixed(2)}" aria-label="${WDF[w]} ${names[b]}"></button>`).join('');
+    });
+    return `<div class="heat" style="grid-template-columns:${transposed ? '34px' : '64px'} repeat(7,1fr)">${html}</div>`;
+  }
+
+  function dailyCols() {
+    const days = monthDays(2026, 10).filter(d => parse(d) <= TODAY), max = Math.max(...days.map(total));
+    return `<div class="readout" data-colout><span class="muted">Tap a bar</span></div><div class="cols">${days.map(d => `<button data-col="${d}" style="height:${Math.max(4, 100 * total(d) / max)}%" aria-label="${label(d)}"></button>`).join('')}</div>`;
+  }
+
+  function kpis() {
+    const days = monthDays(2026, 10).filter(d => parse(d) <= TODAY), sum = days.reduce((a, d) => a + total(d), 0);
+    const pace = sum / days.length;
+    return `<div class="kpis"><div class="kpi"><small>Spent in Nov</small><b>${k(sum)} ₫</b></div><div class="kpi"><small>Daily average</small><b>${k(pace)} ₫</b></div><div class="kpi"><small>Projected</small><b>${k(sum + pace * 6)} ₫</b></div><div class="kpi"><small>Vs. last month</small><b style="color:var(--success)">−6%</b></div></div>`;
+  }
+
+  function profile() {
+    const g = (t, rows) => `<div class="gtitle">${t}</div><div class="group">${rows.map(([n, v, cls]) => `<button data-push="${n}"${cls ? ` class="${cls}"` : ''}>${n}<span>${v || ''} ›</span></button>`).join('')}</div>`;
+    return `<div class="nav"><h1>Profile</h1></div>
+      <div class="prof-h"><div class="avatar">NM</div><div><b style="font-size:1.15em">Nguyễn Nhật Minh</b><div class="muted">nnminh.sam@example.com</div></div></div>
+      ${g('Account', [['Personal info'], ['Password & security']])}
+      ${g('Money', [['Income sources', '1'], ['Categories', '6'], ['Repeating expenses', '3'], ['Pay cycle', 'Day 10']])}
+      ${g('App', [['Appearance', 'System'], ['Notifications'], ['AI assistants (MCP)', 'Web']])}
+      <div class="gtitle">&nbsp;</div><div class="group"><button data-act="signout">Sign out<span></span></button><button class="danger" data-act="delacct">Delete account<span></span></button></div>
+      <p class="hint" style="padding:10px 16px 16px">Seven web tabs become pushed screens.</p>`;
+  }
+
+  function subScreen(name) {
+    let body;
+    if (name === 'Categories') body = `<div class="list">${Object.entries(CATS).map(([n, c]) => `<div class="row"><span class="ic" style="--c:${c.c}">${c.e}</span><div class="rt"><b>${n}</b></div><span class="muted">Edit ›</span></div>`).join('')}</div>`;
+    else if (name === 'Appearance') body = `<div class="glist">${['System', 'Light', 'Dark'].map(v => `<button class="gi" style="width:100%" data-theme-set="${v.toLowerCase()}">${v}<span>${(document.documentElement.dataset.theme || 'system') === v.toLowerCase() ? '✓' : ''}</span></button>`).join('')}</div><p class="hint">Saved in MMKV and read synchronously at launch, so there is no flash (U9).</p>`;
+    else if (name === 'AI assistants (MCP)') body = `<div class="card"><b>Managed on the web</b><p class="muted" style="margin:6px 0 0">Personal access tokens for Claude and other assistants stay in the web app (out of scope for mobile v1).</p><button class="btn ghost">Open web app</button></div>`;
+    else if (name === 'Pay cycle') body = `<div class="glist"><div class="gi">Cycle starts on<span>Day 10 ›</span></div><div class="gi">Budget per cycle<span>${fmt(CYCLE_BUDGET)} ›</span></div></div><p class="hint">Synced in <code>finance_settings</code>, so web and phone agree (U11).</p>`;
+    else if (name === 'Income sources') body = `<div class="list"><div class="row"><span class="ic" style="--c:#10b981">💼</span><div class="rt"><b>Salary</b><small>Monthly · from 1 Jan 2026</small></div><span class="amt">${fmt(25000000)}</span></div></div>`;
+    else body = `<div class="glist"><div class="gi">${name}<span>›</span></div></div><p class="hint">A regular pushed screen; back button and swipe-back both work.</p>`;
+    return `<button class="back" data-back>‹ Profile</button><div class="nav"><h1 style="font-size:1.6em">${name}</h1></div><div class="pad">${body}</div>`;
+  }
+
+  function formHTML(d) {
+    return `<div class="grab"></div><div class="sheet-h" data-form data-d="${d}"><button class="link" data-act="cancel">Cancel</button><b>New expense</b><button class="link strong" data-act="save">Save</button></div>
+      <div class="seg"><button class="on" data-seg>Spending</button><button data-seg>Income</button></div>
+      <label class="big-amt"><input class="amt-in" inputmode="numeric" placeholder="0" aria-label="Amount"><span>₫</span></label>
+      ${catChips()}
+      <div class="glist"><div class="gi">Date<span>${longLabel(d)} ›</span></div><div class="gi">Time<span>${pad(new Date().getHours())}:${pad(new Date().getMinutes())} ›</span></div><div class="gi">Note<span>Optional ›</span></div><button class="gi" style="width:100%" data-toggle>Repeat<span class="switch"></span></button></div>
+      <button class="btn ghost" data-act="saveadd">Save &amp; add another</button>`;
+  }
+
+  function keypad(d, inSheet) {
+    const keys = ['1', '2', '3', 'del', '4', '5', '6', 'ok', '7', '8', '9', '000', '0'];
+    return `<div class="kp" data-kp data-d="${d}" data-v="0" data-cat="Food">${inSheet ? `<div class="grab"></div><div class="sheet-h"><button class="link" data-act="close">Close</button><b>Quick add · ${longLabel(d)}</b><span style="width:44px"></span></div>` : ''}
+      <div class="kp-amt"><span data-amt>0</span> <small>₫</small></div>
+      ${catChips('Food', true)}
+      <div class="keys">${keys.map(x => x === 'ok' ? '<button class="ok" data-k="ok">✓<br>Add</button>' : x === 'del' ? '<button data-k="del" aria-label="Delete digit">⌫</button>' : `<button data-k="${x}"${x === '0' ? ' style="grid-column:span 2"' : ''}>${x}</button>`).join('')}</div></div>`;
+  }
+
+  // ---------- direction screens ----------
+  const calScreen = () => `<div class="nav"><h1>Calendar</h1><button class="act" data-act="today">Today</button></div>${weekRows()}<p class="hint" style="padding-bottom:12px">Fixed row height → scrollToIndex, no measuring</p>`;
+
+  const anaFull = transposed => `<div class="nav"><h1>Analytics</h1><span class="sub">November</span></div><div class="pad">
+      ${kpis()}
+      <div class="card"><h5>Spending forecast ${info('forecast')}</h5>${lineChart()}</div>
+      <div class="card"><h5>By category ${info('cats')}</h5>${catBars()}</div>
+      <div class="card"><h5>When you spend ${info('heat')}</h5>${heatGrid(transposed)}</div>
+      <div class="card"><h5>Daily spending ${info('daily')}</h5>${dailyCols()}</div></div>`;
+
+  function bHome() {
+    const mon = monday(TODAY);
+    const days = [...Array(7)].map((_, i) => iso(addDays(mon, i)));
+    return `<div class="nav" style="padding-bottom:6px"><div><div class="sub">${MONF[10]} 2026 · week 48</div><h1>Today</h1></div><button class="act" data-tab="month">Month</button></div>
+      <div class="strip">${days.map(d => `<button data-strip="${d}" class="${d === TODAY_ISO ? 'on' : ''}${parse(d) > TODAY ? ' future' : ''}"><small>${WD[wdi(parse(d))]}</small><b>${parse(d).getDate()}</b><i data-total="${d}" data-fmt="k">${k(total(d))}</i></button>`).join('')}</div>
+      <div class="ledger"><div class="ledger-h"><span class="muted" data-ledger-title>${longLabel(TODAY_ISO)}</span><b data-ledger-total>${tot(TODAY_ISO)}</b></div><div data-ledger>${listHTML(TODAY_ISO)}</div></div>
+      ${keypad(TODAY_ISO, false)}`;
+  }
+  const bMonth = (y = 2026, m = 10) => `<div class="nav"><h1>Month</h1></div><div class="mhead"><button class="wnav" data-mon="-1"><span style="font-size:1.4em;padding:0 8px">‹</span></button><b>${MONF[m]} ${y}</b><button data-mon="1"><span style="font-size:1.4em;padding:0 8px">›</span></button></div>${monthGrid(y, m, false)}<p class="hint">Swipe or ‹ › to page months · tap a day</p>`;
+  const bInsights = () => `<div class="nav"><h1>Insights</h1><span class="sub">November</span></div><div class="pad">${kpis()}<div class="card"><h5>By category ${info('cats')}</h5>${catBars()}</div><div class="card"><h5>Spending forecast ${info('forecast')}</h5>${lineChart()}</div><div class="group" style="margin:0"><button data-push="All analytics">See all analytics<span>›</span></button></div></div>`;
+
+  function cFeed() {
+    const days = Object.keys(DATA).filter(d => parse(d) <= TODAY).sort().reverse();
+    const nov = monthDays(2026, 10), max = Math.max(...nov.map(total), 1);
+    return `<div class="nav" style="padding-bottom:4px"><h1>Feed</h1><span class="sub">tap the strip to jump</span></div>
+      <div class="hstrip">${nov.map(d => `<button data-jump="${d}" class="${d === TODAY_ISO ? 'today' : ''}" style="height:${parse(d) > TODAY ? 3 : Math.max(8, 100 * total(d) / max)}%;${parse(d) > TODAY ? 'opacity:.25' : ''}" aria-label="${label(d)}"></button>`).join('')}</div>
+      <div class="feed">${days.map(d => { const t = total(d); return `<div class="fh" id="fh-${d}"><b>${d === TODAY_ISO ? 'Today' : label(d)}</b>${tot(d)}<span class="bud"><span class="${t > DAILY_BUDGET ? 'over' : ''}" style="width:${Math.min(100, 100 * t / DAILY_BUDGET)}%"></span></span></div>${listHTML(d)}`; }).join('')}</div>`;
+  }
+  function cStories() {
+    const sum = (filter) => Object.entries(DATA).filter(([d]) => filter(parse(d))).reduce((a, [d]) => a + total(d), 0);
+    const cnt = filter => Object.keys(DATA).filter(d => filter(parse(d))).length;
+    const we = sum(d => wdi(d) >= 5) / cnt(d => wdi(d) >= 5), wk = sum(d => wdi(d) < 5) / cnt(d => wdi(d) < 5);
+    const pct = Math.round(100 * (we / wk - 1));
+    const cards = [
+      ['Pace', 'You\'ll end November around ' + (() => { const ds = monthDays(2026, 10).filter(d => parse(d) <= TODAY); const s = ds.reduce((a, d) => a + total(d), 0); return k(s + s / ds.length * 6); })() + ' ₫', 'Drag on the chart to read any day. Dashed is the forecast; the band is the likely range.', lineChart()],
+      ['Weekends', `Weekends cost ${pct}% more than weekdays`, `A weekend day averages ${k(we)} ₫; a weekday ${k(wk)} ₫.`, `<div class="bars"><div class="bar"><span class="bl">Weekday</span><span class="bt"><span style="width:${100 * wk / we}%;background:var(--primary)"></span></span></div><div class="bar"><span class="bl">Weekend</span><span class="bt"><span style="width:100%;background:var(--warning)"></span></span></div></div>`],
+      ['Categories', 'Food is where most of it goes', 'Tap a bar to see the amount and share.', catBars()],
+      ['Timing', 'Evenings are your busiest time', 'Tap a cell to see that slot.', heatGrid(false)],
+    ];
+    return `<div class="nav"><h1>Stories</h1><span class="sub">November</span></div><div class="stories">${cards.map(([kk, h, p, c]) => `<article class="story"><span class="kicker">${kk}</span><h4>${h}</h4><p>${p}</p><div class="grow">${c}</div></article>`).join('')}</div><div class="sdots">${cards.map((_, i) => `<span class="${i ? '' : 'on'}"></span>`).join('')}</div>`;
+  }
+
+  const dMonth = (y = 2026, m = 10) => `<div class="nav" style="padding-bottom:2px"><h1>${MONF[m]}</h1><span class="sub">${y}</span></div><div class="mhead"><button data-mon="-1" aria-label="Previous month"><span style="font-size:1.4em;padding:0 8px">‹</span></button><span class="muted">swipe to change month</span><button data-mon="1" aria-label="Next month"><span style="font-size:1.4em;padding:0 8px">›</span></button></div>${monthGrid(y, m, true)}<div class="heat-legend">less <span style="opacity:.2"></span><span style="opacity:.5"></span><span></span> more</div>
+    <div class="bs" data-bs><div class="bs-top" data-bs-handle><div class="grab"></div><div class="row2"><b data-bs-title>${longLabel(TODAY_ISO)}</b><b data-bs-total>${tot(TODAY_ISO)}</b></div></div><div class="bs-c" data-bs-body>${listHTML(TODAY_ISO)}<button class="btn ghost" data-act="dform">+ Add expense</button></div></div>`;
+  const dAna = () => `<div class="nav"><h1>Analytics</h1></div><div class="pad"><div class="seg" data-segs><button class="on" data-pane="ov">Overview</button><button data-pane="ca">Categories</button><button data-pane="pa">Patterns</button></div>
+      <div data-panel="ov">${kpis()}<div class="card"><h5>Spending forecast ${info('forecast')}</h5>${lineChart()}</div></div>
+      <div data-panel="ca" hidden><div class="card"><h5>By category ${info('cats')}</h5>${catBars()}</div></div>
+      <div data-panel="pa" hidden><div class="card"><h5>When you spend ${info('heat')}</h5>${heatGrid(false)}</div><div class="card"><h5>Daily spending ${info('daily')}</h5>${dailyCols()}</div></div></div>`;
+
+  function eHome() {
+    const t = total(TODAY_ISO), r = 42, C = 2 * Math.PI * r, f = Math.min(1, t / DAILY_BUDGET);
+    let cyc = 0; for (let d = new Date(2026, 10, 10); d <= TODAY; d = addDays(d, 1)) cyc += total(iso(d));
+    return `<div class="nav"><div><div class="sub">Tuesday, 24 November</div><h1>Good afternoon</h1></div></div><div class="pad">
+      <div class="card ringcard"><svg viewBox="0 0 104 104"><circle cx="52" cy="52" r="${r}" fill="none" stroke="var(--card2)" stroke-width="11"/><circle data-ring cx="52" cy="52" r="${r}" fill="none" stroke="${t > DAILY_BUDGET ? 'var(--danger)' : 'var(--success)'}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - f)}" transform="rotate(-90 52 52)" style="transition:stroke-dashoffset .4s"/></svg>
+        <div><small class="muted">Spent today</small><div class="big" data-total="${TODAY_ISO}" data-fmt="full">${fmt(t)}</div><small class="muted">of ${fmt(DAILY_BUDGET)} daily budget</small></div></div>
+      <div class="card"><h5>Pay cycle · 10 Nov – 9 Dec <span class="muted" style="font-weight:400">15 days left</span></h5><div class="prog"><span style="width:${100 * cyc / CYCLE_BUDGET}%"></span></div><small class="muted">${fmt(cyc)} of ${fmt(CYCLE_BUDGET)}</small></div>
+      <div class="card"><h5>Month forecast ${info('forecast')}</h5>${lineChart()}</div>
+      <div class="gtitle" style="padding-left:4px">Today</div>${listHTML(TODAY_ISO)}<p class="hint">Swipe left to delete</p></div>`;
+  }
+
+  const DIRS = {
+    A: { tabs: [['cal', 'Calendar', 'cal'], ['week', 'Week', 'week'], ['+'], ['ana', 'Analytics', 'chart'], ['prof', 'Profile', 'user']], plus: 'form',
+         screens: { cal: calScreen, week: () => weekScreen(0), ana: () => anaFull(false), prof: profile } },
+    B: { tabs: [['home', 'Today', 'clock'], ['month', 'Month', 'cal'], ['+'], ['ana', 'Insights', 'spark'], ['prof', 'Profile', 'user']], plus: 'keypad',
+         screens: { home: bHome, month: () => bMonth(), ana: bInsights, prof: profile }, flex: ['home'] },
+    C: { tabs: [['feed', 'Feed', 'feed'], ['week', 'Week', 'week'], ['+'], ['ana', 'Stories', 'spark'], ['prof', 'Profile', 'user']], plus: 'kpsheet',
+         screens: { feed: cFeed, week: () => weekScreen(0), ana: cStories, prof: profile }, flex: ['feed'] },
+    D: { tabs: [['cal', 'Month', 'cal'], ['week', 'Week', 'week'], ['+'], ['ana', 'Analytics', 'chart'], ['prof', 'Profile', 'user']], plus: 'dsheet',
+         screens: { cal: () => dMonth(), week: () => weekScreen(0), ana: dAna, prof: profile } },
+    E: { tabs: [['home', 'Home', 'home'], ['cal', 'Calendar', 'cal'], ['+'], ['ana', 'Analytics', 'chart'], ['prof', 'Profile', 'user']], plus: 'form',
+         screens: { home: eHome, cal: calScreen, ana: () => anaFull(true), prof: profile } },
+    F: { tabs: [['cal', 'Month', 'cal'], ['week', 'Week', 'week'], ['+'], ['ana', 'Analytics', 'chart'], ['prof', 'Profile', 'user']], plus: 'fpanel',
+         screens: { cal: () => fMonth(), week: fWeek, ana: dAna, prof: profile }, flex: ['week'] },
+  };
+
+  // ---------- phone behaviour ----------
+  const $ = (root, sel) => root.querySelector(sel);
+  const $$ = (root, sel) => [...root.querySelectorAll(sel)];
+
+  const capture = (el, pid) => { try { el.setPointerCapture(pid); } catch (e) { /* pointer already released */ } };
+  function buzz(ph) { ph.classList.remove('buzz'); void ph.offsetWidth; ph.classList.add('buzz'); }
+  function toast(ph, msg, undo) {
+    const t = $(ph, '.toast');
+    clearTimeout(ph._tt);
+    t.innerHTML = `<span>${msg}</span>${undo ? '<button>Undo</button>' : ''}`;
+    t.classList.add('on');
+    if (undo) t.querySelector('button').onclick = () => { undo(); t.classList.remove('on'); };
+    ph._tt = setTimeout(() => { t.classList.remove('on'); ph._commit && ph._commit(); ph._commit = null; }, 3800);
+  }
+  function openSheet(ph, html) { const ov = $(ph, '.ov'); $(ph, '.sheet').innerHTML = html; $(ph, '.sheet').scrollTop = 0; ov.classList.add('sheet-on'); ph._dirty = false; }
+  function closeSheet(ph) { $(ph, '.ov').classList.remove('sheet-on'); ph._dirty = false; }
+  function alertBox(ph, title, msg, buttons, extra = '') {
+    const ov = $(ph, '.ov');
+    $(ph, '.alert-wrap').innerHTML = `<div class="alert" role="alertdialog"><div class="ab-body"><b>${title}</b><p>${msg}</p>${extra}</div><div class="ab">${buttons.map(([l, cls], i) => `<button class="${cls || ''}" data-ab="${i}">${l}</button>`).join('')}</div></div>`;
+    ov.classList.add('alert-on');
+    ph._ab = buttons.map(b => b[2]);
+    const inp = $(ph, '.alert input'); if (inp) setTimeout(() => inp.focus(), 50);
+  }
+  function closeAlert(ph) { $(ph, '.ov').classList.remove('alert-on'); }
+
+  function refresh(d) {
+    $$(document, `[data-total="${d}"]`).forEach(el => el.textContent = el.dataset.fmt === 'k' ? k(total(d)) : fmt(total(d)));
+    $$(document, `[data-list="${d}"]`).forEach(el => el.innerHTML = rowsHTML(d));
+    $$(document, `.heat-on [data-day="${d}"]`).forEach(el => el.style.background = heatBg(total(d)));
+    $$(document, '.phone[data-dir="F"]').forEach(fCharts);
+    if (d === TODAY_ISO) $$(document, '[data-ring]').forEach(c => { const C = 2 * Math.PI * 42, t = total(d); c.style.strokeDashoffset = C * (1 - Math.min(1, t / DAILY_BUDGET)); c.setAttribute('stroke', t > DAILY_BUDGET ? 'var(--danger)' : 'var(--success)'); });
+  }
+  function addEntry(d, cat, amt) {
+    const now = new Date();
+    const e = { id: NEXT++, cat, desc: CATS[cat].d[0], amt, time: `${pad(now.getHours())}:${pad(now.getMinutes())}` };
+    (DATA[d] = DATA[d] || []).push(e);
+    DATA[d].sort((a, b) => a.time.localeCompare(b.time));
+    refresh(d);
+    return e;
+  }
+  function removeEntryUndoable(ph, d, id) {
+    const arr = DATA[d], i = arr.findIndex(e => e.id === id);
+    if (i < 0) return;
+    const [e] = arr.splice(i, 1);
+    refresh(d);
+    buzz(ph);
+    toast(ph, `Deleted ${e.desc} · ${fmt(e.amt)}`, () => { arr.splice(i, 0, e); refresh(d); });
+  }
+  const offline = ph => { if (document.body.classList.contains('offline')) { toast(ph, 'Offline — cached data is read-only. Connect to add or change expenses.'); return true; } return false; };
+
+  function show(ph, s, push) {
+    $$(ph, '.scr').forEach(x => x.classList.remove('on', 'push'));
+    const scr = $(ph, `.scr[data-s="${s}"]`);
+    scr.classList.add('on');
+    if (push) scr.classList.add('push');
+    if (!push) { $$(ph, '.tab[data-tab]').forEach(t => t.classList.toggle('on', t.dataset.tab === s)); ph._tab = s; }
+    if (s === 'cal' && !scr._scrolled && ph.isConnected) { const wk = $(scr, '[data-todaywk]'); if (wk) scr.scrollTop = wk.offsetTop - scr.clientHeight * 0.55; scr._scrolled = true; }
+  }
+  function openDay(ph, d) {
+    const scr = $(ph, '.scr[data-s="day"]');
+    const backName = { cal: ph.dataset.dir === 'D' ? 'Month' : 'Calendar', week: 'Week', month: 'Month', feed: 'Feed', home: 'Home' }[ph._tab] || 'Back';
+    scr.innerHTML = `<button class="back" data-back>‹ ${backName}</button><div class="nav"><h1 style="font-size:1.6em">${longLabel(d)}</h1></div><div class="daytotal">${tot(d)}</div><div class="pad">${listHTML(d)}<p class="hint">Swipe left to delete</p><button class="btn ghost" data-act="add-day" data-d="${d}">+ Add expense for this day</button></div>`;
+    show(ph, 'day', true);
+  }
+  function plus(ph, dArg) {
+    if (offline(ph)) return;
+    const d = dArg || TODAY_ISO;
+    const mode = DIRS[ph.dataset.dir].plus;
+    if (mode === 'fpanel') { show(ph, 'week'); fSelect(ph, dArg || ph._dSel || TODAY_ISO); fKeypad(ph, true); const kp = $(ph, '[data-fdock] [data-kp]'); kp.classList.remove('pulse'); void kp.offsetWidth; kp.classList.add('pulse'); return; }
+    if (mode === 'form') { openSheet(ph, formHTML(d)); }
+    else if (mode === 'kpsheet') { openSheet(ph, keypad(d, true)); }
+    else if (mode === 'keypad') { show(ph, 'home'); selectStrip(ph, d); const kp = $(ph, '.scr[data-s="home"] [data-kp]'); kp.classList.remove('pulse'); void kp.offsetWidth; kp.classList.add('pulse'); }
+    else if (mode === 'dsheet') { show(ph, 'cal'); dSelect(ph, ph._dSel || d); dForm(ph); }
+  }
+  function selectStrip(ph, d) {
+    const home = $(ph, '.scr[data-s="home"]');
+    $$(home, '[data-strip]').forEach(b => b.classList.toggle('on', b.dataset.strip === d));
+    $(home, '[data-ledger-title]').textContent = longLabel(d);
+    $(home, '[data-ledger-total]').innerHTML = tot(d);
+    $(home, '[data-ledger]').innerHTML = listHTML(d);
+    $(home, '[data-kp]').dataset.d = d;
+  }
+
+  // D: bottom sheet
+  const SNAPS = ph => { const h = $(ph, '.scr[data-s="cal"]').clientHeight; return [150, Math.round(h * 0.55), h - 8]; };
+  function dSnap(ph, i) { const bs = $(ph, '[data-bs]'); bs.style.height = SNAPS(ph)[i] + 'px'; bs._snap = i; }
+  function dSelect(ph, d) {
+    ph._dSel = d;
+    $$(ph, '.mgrid .dc').forEach(c => c.classList.toggle('sel', c.dataset.day === d));
+    $(ph, '[data-bs-title]').textContent = longLabel(d);
+    $(ph, '[data-bs-total]').innerHTML = tot(d);
+    $(ph, '[data-bs-body]').innerHTML = `${listHTML(d)}<button class="btn ghost" data-act="dform">+ Add expense</button>`;
+    const bs = $(ph, '[data-bs]'); if (!bs._snap) dSnap(ph, 1);
+  }
+  function dForm(ph) {
+    const d = ph._dSel || TODAY_ISO;
+    $(ph, '[data-bs-body]').innerHTML = formHTML(d).replace('<div class="grab"></div>', '').replace('data-act="cancel"', 'data-act="dcancel"');
+    dSnap(ph, 2);
+    ph._dirty = false;
+  }
+
+  // F: week view
+  const weekDays = d => { const mon = monday(parse(d)); return [...Array(7)].map((_, i) => iso(addDays(mon, i))); };
+  function fWeekBars(ph) {
+    const d = ph._dSel, box = $(ph, '[data-fwbars]');
+    if (!d || !box) return;
+    const days = weekDays(d), max = Math.max(...days.map(total), 1);
+    box.innerHTML = days.map(x => {
+      const future = parse(x) > TODAY;
+      return `<div><button data-fsel="${x}" class="${x === d ? 'sel' : ''}${x === TODAY_ISO ? ' today' : ''}${future ? ' future' : ''}" style="height:${future ? 8 : Math.max(8, 100 * total(x) / max)}%" aria-label="${label(x)}: ${fmt(total(x))}"></button></div>`;
+    }).join('');
+  }
+  function fCharts(ph) {
+    fWeekBars(ph);
+    const mb = $(ph, '[data-fmonthbars]');
+    if (mb) mb.innerHTML = fMonthBars(2026, Number(mb.dataset.m));
+  }
+  function fSelect(ph, d) {
+    const scr = $(ph, '.scr[data-s="week"]');
+    ph._dSel = d;
+    const days = weekDays(d), mon = parse(days[0]), end = parse(days[6]);
+    const off = Math.round((mon - monday(TODAY)) / (7 * 864e5));
+    $(scr, '[data-fwk-title]').textContent = off === 0 ? 'This week' : off === -1 ? 'Last week' : `${-off} weeks ago`;
+    $(scr, '[data-fwk-sub]').textContent = `${mon.getDate()} ${MON[mon.getMonth()]} – ${end.getDate()} ${MON[end.getMonth()]}`;
+    const next = $(scr, '[data-fwk="1"]'); next.disabled = off >= 0; next.style.opacity = off >= 0 ? '.4' : '';
+    fWeekBars(ph);
+    $(scr, '[data-fstrip]').innerHTML = days.map(x => `<button data-fsel="${x}" class="${x === d ? 'on' : ''}${x === TODAY_ISO ? ' today' : ''}${parse(x) > TODAY ? ' future' : ''}"><small>${WD[wdi(parse(x))]}</small><b>${parse(x).getDate()}</b></button>`).join('');
+    $(scr, '[data-ledger-title]').textContent = longLabel(d);
+    $(scr, '[data-ledger-total]').innerHTML = tot(d);
+    $(scr, '[data-ledger]').innerHTML = listHTML(d);
+    $(scr, '[data-kp]').dataset.d = d;
+    $(scr, '[data-dock-title]').textContent = `Add to ${longLabel(d)}`;
+  }
+  function fStep(ph, delta) {
+    let d = addDays(parse(ph._dSel || TODAY_ISO), 7 * delta);
+    if (d > TODAY) d = TODAY;
+    if (d < new Date(2026, 8, 28)) d = new Date(2026, 8, 28);
+    fSelect(ph, iso(d));
+    buzz(ph);
+  }
+  function fGo(ph, d) {
+    if (parse(d) > TODAY) return toast(ph, 'That day is in the future.');
+    show(ph, 'week');
+    fSelect(ph, d);
+    buzz(ph);
+  }
+  // Closing the keypad gives the day's expense list the whole screen.
+  function fKeypad(ph, open, force) {
+    const scr = $(ph, '.scr[data-s="week"]'), dock = $(scr, '[data-fdock]'), kp = $(scr, '[data-kp]');
+    if (!open && !force && kp.dataset.v !== '0') {
+      return alertBox(ph, 'Discard this amount?', `${fmt(Number(kp.dataset.v))} hasn't been added to ${longLabel(ph._dSel)} yet.`, [['Keep editing'], ['Discard', 'destructive', () => { kp.dataset.v = '0'; kpUpdate(kp); fKeypad(ph, false, true); }]]);
+    }
+    dock.hidden = !open;
+    $(scr, '[data-kpopen]').hidden = open;
+  }
+  const fKeypadOpen = ph => !$(ph, '.scr[data-s="week"] [data-fdock]').hidden;
+
+  // keypad
+  function kpUpdate(kp) { $(kp, '[data-amt]').textContent = Number(kp.dataset.v).toLocaleString('vi-VN'); }
+
+  function makePhone(id) {
+    const dir = DIRS[id];
+    const ph = document.createElement('div');
+    ph.className = 'phone';
+    ph.dataset.dir = id;
+    const screens = Object.entries(dir.screens).map(([s, fn]) => `<section class="scr${(dir.flex || []).includes(s) ? ' flex' : ''}" data-s="${s}">${fn()}</section>`).join('');
+    const tabs = dir.tabs.map(t => t[0] === '+' ? `<button class="tab plus" data-plus aria-label="Add expense"><span>${icon('plus')}</span></button>` : `<button class="tab" data-tab="${t[0]}">${icon(t[2])}${t[1]}</button>`).join('');
+    ph.innerHTML = `<div class="notch"></div><div class="sb"><b>9:41</b><span>●●● 5G ▮</span></div><div class="offline-bar">Offline · showing cached data</div>
+      <div class="screens">${screens}<section class="scr" data-s="day"></section><section class="scr" data-s="sub"></section></div>
+      <nav class="tabbar">${tabs}</nav><div class="ov"><div class="dim"></div><div class="sheet"></div><div class="alert-wrap"></div><div class="toast"></div></div><div class="hb"></div>`;
+    show(ph, dir.tabs[0][0]);
+    if (id === 'D') { dSelect(ph, TODAY_ISO); dSnap(ph, 0); }
+    if (id === 'F') fSelect(ph, TODAY_ISO);
+    const st = $(ph, '.stories');
+    if (st) st.addEventListener('scroll', () => { const i = Math.round(st.scrollLeft / (st.firstElementChild.offsetWidth + 10)); $$(ph, '.sdots span').forEach((s, j) => s.classList.toggle('on', i === j)); });
+    wire(ph);
+    return ph;
+  }
+
+  function wire(ph) {
+    ph.addEventListener('click', ev => {
+      if (ph._suppress) { ph._suppress = false; ev.preventDefault(); return; }
+      const t = ev.target;
+      let el;
+      if ((el = t.closest('[data-ab]'))) { const cb = ph._ab[Number(el.dataset.ab)]; if (!cb || cb() !== false) closeAlert(ph); return; }
+      if (t.closest('.dim')) { if ($(ph, '.ov').classList.contains('alert-on')) return; return tryCloseSheet(ph); }
+      if ((el = t.closest('[data-plus]'))) return plus(ph);
+      if ((el = t.closest('[data-tab]'))) return show(ph, el.dataset.tab);
+      if ((el = t.closest('.del'))) { const sw = el.closest('.swipe'); return removeEntryUndoable(ph, sw.dataset.d, Number(sw.dataset.id)); }
+      if ((el = t.closest('[data-back]'))) return show(ph, ph._tab);
+      if ((el = t.closest('[data-info]'))) { const [h, p] = INFO[el.dataset.info]; return openSheet(ph, `<div class="grab"></div><div class="sheet-h"><b>${h}</b><button class="link strong" data-act="close">Done</button></div><p style="margin:0 0 8px">${p}</p><p class="hint" style="text-align:left">Replaces the web's hover-only <code>title=</code> tooltip (U5).</p>`); }
+      if ((el = t.closest('[data-push]'))) { $(ph, '.scr[data-s="sub"]').innerHTML = subScreen(el.dataset.push); return show(ph, 'sub', true); }
+      if ((el = t.closest('[data-theme-set]'))) { setTheme(el.dataset.themeSet); $(ph, '.scr[data-s="sub"]').innerHTML = subScreen('Appearance'); return; }
+      if ((el = t.closest('[data-strip]'))) { buzz(ph); return selectStrip(ph, el.dataset.strip); }
+      if ((el = t.closest('[data-jump]'))) { const h = $(ph, `#fh-${el.dataset.jump}`); if (!h) return toast(ph, 'No expenses yet — that day is in the future.'); const f = $(ph, '.feed'); f.scrollTo({ top: h.offsetTop, behavior: 'smooth' }); return; }
+      if ((el = t.closest('[data-mon]'))) return changeMonth(ph, Number(el.dataset.mon));
+      if ((el = t.closest('[data-wk]'))) { if (el.disabled) return; ph._wk = Math.min(0, (ph._wk || 0) + Number(el.dataset.wk)); $(ph, '.scr[data-s="week"]').innerHTML = weekScreen(ph._wk); return; }
+      if ((el = t.closest('[data-fsel]'))) { if (parse(el.dataset.fsel) > TODAY) return toast(ph, 'That day is in the future.'); buzz(ph); return fSelect(ph, el.dataset.fsel); }
+      if ((el = t.closest('[data-fday]'))) return fGo(ph, el.dataset.fday);
+      if ((el = t.closest('[data-fwk]'))) { if (el.disabled) return; return fStep(ph, Number(el.dataset.fwk)); }
+      if ((el = t.closest('[data-day]'))) {
+        if (ph.dataset.dir === 'D' && el.closest('.scr[data-s="cal"]')) { buzz(ph); return dSelect(ph, el.dataset.day); }
+        if (ph.dataset.dir === 'F' && el.closest('.scr[data-s="cal"]')) return fGo(ph, el.dataset.day);
+        if (parse(el.dataset.day) > TODAY) return toast(ph, 'That day is in the future.');
+        return openDay(ph, el.dataset.day);
+      }
+      if ((el = t.closest('[data-sel]'))) {
+        const box = el.closest('.card, .story, .pad');
+        $$(box, '[data-sel]').forEach(b => b.classList.toggle('sel', b === el));
+        const [c, v, p] = el.dataset.sel.split('|');
+        $(box, '[data-legend]').innerHTML = `<b>${CATS[c].e} ${c}</b> · ${v} · ${p}% of the month`;
+        return buzz(ph);
+      }
+      if ((el = t.closest('[data-heat]'))) {
+        const [w, b, v, n] = el.dataset.heat.split('|');
+        return openSheet(ph, `<div class="grab"></div><div class="sheet-h"><b>${w}, ${b}</b><button class="link strong" data-act="close">Done</button></div><div class="daytotal" style="padding:0">${fmt(Number(v))}</div><p class="muted" style="margin:4px 0 10px">${n} expenses over the last eight weeks.</p><p class="hint" style="text-align:left">Tap-for-detail replaces the hover tooltip; cells are ≥ 44 pt on a real phone.</p>`);
+      }
+      if ((el = t.closest('[data-col]'))) {
+        $$(el.parentElement, 'button').forEach(b => b.classList.toggle('sel', b === el));
+        el.closest('.card').querySelector('[data-colout]').innerHTML = `<b>${fmt(total(el.dataset.col))}</b><span class="muted">${longLabel(el.dataset.col)}</span>`;
+        return;
+      }
+      if ((el = t.closest('[data-pane]'))) {
+        const pad_ = el.closest('.pad');
+        $$(pad_, '[data-pane]').forEach(b => b.classList.toggle('on', b === el));
+        $$(pad_, '[data-panel]').forEach(p => p.hidden = p.dataset.panel !== el.dataset.pane);
+        return;
+      }
+      if ((el = t.closest('[data-seg]'))) { $$(el.parentElement, 'button').forEach(b => b.classList.toggle('on', b === el)); return; }
+      if ((el = t.closest('[data-toggle]'))) { $(el, '.switch').classList.toggle('on'); ph._dirty = true; return; }
+      if ((el = t.closest('[data-chip]'))) {
+        $$(el.parentElement, '[data-chip]').forEach(b => b.classList.toggle('on', b === el));
+        const kp = el.closest('[data-kp]'); if (kp) kp.dataset.cat = el.dataset.chip; else ph._dirty = true;
+        return buzz(ph);
+      }
+      if ((el = t.closest('[data-k]'))) {
+        const kp = el.closest('[data-kp]'), key = el.dataset.k;
+        if (key === 'del') kp.dataset.v = kp.dataset.v.slice(0, -1) || '0';
+        else if (key === 'ok') return kpSave(ph, kp);
+        else if (kp.dataset.v.length < 10) kp.dataset.v = String(Number(kp.dataset.v + key));
+        return kpUpdate(kp);
+      }
+      if ((el = t.closest('[data-act]'))) return act(ph, el.dataset.act, el);
+    });
+
+    ph.addEventListener('input', ev => {
+      if (ev.target.matches('.amt-in')) {
+        const v = ev.target.value.replace(/\D/g, '').slice(0, 10);
+        ev.target.value = v ? Number(v).toLocaleString('vi-VN') : '';
+        ph._dirty = true;
+      }
+    });
+    ph.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.matches('.alert input')) $(ph, '.alert .destructive')?.click(); });
+
+    // swipe-to-delete
+    ph.addEventListener('pointerdown', ev => {
+      const row = ev.target.closest('.swipe .row');
+      if (row) { ph._sw = { row, x: ev.clientX, y: ev.clientY, dx: 0, open: row._open || 0, id: ev.pointerId }; }
+      const h = ev.target.closest('[data-bs-handle]');
+      if (h) { const bs = h.parentElement; bs.classList.add('drag'); ph._bs = { bs, y: ev.clientY, h0: bs.offsetHeight }; capture(h, ev.pointerId); }
+      const g = ev.target.closest('.mgrid, [data-fstrip], [data-fwbars]');
+      if (g && ph.dataset.dir !== 'A') ph._mg = { x: ev.clientX, y: ev.clientY, week: !g.matches('.mgrid') };
+      const sc = ev.target.closest('svg.scrub');
+      if (sc) { capture(sc, ev.pointerId); ph._sc = sc; scrubTo(sc, ev); }
+    });
+    ph.addEventListener('pointermove', ev => {
+      const s = ph._sw;
+      if (s) {
+        const dx = ev.clientX - s.x, dy = ev.clientY - s.y;
+        if (!s.dragging && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) { s.dragging = true; s.row.classList.add('drag'); capture(s.row, s.id); }
+        if (s.dragging) { s.dx = Math.min(0, s.open + dx); s.row.style.transform = `translateX(${s.dx}px)`; }
+      }
+      if (ph._bs) { const b = ph._bs, max = SNAPS(ph)[2]; b.bs.style.height = Math.max(110, Math.min(max, b.h0 + (b.y - ev.clientY))) + 'px'; }
+      if (ph._sc) scrubTo(ph._sc, ev);
+    });
+    const end = ev => {
+      const s = ph._sw;
+      if (s && s.dragging) {
+        s.row.classList.remove('drag');
+        const sw = s.row.closest('.swipe');
+        if (s.dx < -150) { s.row.style.transform = 'translateX(-100%)'; sw.classList.add('gone'); setTimeout(() => removeEntryUndoable(ph, sw.dataset.d, Number(sw.dataset.id)), 200); }
+        else if (s.dx < -40) { s.row.style.transform = 'translateX(-84px)'; s.row._open = -84; }
+        else { s.row.style.transform = ''; s.row._open = 0; }
+        ph._suppress = true; setTimeout(() => ph._suppress = false, 0);
+      }
+      ph._sw = null;
+      if (ph._bs) {
+        const b = ph._bs; b.bs.classList.remove('drag');
+        const h = b.bs.offsetHeight, snaps = SNAPS(ph);
+        let best = 0; snaps.forEach((v, i) => { if (Math.abs(v - h) < Math.abs(snaps[best] - h)) best = i; });
+        if (best === 0 && ph._dirty) { dSnap(ph, 2); alertBox(ph, 'Discard this expense?', 'You have unsaved changes.', [['Keep editing'], ['Discard', 'destructive', () => { ph._dirty = false; dSelect(ph, ph._dSel); dSnap(ph, 0); }]]); }
+        else dSnap(ph, best);
+        ph._bs = null;
+      }
+      if (ph._mg) {
+        const dx = ev.clientX - ph._mg.x;
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(ev.clientY - ph._mg.y)) { ph._suppress = true; setTimeout(() => ph._suppress = false, 0); (ph._mg.week ? fStep : changeMonth)(ph, dx < 0 ? 1 : -1); }
+        ph._mg = null;
+      }
+      if (ph._sc) { const sc = ph._sc; ph._sc = null; $(sc, '.sl').setAttribute('opacity', '0'); }
+    };
+    ph.addEventListener('pointerup', end);
+    ph.addEventListener('pointercancel', end);
+  }
+
+  function scrubTo(sc, ev) {
+    const r = sc.getBoundingClientRect(), vb = sc.viewBox.baseVal, x = (ev.clientX - r.left) / r.width * vb.width;
+    const pts = JSON.parse(sc.dataset.pts);
+    let best = pts[0]; for (const p of pts) if (Math.abs(p[0] - x) < Math.abs(best[0] - x)) best = p;
+    $(sc, '.sl').setAttribute('x1', best[0]); $(sc, '.sl').setAttribute('x2', best[0]); $(sc, '.sl').setAttribute('opacity', '1');
+    $(sc, '.sd').setAttribute('cx', best[0]); $(sc, '.sd').setAttribute('cy', best[1]);
+    sc.parentElement.querySelector('[data-readout]').innerHTML = `<b>${best[3]}</b><span class="muted">${best[2]}</span>`;
+    if (sc._last !== best[0]) { sc._last = best[0]; }
+  }
+
+  function changeMonth(ph, delta) {
+    if (ph.dataset.dir === 'F') {
+      ph._m = Math.max(9, Math.min(11, (ph._m ?? 10) + delta));
+      $(ph, '.scr[data-s="cal"]').innerHTML = fMonth(2026, ph._m);
+      return buzz(ph);
+    }
+    ph._m = Math.max(9, Math.min(11, (ph._m ?? 10) + delta));
+    if (ph.dataset.dir === 'D') {
+      const scr = $(ph, '.scr[data-s="cal"]'), keep = ph._dSel;
+      scr.innerHTML = dMonth(2026, ph._m);
+      dSelect(ph, keep && parse(keep).getMonth() === ph._m ? keep : iso(new Date(2026, ph._m, 1)));
+      dSnap(ph, 0);
+    } else {
+      $(ph, '.scr[data-s="month"]').innerHTML = bMonth(2026, ph._m);
+    }
+    buzz(ph);
+  }
+
+  function tryCloseSheet(ph) {
+    if (ph._dirty) return alertBox(ph, 'Discard this expense?', 'You have unsaved changes.', [['Keep editing'], ['Discard', 'destructive', () => closeSheet(ph)]]);
+    closeSheet(ph);
+  }
+
+  function formSave(ph, root, keepOpen, inSheet) {
+    const head = $(root, '[data-form]'), d = head.dataset.d;
+    const input = $(root, '.amt-in'), amt = Number(input.value.replace(/\D/g, ''));
+    if (!amt) { const b = $(root, '.big-amt'); b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); toast(ph, 'Enter an amount first'); return false; }
+    const cat = $(root, '.chip.on')?.dataset.chip || 'Food';
+    const e = addEntry(d, cat, amt);
+    buzz(ph);
+    toast(ph, `Saved ${fmt(amt)} · ${cat}`, () => { DATA[d] = DATA[d].filter(x => x.id !== e.id); refresh(d); });
+    if (keepOpen) { input.value = ''; input.focus(); ph._dirty = false; }
+    else if (inSheet) closeSheet(ph);
+    return true;
+  }
+
+  function kpSave(ph, kp) {
+    const amt = Number(kp.dataset.v), d = kp.dataset.d, cat = kp.dataset.cat;
+    if (!amt) { const a = $(kp, '.kp-amt'); a.style.animation = 'buzz .12s linear 3'; setTimeout(() => a.style.animation = '', 400); return toast(ph, 'Type an amount first'); }
+    if (offline(ph)) return;
+    const e = addEntry(d, cat, amt);
+    kp.dataset.v = '0'; kpUpdate(kp);
+    buzz(ph);
+    toast(ph, `Added ${fmt(amt)} · ${cat}`, () => { DATA[d] = DATA[d].filter(x => x.id !== e.id); refresh(d); });
+  }
+
+  function act(ph, a, el) {
+    if (a === 'close') return closeSheet(ph);
+    if (a === 'fkpclose') return fKeypad(ph, false);
+    if (a === 'fkpopen') { if (offline(ph)) return; return fKeypad(ph, true); }
+    if (a === 'cancel') return tryCloseSheet(ph);
+    if (a === 'save') return formSave(ph, $(ph, '.sheet'), false, true);
+    if (a === 'saveadd') { if (ph.dataset.dir === 'D') return formSave(ph, $(ph, '[data-bs-body]'), true, false); return formSave(ph, $(ph, '.sheet'), true, true); }
+    if (a === 'today') { const scr = el.closest('.scr'), wk = $(scr, '[data-todaywk]'); scr.scrollTo({ top: wk.offsetTop - scr.clientHeight * 0.55, behavior: 'smooth' }); return; }
+    if (a === 'add-day') { show(ph, ph._tab); return plus(ph, el.dataset.d); }
+    if (a === 'dform') { if (offline(ph)) return; return dForm(ph); }
+    if (a === 'dcancel') {
+      const back = () => { ph._dirty = false; dSelect(ph, ph._dSel); dSnap(ph, 1); };
+      if (ph._dirty) return alertBox(ph, 'Discard this expense?', 'You have unsaved changes.', [['Keep editing'], ['Discard', 'destructive', back]]);
+      return back();
+    }
+    if (a === 'signout') return alertBox(ph, 'Sign out?', 'Your data stays in your account. The refresh token is removed from the Keychain.', [['Cancel'], ['Sign out', 'destructive', () => toast(ph, 'Signed out (mock)')]]);
+    if (a === 'delacct') {
+      return alertBox(ph, 'Delete account?', 'This permanently deletes your account, expenses, incomes and API keys on every device. Enter your password to confirm.', [['Cancel'], ['Delete', 'destructive', () => {
+        const pw = $(ph, '.alert input');
+        if (pw.value.length < 12) { $(ph, '.alert .err').textContent = 'Incorrect password (401). Nothing was deleted.'; pw.select(); return false; }
+        buzz(ph); toast(ph, 'Account deleted · DELETE /api/v1/auth/account → 204');
+      }]], '<input type="password" placeholder="Current password" aria-label="Current password"><div class="err"></div>');
+    }
+  }
+  // Form save inside the D bottom sheet
+  document.addEventListener('click', ev => {
+    const el = ev.target.closest('.phone[data-dir="D"] [data-bs-body] [data-act="save"]');
+    if (!el) return;
+    ev.stopPropagation();
+    const ph = el.closest('.phone');
+    if (formSave(ph, $(ph, '[data-bs-body]'), false, false)) { ph._dirty = false; dSelect(ph, ph._dSel); dSnap(ph, 1); }
+  }, true);
+
+  document.addEventListener('keydown', ev => {
+    if (ev.key !== 'Escape') return;
+    $$(document, '.phone[data-dir="F"]').forEach(ph => { if ($(ph, '.scr[data-s="week"]').classList.contains('on') && fKeypadOpen(ph) && !$(ph, '.ov').classList.contains('alert-on')) fKeypad(ph, false); });
+  });
+
+  // ---------- page controls ----------
+  function setTheme(v) {
+    if (v === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v;
+    $$(document, '#theme button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+    try { localStorage.setItem('mf-mock-theme', v); } catch (e) {}
+  }
+  $$(document, '#theme button').forEach(b => b.onclick = () => setTheme(b.dataset.v));
+  try { const v = localStorage.getItem('mf-mock-theme'); if (v) setTheme(v); } catch (e) {}
+  $$(document, '#ts button').forEach(b => b.onclick = () => {
+    $$(document, '#ts button').forEach(x => x.classList.toggle('on', x === b));
+    $$(document, '.phone').forEach(p => { p.style.setProperty('--ts', b.dataset.v); p.classList.toggle('big', Number(b.dataset.v) >= 1.3); });
+  });
+  $$(document, '#net button').forEach(b => b.onclick = () => {
+    $$(document, '#net button').forEach(x => x.classList.toggle('on', x === b));
+    document.body.classList.toggle('offline', b.dataset.v === 'off');
+  });
+
+  // ---------- scores ----------
+  const SCORES = [
+    ['Low build effort', 5, 3, 4, 2, 3, 3],
+    ['Daily-entry speed', 3, 5, 4, 4, 3, 5],
+    ['At-a-glance overview', 3, 2, 3, 5, 5, 4],
+    ['Fits the existing week loader', 5, 3, 5, 2, 5, 4],
+    ['Platform familiarity', 5, 3, 4, 5, 4, 4],
+    ['60 fps safety on mid-range Android', 5, 4, 5, 3, 3, 4],
+  ];
+  const dots = n => '●'.repeat(n) + `<i>${'●'.repeat(5 - n)}</i>`;
+  $(document, '#scores').innerHTML = `<thead><tr><th>Criterion</th>${['A', 'B', 'C', 'D', 'E', 'F ★'].map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${SCORES.map(([n, ...v]) => `<tr><th>${n}</th>${v.map(x => `<td class="dots" aria-label="${x} of 5">${dots(x)}</td>`).join('')}</tr>`).join('')}<tr><th>Total</th>${[0, 1, 2, 3, 4, 5].map(i => `<td><b>${SCORES.reduce((a, r) => a + r[i + 1], 0)}</b> / 30</td>`).join('')}</tr></tbody>`;
+
+  $$(document, '.phone-slot').forEach(slot => { const ph = makePhone(slot.dataset.dir); slot.appendChild(ph); show(ph, ph._tab); if (ph.dataset.dir === 'D') { dSelect(ph, TODAY_ISO); dSnap(ph, 0); } });
+})();
+</script>
+</body>
+</html>
