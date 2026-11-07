@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getMonthIncome, monthRange } from '../src/lib/income';
 import {
-  adjacentPeriod, adjacentPeriodDate, DEFAULT_SHOW_BY, markerSets, periodDayLabel, periodOf, periodRangeLabel, periodsBetween, SHOW_BY, viewPeriodIncome, viewPeriodOf,
+  adjacentPeriod, adjacentPeriodDate, DEFAULT_SHOW_BY, markerSets, periodDayLabel, periodTitle, periodOf, periodRangeLabel, periodsBetween, SHOW_BY, viewPeriodIncome, viewPeriodOf,
   type BudgetPeriodSetting, type PeriodIncome,
 } from '../src/lib/periods';
 import { addDays, MAX_RANGE_DAYS } from '../src/lib/plans';
@@ -194,4 +194,12 @@ test('period range labels are day-first and independent of the runtime locale', 
   assert.equal(periodRangeLabel(range), '25 Nov – 24 Dec');
   assert.equal(periodRangeLabel(range, true), '25 Nov – 24 Dec 2026');
   assert.equal(periodRangeLabel({ start: '2026-12-25', end: '2027-01-24' }, true), '25 Dec – 24 Jan 2027');
+});
+
+test('periodTitle names a Calendar page in full, with the day count while today is in it', () => {
+  const cycle = periodOf(fromDay(5), [], '2026-11-08');
+  assert.deepEqual(periodTitle(cycle, '2026-11-08'), { title: '5 Nov – 4 Dec 2026', day: 'Day 4 of 30' });
+  assert.deepEqual(periodTitle(periodOf(fromDay(5), [], '2026-10-20'), '2026-11-08'), { title: '5 Oct – 4 Nov 2026', day: null });
+  assert.deepEqual(periodTitle(periodOf(calendar, [], '2026-11-08'), '2026-11-08'), { title: 'November 2026', day: 'Day 8 of 30' });
+  assert.deepEqual(periodTitle(periodOf(fromDay(5), [], '2026-12-20'), '2026-12-31'), { title: '5 Dec – 4 Jan 2027', day: 'Day 27 of 31' });
 });

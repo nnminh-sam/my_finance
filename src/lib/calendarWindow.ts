@@ -6,6 +6,8 @@ import {
   endOfMonth,
   endOfWeek,
   format,
+  getISOWeek,
+  parseISO,
   startOfMonth,
   startOfWeek,
   subMonths,
@@ -14,15 +16,23 @@ import {
 
 export const PRELOAD_MONTHS = 2;
 export const VISIBLE_WEEKS = 5;
+export const WEEKS_PER_MONTH = 5;
 export const PRELOAD_WEEKS_BUFFER = 4;
 export const FETCH_WEEKS_STEP = 3;
 
-export type ScrollDirection = 'up' | 'down' | 'idle';
+export type ScrollDirection = 'up' | 'down' | 'left' | 'right' | 'idle';
 export type WeekRenderStage = 'dates' | 'totals' | 'details';
 
 export interface MonthRange {
   startMonth: Date;
   endMonth: Date;
+}
+
+export interface CalendarMonthPage {
+  monthDate: Date;
+  monthKey: string;
+  weeks: Date[][];
+  days: Date[];
 }
 
 export interface FetchedWeekBounds {
@@ -38,12 +48,20 @@ export interface WeekFetchBatch {
 }
 
 export function detectScrollDirection(
-  currentScrollTop: number,
-  previousScrollTop: number,
+  currentScrollOffset: number,
+  previousScrollOffset: number,
 ): ScrollDirection {
-  if (currentScrollTop < previousScrollTop) return 'up';
-  if (currentScrollTop > previousScrollTop) return 'down';
+  if (currentScrollOffset < previousScrollOffset) return 'up';
+  if (currentScrollOffset > previousScrollOffset) return 'down';
   return 'idle';
+}
+
+export function getWeekOfYear(dateInWeek: Date): number {
+  return getISOWeek(startOfWeek(dateInWeek, { weekStartsOn: 1 }));
+}
+
+export function formatWeekOfYear(dateInWeek: Date): string {
+  return String(getWeekOfYear(dateInWeek));
 }
 
 export function createInitialMonthRange(
@@ -81,6 +99,54 @@ export function expandMonthRange(
   };
 }
 
+export function buildMonthWeeks(
+  monthDate: Date,
+  weeksCount: number = WEEKS_PER_MONTH,
+): {
+  weeks: Date[][];
+  days: Date[];
+} {
+  const firstWeekStart = startOfWeek(startOfMonth(monthDate), { weekStartsOn: 1 });
+  const lastWeekEnd = endOfWeek(addWeeks(firstWeekStart, weeksCount - 1), { weekStartsOn: 1 });
+  const days = eachDayOfInterval({ start: firstWeekStart, end: lastWeekEnd });
+  const weeks: Date[][] = [];
+  for (let i = 0; i < days.length; i += 7) {
+    weeks.push(days.slice(i, i + 7));
+  }
+  return { weeks, days };
+}
+
+export function buildCalendarMonths(
+  startMonth: Date,
+  endMonth: Date,
+  weeksPerMonth: number = WEEKS_PER_MONTH,
+): {
+  months: CalendarMonthPage[];
+  allDays: Date[];
+} {
+  const months: CalendarMonthPage[] = [];
+  const seenDays = new Map<string, Date>();
+  let cursor = startOfMonth(startMonth);
+  const last = startOfMonth(endMonth);
+
+  while (cursor.getTime() <= last.getTime()) {
+    const monthDate = cursor;
+    const monthKey = format(monthDate, 'yyyy-MM');
+    const { weeks, days } = buildMonthWeeks(monthDate, weeksPerMonth);
+    months.push({ monthDate, monthKey, weeks, days });
+    for (const day of days) {
+      const key = format(day, 'yyyy-MM-dd');
+      if (!seenDays.has(key)) {
+        seenDays.set(key, day);
+      }
+    }
+    cursor = startOfMonth(addMonths(cursor, 1));
+  }
+
+  const allDays = Array.from(seenDays.values()).sort((a, b) => a.getTime() - b.getTime());
+  return { months, allDays };
+}
+
 export function buildCalendarWeeks(startMonth: Date, endMonth: Date): {
   weeks: Date[][];
   allDays: Date[];
@@ -94,6 +160,40 @@ export function buildCalendarWeeks(startMonth: Date, endMonth: Date): {
     weeks.push(allDays.slice(i, i + 7));
   }
   return { weeks, allDays };
+}
+
+/** One calendar page: a whole budget period (a month or a pay cycle), shown week by week. */
+export interface CalendarPeriodPage {
+  key: string; // the period's first day, YYYY-MM-DD
+  start: string; // YYYY-MM-DD, inclusive
+  end: string; // YYYY-MM-DD, inclusive
+  weeks: Date[][]; // Monday to Sunday, from the week of `start` to the week of `end` (5 or 6 for a month-long period)
+  days: Date[];
+}
+
+/**
+ * Pages for consecutive periods. Each page holds every week the period touches, so no day of the period
+ * falls onto another page; days of the neighbouring periods fill the first and last week.
+ */
+export function buildPeriodPages(periods: readonly { start: string; end: string }[]): {
+  pages: CalendarPeriodPage[];
+  allDays: Date[];
+} {
+  const seenDays = new Map<string, Date>();
+  const pages = periods.map(({ start, end }) => {
+    const first = startOfWeek(parseISO(start), { weekStartsOn: 1 });
+    const last = endOfWeek(parseISO(end), { weekStartsOn: 1 });
+    const days = eachDayOfInterval({ start: first, end: last });
+    const weeks: Date[][] = [];
+    for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+    for (const day of days) {
+      const key = format(day, 'yyyy-MM-dd');
+      if (!seenDays.has(key)) seenDays.set(key, day);
+    }
+    return { key: start, start, end, weeks, days };
+  });
+  const allDays = Array.from(seenDays.values()).sort((a, b) => a.getTime() - b.getTime());
+  return { pages, allDays };
 }
 
 export function getMonthFirstWeekKey(monthDate: Date): string {
@@ -138,7 +238,7 @@ export function getNextWeeksToFetch(params: {
   const fetchedStart = startOfWeek(fetchedBounds.startWeek, { weekStartsOn: 1 });
   const fetchedEnd = startOfWeek(fetchedBounds.endWeek, { weekStartsOn: 1 });
 
-  if (direction === 'up') {
+  if (direction === 'up' || direction === 'left') {
     const weeksAheadUp = differenceInCalendarWeeks(visStart, fetchedStart, { weekStartsOn: 1 });
     if (weeksAheadUp <= bufferWeeks) {
       const targetStartWeek = subWeeks(
@@ -158,7 +258,7 @@ export function getNextWeeksToFetch(params: {
         };
       }
     }
-  } else if (direction === 'down') {
+  } else if (direction === 'down' || direction === 'right') {
     const weeksAheadDown = differenceInCalendarWeeks(fetchedEnd, visEnd, { weekStartsOn: 1 });
     if (weeksAheadDown <= bufferWeeks) {
       const batchStartWeek = addWeeks(fetchedEnd, 1);

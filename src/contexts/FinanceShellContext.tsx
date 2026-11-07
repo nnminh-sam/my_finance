@@ -21,7 +21,12 @@ export interface FinanceShellContextValue {
   setKeypadOpen: (open: boolean) => void;
   /** Increments each time the + tab asks the keypad to draw attention to itself. */
   keypadPulse: number;
+  /** Desktop Calendar: one page per calendar month or per pay cycle. Chosen in the top bar. */
+  calendarBasis: CalendarBasis;
+  setCalendarBasis: (basis: CalendarBasis) => void;
 }
+
+export type CalendarBasis = 'month' | 'cycle';
 
 export const FinanceShellContext = createContext<FinanceShellContextValue | undefined>(undefined);
 

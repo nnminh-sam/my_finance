@@ -12,6 +12,7 @@ import { errorMessage } from '../services/auth';
 import { createFinanceApi } from '../services/finance';
 import { adjacentPeriodDate, isPastPeriod, parsePeriodParam } from '../lib/periods';
 import type { PlanPeriodSummary } from '../lib/periodSummary';
+import { PeriodRunway } from './PeriodRunway';
 import { PlannedSpendings } from './PlannedSpendings';
 import type { PlanEditorState } from './PlannedSpendings';
 import '../styles/UserProfile.css';
@@ -84,7 +85,6 @@ export function PlansPage() {
     }
     return [...byIncome.values()].map(line => ({ key: line.key, label: line.count > 1 ? `${line.label} · ${line.count} × ${money(line.amount)}` : line.label, total: line.total }));
   }, [summary, settings.budgetPeriod?.paycheckIncomeId]);
-  const leftLabel = period?.mode === 'paycheck' ? `Left until ${dayLabel(period.nextStart)}` : 'Left this period';
 
   return (
     <div className="user-profile hide-scrollbar animate-fade-in">
@@ -106,13 +106,17 @@ export function PlansPage() {
         {!summary && !summaryError && <p className="profile-card profile-empty" role="status">Loading the period summary…</p>}
         {summary && (
           <>
-            <dl className="profile-card profile-summary" aria-label={`${periodLabel} at a glance`}>
-              <div><dt>Income this period</dt><dd className="profile-positive">{money(summary.income)}</dd></div>
-              <div><dt>Spent so far</dt><dd>{money(summary.spent)}</dd></div>
-              <div><dt>Committed</dt><dd>{money(summary.committed)}</dd></div>
-              <div><dt>Estimates</dt><dd>{money(summary.tentative)}</dd></div>
-              <div><dt>{leftLabel}</dt><dd style={{ color: summary.left >= 0 ? 'var(--primary)' : 'var(--danger)' }}>{money(summary.left)}</dd></div>
-            </dl>
+            <PeriodRunway
+              className="profile-card plans-runway"
+              income={summary.income}
+              spent={summary.spent}
+              committed={summary.committed}
+              estimates={summary.tentative}
+              start={summary.period.start}
+              end={summary.period.end}
+              today={summary.today}
+              heading={<><b>{period?.mode === 'paycheck' ? `Until ${dayLabel(summary.period.nextStart)}` : 'This period'}</b> · {periodLabel}</>}
+            />
             {paymentLines.length > 0 && (
               <ul className="profile-card plans-payments" aria-label={period?.mode === 'paycheck' ? 'Paychecks in this period' : 'Income in this period'}>
                 {paymentLines.map(line => <li key={line.key}>{line.label} <b>{money(line.total)}</b></li>)}

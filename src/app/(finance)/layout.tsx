@@ -16,12 +16,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { FinanceProvider, useFinance } from '../../contexts/FinanceContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FinanceShellContext } from '../../contexts/FinanceShellContext';
-import type { ExpenseDefaults } from '../../contexts/FinanceShellContext';
+import type { CalendarBasis, ExpenseDefaults } from '../../contexts/FinanceShellContext';
 import { errorMessage } from '../../services/auth';
 import { pages } from '../../lib/pages';
 import type { FinancePage } from '../../lib/pages';
 import { authHref, pageHref, readPageDate } from '../../lib/navigation';
-import { adjacentPeriod, DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, periodRangeLabel, viewPeriodOf } from '../../lib/periods';
+import { adjacentPeriod, calendarPeriod, DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, periodOf, periodRangeLabel, periodTitle, viewPeriodOf } from '../../lib/periods';
+import { addDays } from '../../lib/plans';
 import '../../styles/AuthScreen.css';
 import '../../styles/Plans.css';
 
@@ -195,8 +196,20 @@ function FinanceDocument({
     const resolve = (date: string) => viewPeriodOf(budgetPeriod, showBy, incomes, date);
     return parseISO(adjacentPeriod(resolve, activePeriod, direction).start);
   };
-  const previousDate = page === 'week' ? subWeeks(activeDate, 1) : stepPeriod('previous') ?? subMonths(activeDate, 1);
-  const nextDate = page === 'week' ? addWeeks(activeDate, 1) : stepPeriod('next') ?? addMonths(activeDate, 1);
+  // Desktop Calendar pages are whole months or whole pay cycles, picked in the top bar; Show by sets the start.
+  const [calendarBasis, setCalendarBasis] = useState<CalendarBasis>(showBy === 'pay_cycle' ? 'cycle' : 'month');
+  useEffect(() => {
+    setCalendarBasis(showBy === 'pay_cycle' ? 'cycle' : 'month');
+  }, [showBy]);
+  const calendarView = useMemo(() => {
+    if (page !== 'calendar') return null;
+    const day = format(activeDate, 'yyyy-MM-dd');
+    return calendarBasis === 'cycle' ? periodOf(budgetPeriod, incomes, day) : calendarPeriod(day);
+  }, [page, calendarBasis, budgetPeriod, incomes, activeDate]);
+  const previousDate = calendarView ? parseISO(addDays(calendarView.start, -1))
+    : page === 'week' ? subWeeks(activeDate, 1) : stepPeriod('previous') ?? subMonths(activeDate, 1);
+  const nextDate = calendarView ? parseISO(calendarView.nextStart)
+    : page === 'week' ? addWeeks(activeDate, 1) : stepPeriod('next') ?? addMonths(activeDate, 1);
   const dateNavigation = page === 'calendar' || page === 'week' || page === 'analytics';
 
   const openDate = useCallback((date: Date) => {
@@ -226,7 +239,9 @@ function FinanceDocument({
     keypadOpen,
     setKeypadOpen,
     keypadPulse,
-  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, openPlanPeriod, keypadOpen, keypadPulse]);
+    calendarBasis,
+    setCalendarBasis,
+  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, openPlanPeriod, keypadOpen, keypadPulse, calendarBasis]);
 
   const navigation = [
     { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
@@ -258,6 +273,10 @@ function FinanceDocument({
     ? periodRangeLabel(activePeriod, true)
     : null;
   const periodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : rangeLabel ?? format(activeDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy');
+  // The Calendar's page, named in full in the top bar: "5 Oct – 4 Nov 2026" or "November 2026", plus the day count today.
+  const calendarViewName = calendarView ? periodTitle(calendarView, format(new Date(), 'yyyy-MM-dd')) : null;
+  const calendarViewLabel = calendarViewName?.title ?? null;
+  const calendarViewDay = calendarViewName?.day ?? null;
   const mobilePeriodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : rangeLabel ?? format(activeDate, page === 'day' ? 'MMM d, yyyy' : 'MMMM yyyy');
 
   const renderPrevAction = (extraClass = '') => {
@@ -325,7 +344,7 @@ function FinanceDocument({
             <span className="document-brand-icon"><img src="/favicon.svg" width={40} height={40} alt="" /></span>
             <span className="document-brand-text">
               <span className="document-title">MyFinance</span>
-              <span className="document-subtitle">{periodLabel}</span>
+              <span className={page === 'calendar' ? 'document-subtitle document-subtitle-mobile' : 'document-subtitle'}>{periodLabel}</span>
             </span>
           </Link>
 
@@ -352,8 +371,25 @@ function FinanceDocument({
           </nav>
 
           <div className="document-actions">
-            {renderPrevAction('document-desktop-only')}
-            {renderNextAction('document-desktop-only')}
+            {calendarView && calendarViewLabel ? (
+              <div className="document-period document-desktop-only">
+                <div className="document-basis-toggle" role="group" aria-label="Calendar pages">
+                  <button type="button" aria-pressed={calendarBasis === 'month'} onClick={() => setCalendarBasis('month')}>Month</button>
+                  <button type="button" aria-pressed={calendarBasis === 'cycle'} onClick={() => setCalendarBasis('cycle')}>Pay cycle</button>
+                </div>
+                {renderPrevAction()}
+                <div className="document-period-label" aria-live="polite">
+                  <b>{calendarViewLabel}</b>
+                  {calendarViewDay && <span>{calendarViewDay}</span>}
+                </div>
+                {renderNextAction()}
+              </div>
+            ) : (
+              <>
+                {renderPrevAction('document-desktop-only')}
+                {renderNextAction('document-desktop-only')}
+              </>
+            )}
             <button type="button" className="document-action document-add document-desktop-only" title="Add expense" aria-label="Add expense" onClick={() => openExpense()}><Plus size={20} /></button>
             <button className="document-action document-desktop-only" title="Refresh records" aria-label="Refresh records" onClick={() => { void reload().catch(() => {}); }}><RefreshCw size={20} /></button>
             <button className="document-action document-desktop-only" title="Toggle theme" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>

@@ -155,6 +155,21 @@ export function parsePeriodParam(value: string | null | undefined): string | nul
   return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value ? null : value;
 }
 
+const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
+
+/**
+ * How the top bar names a Calendar page: "November 2026" for a calendar month, "5 Oct – 4 Nov 2026" for a
+ * pay cycle, plus "Day 4 of 30" while today is in it.
+ */
+export function periodTitle(period: Pick<BudgetPeriod, 'start' | 'end' | 'mode'>, today: string): { title: string; day: string | null } {
+  const title = period.mode === 'calendar'
+    ? `${FULL_MONTHS[Number(period.start.slice(5, 7)) - 1]} ${period.start.slice(0, 4)}`
+    : periodRangeLabel(period, true);
+  const dayOf = (date: string) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${period.start}T00:00:00Z`)) / 86_400_000) + 1;
+  const day = today >= period.start && today <= period.end ? `Day ${dayOf(today)} of ${dayOf(period.end)}` : null;
+  return { title, day };
+}
+
 /** A period is past when it ended before `today`; the period containing today is not past. */
 export function isPastPeriod(period: Pick<BudgetPeriod, 'end'>, today: string): boolean {
   return period.end < today;

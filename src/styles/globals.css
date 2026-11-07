@@ -54,36 +54,6 @@ button {
   transition: all 0.2s ease;
 }
 
-.overview-income-heading {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.overview-income-edit {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  padding: 4px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--bg-card);
-  color: var(--primary);
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.overview-income-edit:hover {
-  background: var(--bg-card-hover);
-}
-
-.overview-income-edit:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
-}
-
 /* Animations */
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(20px); }
