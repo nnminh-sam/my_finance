@@ -37,6 +37,10 @@
 .user-profile .plans-group small { color: var(--text-muted); font-weight: 500; font-size: 0.8rem; }
 .user-profile .plans-explain { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px; font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
 .user-profile .plans-explain b { color: var(--text-main); }
+.user-profile .budget-period-hint { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; padding: 12px 20px; border-top: 1px solid var(--border-color); font-size: 0.82rem; color: var(--text-muted); }
+.user-profile .plans-period { color: var(--text-muted); font-weight: 500; }
+.user-profile .plans-payments { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 10px 16px; list-style: none; font-size: 0.82rem; color: var(--text-muted); }
+.user-profile .plans-payments b { color: var(--text-main); font-variant-numeric: tabular-nums; }
 .plan-pill { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: color-mix(in srgb, var(--text-main) 8%, transparent); color: var(--text-muted); }
 .plan-pill.is-sure { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); }
 

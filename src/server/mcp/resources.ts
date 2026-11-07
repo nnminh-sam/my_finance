@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import type { User } from "../auth/store";
 import { CATEGORY_ICONS } from "../finance/model";
+import { loadBudgetPeriod, loadPlanPeriodSummary } from "../finance/periodSummary";
 import type { FinanceStore } from "../finance/store";
 import { getMonthIncome } from "../../lib/income";
 import { monthlyRepeatCost } from "../../lib/repeatRules";
@@ -37,6 +38,12 @@ export const MCP_RESOURCES: McpResourceDefinition[] = [
     uri: "finance://incomes",
     name: "Income Sources",
     description: "All recurring and one-time income sources configured by the user, plus current month income totals.",
+    mimeType: "application/json",
+  },
+  {
+    uri: "finance://budget-period",
+    name: "Budget Period",
+    description: "The budget period setting (calendar month, monthly from a start day, or paycheck to paycheck), the period containing today, and its plan summary.",
     mimeType: "application/json",
   },
   {
@@ -111,6 +118,14 @@ export async function readMcpResource(
       oneTimeIncome: monthBreakdown.oneTimeIncome,
       incomes: incomes.map(inc => enrichIncome(inc, month)),
     });
+  }
+
+  if (uri === "finance://budget-period") {
+    const [{ setting, today, period }, summary] = await Promise.all([
+      loadBudgetPeriod(financeStore, user.id),
+      loadPlanPeriodSummary(financeStore, user.id),
+    ]);
+    return jsonContent(uri, { budgetPeriod: setting, today, currentPeriod: period, summary });
   }
 
   if (uri === "finance://repeat-rules") {

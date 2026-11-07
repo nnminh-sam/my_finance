@@ -1,16 +1,22 @@
-import type { Income, IncomeFrequency, IncomeInput } from '../types';
+import type { Income, IncomeInput, IncomeScheduleFrequency } from '../types';
 
 export interface IncomeDraft {
   id?: string;
   source: string;
   name: string;
   amount: string;
-  frequency: IncomeFrequency;
+  frequency: IncomeScheduleFrequency;
   startDate: string;
   endDate: string; // '' = no end date
+  // Pay-schedule options. Left out of drafts that do not use them; a missing field means its default.
+  interval?: 1 | 2 | 4; // weekly only
+  semimonthlyDay1?: string; // semimonthly only, '' = not chosen
+  semimonthlyDay2?: string;
+  weekendShift?: boolean;
 }
 
-const FREQUENCIES: readonly IncomeFrequency[] = ['once', 'daily', 'weekly', 'monthly', 'yearly'];
+const FREQUENCIES: readonly IncomeScheduleFrequency[] = ['once', 'daily', 'weekly', 'semimonthly', 'monthly', 'yearly'];
+const SHIFT_FREQUENCIES: readonly IncomeScheduleFrequency[] = ['weekly', 'semimonthly', 'monthly', 'yearly'];
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 
 export function isValidIncomeDate(date: string): boolean {
@@ -23,10 +29,17 @@ export function isValidIncomeDate(date: string): boolean {
 
 export function createIncomeDraft(defaultStartDate: string, income?: Income): IncomeDraft {
   if (income) {
-    return {
+    const draft: IncomeDraft = {
       id: income.id, source: income.source, name: income.name, amount: String(income.amount),
       frequency: income.frequency, startDate: income.startDate, endDate: income.endDate ?? '',
     };
+    if (income.interval) draft.interval = income.interval;
+    if (income.semimonthlyDays) {
+      draft.semimonthlyDay1 = String(income.semimonthlyDays[0]);
+      draft.semimonthlyDay2 = String(income.semimonthlyDays[1]);
+    }
+    if (income.weekendShift) draft.weekendShift = true;
+    return draft;
   }
   return { source: '', name: '', amount: '', frequency: 'monthly', startDate: defaultStartDate, endDate: '' };
 }
@@ -54,19 +67,32 @@ export function validateIncomeDraft(draft: IncomeDraft): IncomeInput {
     if (draft.endDate < draft.startDate) throw new Error('The end date cannot be before the start date.');
     endDate = draft.endDate;
   }
-  return { source, name, amount, frequency: draft.frequency, startDate: draft.startDate, endDate };
+  const result: IncomeInput = { source, name, amount, frequency: draft.frequency, startDate: draft.startDate, endDate };
+  if (draft.frequency === 'weekly' && draft.interval && draft.interval !== 1) result.interval = draft.interval;
+  if (draft.frequency === 'semimonthly') {
+    const first = Number(draft.semimonthlyDay1 ?? '');
+    const second = Number(draft.semimonthlyDay2 ?? '');
+    const valid = (day: number, text: string | undefined) => text !== undefined && /^\d{1,2}$/.test(text) && day >= 1 && day <= 31;
+    if (!valid(first, draft.semimonthlyDay1) || !valid(second, draft.semimonthlyDay2)) throw new Error('Choose two paydays between 1 and 31.');
+    if (first >= second) throw new Error('The first payday must be earlier in the month than the second.');
+    result.semimonthlyDays = [first, second];
+  }
+  if (draft.weekendShift && SHIFT_FREQUENCIES.includes(draft.frequency)) result.weekendShift = true;
+  return result;
 }
 
 export function isIncomeDraftDirty(draft: IncomeDraft, snapshot: IncomeDraft): boolean {
   const fields: (keyof IncomeDraft)[] = ['id', 'source', 'name', 'amount', 'frequency', 'startDate', 'endDate'];
-  return fields.some(field => draft[field] !== snapshot[field]);
+  const options = (item: IncomeDraft) => [item.interval ?? 1, item.semimonthlyDay1 ?? '', item.semimonthlyDay2 ?? '', item.weekendShift ?? false];
+  const before = options(snapshot);
+  return fields.some(field => draft[field] !== snapshot[field]) || options(draft).some((value, index) => value !== before[index]);
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** Plain-language schedule for the income form, or null until amount and start date are valid. */
-export function describeIncomeDraft(draft: Pick<IncomeDraft, 'amount' | 'frequency' | 'startDate' | 'endDate'>): string | null {
+export function describeIncomeDraft(draft: Pick<IncomeDraft, 'amount' | 'frequency' | 'startDate' | 'endDate' | 'interval' | 'semimonthlyDay1' | 'semimonthlyDay2' | 'weekendShift'>): string | null {
   const amount = Number(draft.amount);
   if (!/^\d+(?:\.\d{1,2})?$/.test(draft.amount) || !(amount > 0) || !isValidIncomeDate(draft.startDate)) return null;
   const [year, month, day] = draft.startDate.split('-').map(Number);
@@ -77,14 +103,17 @@ export function describeIncomeDraft(draft: Pick<IncomeDraft, 'amount' | 'frequen
   const start = dateLabel(year, month, day);
   if (draft.frequency === 'once') return `${money} once, on ${WEEKDAYS[value.getUTCDay()]}, ${start}.`;
 
+  const stride = draft.frequency === 'weekly' && draft.interval && draft.interval !== 1 ? `every ${draft.interval} weeks on ${WEEKDAYS[value.getUTCDay()]}` : null;
   const every = {
     daily: 'every day',
-    weekly: `every ${WEEKDAYS[value.getUTCDay()]}`,
+    weekly: stride ?? `every ${WEEKDAYS[value.getUTCDay()]}`,
+    semimonthly: draft.semimonthlyDay1 && draft.semimonthlyDay2 ? `on day ${draft.semimonthlyDay1} and day ${draft.semimonthlyDay2} of every month` : 'twice a month',
     monthly: `on day ${day} of every month`,
     yearly: `every year on ${day} ${MONTHS[month - 1]}`,
   }[draft.frequency];
   const validEnd = draft.endDate !== '' && isValidIncomeDate(draft.endDate) && draft.endDate >= draft.startDate;
   const end = validEnd ? `until ${dateLabel(...(draft.endDate.split('-').map(Number) as [number, number, number]))}` : 'with no end date';
   const shortMonths = draft.frequency === 'monthly' && day > 28 ? ' In shorter months it is paid on the last day.' : '';
-  return `${money} ${every}, from ${start}, ${end}.${shortMonths}`;
+  const shift = draft.weekendShift && SHIFT_FREQUENCIES.includes(draft.frequency) ? ' A Saturday or Sunday payday is paid on the Friday before.' : '';
+  return `${money} ${every}, from ${start}, ${end}.${shortMonths}${shift}`;
 }

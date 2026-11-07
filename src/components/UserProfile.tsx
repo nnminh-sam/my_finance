@@ -14,6 +14,8 @@ import { clampDelayDays, clampSalaryDay, defaultSalaryCycleConfig, getPaydayForM
 import type { SalaryCycleConfig } from '../lib/salaryCycle';
 import type { CategoryData } from '../types';
 import { EditorActions } from './ProfileSection';
+import { BudgetPeriodSection } from './BudgetPeriodSection';
+import type { BudgetPeriodEditorState } from './BudgetPeriodSection';
 import { IncomeSources } from './IncomeSources';
 import type { IncomeEditorState } from './IncomeSources';
 import { McpAccessSection } from './McpAccessSection';
@@ -116,11 +118,12 @@ export function UserProfile() {
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const [incomeEditor, setIncomeEditor] = useState<IncomeEditorState>({ dirty: false, busy: false });
+  const [budgetEditor, setBudgetEditor] = useState<BudgetPeriodEditorState>({ dirty: false, busy: false });
   const [mcpTokenCount, setMcpTokenCount] = useState<number | undefined>(undefined);
   const categoryDirty = category.state !== null && (category.state.draft.isNew || category.dirty);
-  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, paycycle: false, mcp: false, preferences: false };
+  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, paycycle: budgetEditor.dirty, mcp: false, preferences: false };
   const dirty = Object.values(unsaved).some(Boolean);
-  const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy);
+  const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy || budgetEditor.busy);
   const initials = (user?.name || user?.email || '').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
   const monthIncome = getMonthIncome(incomeMonth(new Date()), incomes).totalIncome;
   const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: settings.categories.length, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
@@ -539,6 +542,7 @@ export function UserProfile() {
                 </div>
               </div>
             </div>
+            <BudgetPeriodSection disabled={isLoggingOut} onEditorStateChange={setBudgetEditor} />
           </section>
 
           <div id="profile-panel-mcp" role="tabpanel" aria-labelledby="profile-tab-mcp" hidden={tab !== 'mcp'}>

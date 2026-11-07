@@ -1,3 +1,4 @@
+import type { BudgetPeriodSetting } from "../../lib/periods";
 import type { PlanException, PlanFrequency } from "../../lib/plans";
 
 export interface Category { id: string; name: string; color: string; icon: string }
@@ -6,6 +7,13 @@ export interface FinanceSettings {
   avatar: string;
   categories: Category[];
   timezone: string; // IANA zone used to decide when planned spendings become real
+  budgetPeriod: BudgetPeriodSetting;
+}
+export interface SettingsPatch {
+  avatar?: string;
+  categories?: Category[];
+  timezone?: string;
+  budgetPeriod?: { mode?: BudgetPeriodSetting["mode"]; startDay?: number; paycheckIncomeId?: string | null };
 }
 export interface SpendingInput { amount: number; description: string; category: string; date: string; time: string; repeatRuleId?: string | null }
 export interface Spending extends SpendingInput {
@@ -14,7 +22,7 @@ export interface Spending extends SpendingInput {
   planDate?: string | null; // the plan occurrence date it came from
 }
 export interface SpendingPage { spendings: Spending[]; nextCursor: string | null }
-export const INCOME_FREQUENCIES = ["once", "daily", "weekly", "monthly", "yearly"] as const;
+export const INCOME_FREQUENCIES = ["once", "daily", "weekly", "semimonthly", "monthly", "yearly"] as const;
 export type IncomeFrequency = typeof INCOME_FREQUENCIES[number];
 export interface IncomeInput {
   source: string;
@@ -23,6 +31,9 @@ export interface IncomeInput {
   frequency: IncomeFrequency;
   startDate: string; // YYYY-MM-DD; the only date for one-time income
   endDate: string | null; // YYYY-MM-DD inclusive, null = no end; always null for one-time income
+  interval?: 1 | 2 | 4; // weekly only; omitted = 1
+  semimonthlyDays?: [number, number]; // semimonthly only; two ints 1..31, first < second
+  weekendShift?: boolean; // omitted = false
 }
 export interface Income extends IncomeInput { id: string }
 export interface IncomePage { incomes: Income[]; nextCursor: string | null }
@@ -83,6 +94,7 @@ export function defaultFinanceSettings(): FinanceSettings {
   return {
     avatar: "",
     timezone: "Asia/Ho_Chi_Minh",
+    budgetPeriod: { mode: "calendar", startDay: 1, paycheckIncomeId: null },
     categories: [
       { id: "Food", name: "Food", color: "#10b981", icon: "Utensils" },
       { id: "Transport", name: "Transport", color: "#3b82f6", icon: "Car" },

@@ -96,3 +96,68 @@ test("plans: local time zone stamps and descriptions", () => {
   assert.equal(describePlanSchedule(plan({ frequency: "weekly", daysOfWeek: [1, 3] })), "Weekly · Mon, Wed");
   assert.equal(describePlanSchedule(plan({ frequency: "monthly", startDate: "2026-11-05" })), "Monthly on day 5");
 });
+
+// ---- plan summary of one budget period ----
+import { summarizePlanPeriod, type SummaryIncome, type SummarySpending } from "../src/lib/periodSummary";
+import type { BudgetPeriod } from "../src/lib/periods";
+
+const period: BudgetPeriod = { start: "2026-11-25", end: "2026-12-24", nextStart: "2026-12-25", mode: "paycheck" };
+const salary: SummaryIncome = { id: "s", source: "Salary", name: "Shop", amount: 1000.1, frequency: "monthly", startDate: "2026-01-25", endDate: null };
+function planned(overrides: Partial<PlanLike> = {}) {
+  return { ...plan({ frequency: "monthly", startDate: "2026-11-01", time: "08:00", amount: 400, description: "Rent", sure: true, ...overrides }), materializedThrough: "2026-11-04T12:00" as string | null };
+}
+const summarize = (input: { spendings?: SummarySpending[]; plans?: ReturnType<typeof planned>[]; incomes?: SummaryIncome[]; period?: BudgetPeriod }) =>
+  summarizePlanPeriod({ period: input.period ?? period, today: "2026-11-30", incomes: input.incomes ?? [salary], spendings: input.spendings ?? [], plans: input.plans ?? [] });
+
+test("period summary: a bill due on the 1st lands in the period of the paycheck before it", () => {
+  const summary = summarize({ plans: [planned()] });
+  assert.deepEqual(summary.occurrences.map(item => [item.description, item.date, item.sure]), [["Rent", "2026-12-01", true]]);
+  assert.equal(summary.committed, 400);
+  // The next period (paid on the 25th of December) holds the January bill instead.
+  const next = summarize({ plans: [planned()], period: { start: "2026-12-25", end: "2027-01-24", nextStart: "2027-01-25", mode: "paycheck" } });
+  assert.deepEqual(next.occurrences.map(item => item.date), ["2027-01-01"]);
+});
+
+test("period summary: payments, committed versus estimate, and the left formula", () => {
+  const coffee = planned({ id: "p2", description: "Coffee", amount: 50.25, sure: false, frequency: "weekly", startDate: "2026-12-04", time: "09:00" });
+  const summary = summarize({
+    plans: [planned(), coffee],
+    spendings: [{ amount: 120.5, date: "2026-11-25" }, { amount: 30, date: "2026-12-24" }],
+  });
+  // Only the payment dated 2026-11-25 is in the period (the next one is 2026-12-25).
+  assert.deepEqual(summary.payments, [{ incomeId: "s", source: "Salary", name: "Shop", date: "2026-11-25", amount: 1000.1 }]);
+  assert.equal(summary.income, 1000.1);
+  assert.equal(summary.spent, 150.5);
+  assert.equal(summary.committed, 400);
+  // Coffee on Fri 4, 11, 18 December: 3 x 50.25.
+  assert.equal(summary.tentative, 150.75);
+  // 1000.10 - 150.50 - 400 - 150.75 = 298.85
+  assert.equal(summary.left, 298.85);
+  assert.equal(summary.today, "2026-11-30");
+});
+
+test("period summary: spending counts only inside the period and materialized occurrences are not counted twice", () => {
+  const summary = summarize({
+    plans: [{ ...planned(), materializedThrough: "2026-11-30T00:00" }],
+    spendings: [
+      { amount: 5, date: "2026-11-24" }, { amount: 7, date: "2026-12-25" },
+      { amount: 400, date: "2026-12-01", planId: "p1", planDate: "2026-12-01" },
+    ],
+  });
+  assert.equal(summary.spent, 400, "only the materialized rent is dated in the period");
+  assert.equal(summary.committed, 0, "it is not projected again");
+  assert.deepEqual(summary.occurrences, []);
+  assert.equal(summary.left, 1000.1 - 400);
+  // An occurrence at or before the watermark is already real, so it is skipped.
+  assert.deepEqual(summarize({ plans: [{ ...planned(), materializedThrough: "2026-12-01T08:00" }] }).occurrences, []);
+  // A spending on the last day counts, the day after does not.
+  assert.equal(summarize({ spendings: [{ amount: 9, date: "2026-12-24" }] }).spent, 9);
+  assert.equal(summarize({ spendings: [{ amount: 9, date: "2026-12-25" }] }).spent, 0);
+});
+
+test("period summary: a past period has no projection", () => {
+  const past: BudgetPeriod = { start: "2026-09-25", end: "2026-10-24", nextStart: "2026-10-25", mode: "paycheck" };
+  const summary = summarize({ period: past, plans: [planned()], spendings: [{ amount: 100, date: "2026-10-01" }] });
+  assert.deepEqual(summary.occurrences, []);
+  assert.equal(summary.left, 1000.1 - 100);
+});

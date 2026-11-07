@@ -4,8 +4,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import { errorMessage, getAuthState } from '../services/auth';
 import { createFinanceApi } from '../services/finance';
-import type { FinanceSettings, SpendingInput } from '../services/finance';
+import type { FinanceSettings, FinanceSettingsUpdate, SpendingInput } from '../services/finance';
 import type { Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, Spending } from '../types';
+import { DEFAULT_BUDGET_PERIOD } from '../lib/periods';
 import { isValidTimeZone, projectPlans, type PlanOccurrence } from '../lib/plans';
 
 interface FinanceContextValue {
@@ -18,7 +19,7 @@ interface FinanceContextValue {
   error: string | null;
   reload: () => Promise<void>;
   fetchWeeksSpendings: (startDate: string, endDate: string) => Promise<Spending[]>;
-  updateSettings: (updates: Partial<FinanceSettings>) => Promise<void>;
+  updateSettings: (updates: FinanceSettingsUpdate) => Promise<void>;
   createSpending: (input: SpendingInput) => Promise<Spending>;
   updateSpending: (id: string, input: SpendingInput) => Promise<void>;
   deleteSpending: (id: string) => Promise<void>;
@@ -40,7 +41,7 @@ interface FinanceContextValue {
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
 const api = createFinanceApi();
 const emptySettings: FinanceSettings = {
-  avatar: '', categories: [],
+  avatar: '', categories: [], budgetPeriod: DEFAULT_BUDGET_PERIOD,
 };
 
 export function FinanceProvider({ userId, children }: { userId: string; children: ReactNode }) {
@@ -146,7 +147,7 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     };
   }, [reload]);
 
-  const updateSettings = useCallback((updates: Partial<FinanceSettings>) => serialize(async () => {
+  const updateSettings = useCallback((updates: FinanceSettingsUpdate) => serialize(async () => {
     const saved = await api.updateSettings(updates);
     if (currentAccount()) setSettings(saved);
   }), [serialize, currentAccount]);
@@ -179,7 +180,16 @@ export function FinanceProvider({ userId, children }: { userId: string; children
 
   const deleteIncome = useCallback((id: string) => serialize(async () => {
     await api.deleteIncome(id);
-    if (currentAccount()) setIncomes(records => records.filter(record => record.id !== id));
+    if (!currentAccount()) return;
+    setIncomes(records => records.filter(record => record.id !== id));
+    // The server resets the budget period when its paycheck income is deleted. If the refresh fails,
+    // apply the same reset locally so the page never shows a paycheck period without an income.
+    const fresh = await api.getSettings().catch(() => null);
+    if (!currentAccount()) return;
+    if (fresh) setSettings(fresh);
+    else setSettings(current => current.budgetPeriod?.mode === 'paycheck' && current.budgetPeriod.paycheckIncomeId === id
+      ? { ...current, budgetPeriod: { ...current.budgetPeriod, mode: 'calendar', paycheckIncomeId: null } }
+      : current);
   }), [serialize, currentAccount]);
 
   const realPlanKeys = useMemo(() => new Set(

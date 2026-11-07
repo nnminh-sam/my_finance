@@ -1,7 +1,13 @@
 import { authenticatedFetch } from './auth';
+import type { BudgetPeriodSetting } from '../lib/periods';
+import type { PlanPeriodSummary } from '../lib/periodSummary';
 import type { Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, RepeatRule, RepeatRuleInput, Spending, UserSettings } from '../types';
 
-export type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'> & { timezone?: string };
+export type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'> & { timezone?: string; budgetPeriod?: BudgetPeriodSetting };
+/** A settings change: a budgetPeriod patch may name only the keys it changes (null clears the paycheck income). */
+export type FinanceSettingsUpdate = Partial<Omit<FinanceSettings, 'budgetPeriod'>> & {
+  budgetPeriod?: Partial<Omit<BudgetPeriodSetting, 'paycheckIncomeId'>> & { paycheckIncomeId?: string | null };
+};
 export type SpendingInput = Omit<Spending, 'id' | 'planId' | 'planDate'>;
 type Fetcher = (path: string, init?: RequestInit) => Promise<Response>;
 
@@ -24,7 +30,7 @@ export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
     async getSettings(): Promise<FinanceSettings> {
       return (await request<{ settings: FinanceSettings }>('/settings')).settings;
     },
-    async updateSettings(updates: Partial<FinanceSettings>): Promise<FinanceSettings> {
+    async updateSettings(updates: FinanceSettingsUpdate): Promise<FinanceSettings> {
       return (await request<{ settings: FinanceSettings }>('/settings', json('PUT', updates))).settings;
     },
     async getSpendings(range?: { startDate?: string; endDate?: string }): Promise<Spending[]> {
@@ -92,6 +98,11 @@ export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
     },
     async syncRepeatRules(asOfDate?: string): Promise<{ spendingsCreated: number }> {
       return await request<{ spendingsCreated: number }>('/repeat-rules/sync', json('POST', { asOfDate }));
+    },
+    /** Plan summary of the budget period containing `date` (default: today in the saved time zone). */
+    async getPlanSummary(date?: string): Promise<PlanPeriodSummary> {
+      const query = date ? `?date=${encodeURIComponent(date)}` : '';
+      return (await request<{ summary: PlanPeriodSummary }>(`/plans/summary${query}`)).summary;
     },
     async getPlans(): Promise<Plan[]> {
       return (await request<{ plans: Plan[] }>('/plans')).plans;

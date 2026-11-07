@@ -3,6 +3,7 @@ import { HttpError } from "../auth/http";
 import type { User } from "../auth/store";
 import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category } from "../finance/model";
 import type { FinanceStore } from "../finance/store";
+import { loadBudgetPeriod, loadPlanPeriodSummary } from "../finance/periodSummary";
 import { incomeInput, planExceptionInput, planInput, settingsPatch, spendingInput, uuid } from "../finance/validation";
 import { addDays, describePlanSchedule, localNowStamp, projectPlans } from "../../lib/plans";
 import {
@@ -331,7 +332,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         frequency: {
           type: "string",
           enum: [...INCOME_FREQUENCIES],
-          description: "Payment frequency: 'once', 'daily', 'weekly', 'monthly', or 'yearly'.",
+          description: "Payment frequency: 'once', 'daily', 'weekly', 'semimonthly' (twice a month, needs semimonthlyDays), 'monthly', or 'yearly'.",
         },
         startDate: {
           type: "string",
@@ -341,6 +342,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           type: ["string", "null"] as unknown as "string",
           description: "Optional inclusive end date in YYYY-MM-DD format (must be null/omitted when frequency is 'once').",
         },
+        interval: { type: "integer", enum: [1, 2, 4], description: "Weekly only: paid every 1, 2 or 4 weeks (default 1)." },
+        semimonthlyDays: {
+          type: "array",
+          items: { type: "integer", minimum: 1, maximum: 31 },
+          minItems: 2,
+          maxItems: 2,
+          description: "Required for 'semimonthly': the two paydays of the month, first before second (31 = last day of the month).",
+        },
+        weekendShift: { type: "boolean", description: "Pay on the Friday before when a payday falls on a Saturday or Sunday (not for 'once' or 'daily'; default false)." },
       },
       required: ["source", "amount", "frequency", "startDate"],
       additionalProperties: false,
@@ -354,7 +364,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     name: "update_income",
-    description: "Update an existing income source by its UUID.",
+    description: "Update an existing income source by its UUID. This replaces the whole income: omitted interval and weekendShift reset to their defaults (every week, off), so send them again to keep them. For a semimonthly income semimonthlyDays is required on every update (omitting it is a 400); for other frequencies an omitted semimonthlyDays resets to none.",
     inputSchema: {
       type: "object",
       properties: {
@@ -368,6 +378,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         frequency: { type: "string", enum: [...INCOME_FREQUENCIES] },
         startDate: { type: "string", description: "YYYY-MM-DD" },
         endDate: { type: ["string", "null"] as unknown as "string", description: "YYYY-MM-DD or null" },
+        interval: { type: "integer", enum: [1, 2, 4], description: "Weekly only: every 1, 2 or 4 weeks." },
+        semimonthlyDays: {
+          type: "array",
+          items: { type: "integer", minimum: 1, maximum: 31 },
+          minItems: 2,
+          maxItems: 2,
+          description: "Required for 'semimonthly': the two paydays of the month, first before second.",
+        },
+        weekendShift: { type: "boolean", description: "Pay on the Friday before a Saturday or Sunday payday." },
       },
       required: ["id", "source", "amount", "frequency", "startDate"],
       additionalProperties: false,
@@ -405,6 +424,22 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     description: "List planned (forecast) spendings. A plan's future occurrences are projections, not real spendings; each becomes a real spending automatically once its local date and time pass. Includes each plan's next occurrences and projected totals for the rest of this month and next month.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { title: "List Planned Spendings", readOnlyHint: true },
+  },
+  {
+    name: "get_plan_period_summary",
+    description: "Summary of one budget period (calendar month, monthly from a start day, or paycheck to paycheck, per the user's budget period setting): payments received, spent so far, committed (sure) and estimated planned spendings, and what is left. Defaults to the period containing today.",
+    inputSchema: {
+      type: "object",
+      properties: { date: { type: "string", description: "Any date (YYYY-MM-DD) inside the period; default today in the user's time zone." } },
+      additionalProperties: false,
+    },
+    annotations: { title: "Plan Period Summary", readOnlyHint: true },
+  },
+  {
+    name: "get_budget_period",
+    description: "The user's budget period setting (mode, start day, paycheck income) and the period containing today.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { title: "Budget Period", readOnlyHint: true },
   },
   {
     name: "get_spending_forecast",
@@ -608,6 +643,11 @@ function validateMonthString(value: unknown, fallbackMonth?: string): string {
   return value;
 }
 
+function settingsResult<T extends object>(result: T | "invalid-budget-period"): T {
+  if (result === "invalid-budget-period") throw new HttpError(400, "Paycheck period needs one of your weekly, twice-a-month or monthly incomes");
+  return result;
+}
+
 function validateDateString(value: unknown, field: string): string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new HttpError(400, `Invalid ${field} (expected YYYY-MM-DD)`);
@@ -669,7 +709,7 @@ export async function executeMcpTool(
           : [...current.categories, newCat];
 
         const patch = settingsPatch({ categories: nextCategories });
-        const updated = await financeStore.updateSettings(user.id, patch);
+        const updated = settingsResult(await financeStore.updateSettings(user.id, patch));
         return toolSuccess({
           action: existingIndex >= 0 ? "updated" : "created",
           category: newCat,
@@ -684,7 +724,7 @@ export async function executeMcpTool(
         const exists = current.categories.some(c => c.id === targetId);
         if (!exists) throw new HttpError(404, `Category '${targetId}' not found in settings`);
         const nextCategories = current.categories.filter(c => c.id !== targetId);
-        const updated = await financeStore.updateSettings(user.id, { categories: nextCategories });
+        const updated = settingsResult(await financeStore.updateSettings(user.id, { categories: nextCategories }));
         return toolSuccess({
           deletedCategoryId: targetId,
           settings: updated,
@@ -693,7 +733,7 @@ export async function executeMcpTool(
 
       case "update_settings": {
         const patch = settingsPatch(args);
-        const settings = await financeStore.updateSettings(user.id, patch);
+        const settings = settingsResult(await financeStore.updateSettings(user.id, patch));
         return toolSuccess({ settings });
       }
 
@@ -840,6 +880,9 @@ export async function executeMcpTool(
           frequency: args.frequency,
           startDate: args.startDate,
           endDate: args.endDate ?? null,
+          interval: args.interval ?? undefined,
+          semimonthlyDays: args.semimonthlyDays ?? undefined,
+          weekendShift: args.weekendShift ?? undefined,
         });
         const income = await financeStore.createIncome(user.id, validated);
         return toolSuccess({ income: enrichIncome(income) });
@@ -854,9 +897,13 @@ export async function executeMcpTool(
           frequency: args.frequency,
           startDate: args.startDate,
           endDate: args.endDate ?? null,
+          interval: args.interval ?? undefined,
+          semimonthlyDays: args.semimonthlyDays ?? undefined,
+          weekendShift: args.weekendShift ?? undefined,
         });
         const income = await financeStore.updateIncome(user.id, id, validated);
         if (!income) throw new HttpError(404, "Income not found");
+        if (income === "paycheck-in-use") throw new HttpError(400, "This income sets the paycheck budget period, so it must stay weekly, twice a month or monthly");
         return toolSuccess({ income: enrichIncome(income) });
       }
 
@@ -887,6 +934,16 @@ export async function executeMcpTool(
             nextOccurrences: projectPlans([plan], today, addDays(today, 400)).slice(0, 5),
           })),
         });
+      }
+
+      case "get_plan_period_summary": {
+        const date = args.date === undefined || args.date === null ? undefined : validateDateString(args.date, "date");
+        return toolSuccess({ summary: await loadPlanPeriodSummary(financeStore, user.id, date) });
+      }
+
+      case "get_budget_period": {
+        const { setting, today, period } = await loadBudgetPeriod(financeStore, user.id);
+        return toolSuccess({ budgetPeriod: setting, today, currentPeriod: period });
       }
 
       case "get_spending_forecast": {

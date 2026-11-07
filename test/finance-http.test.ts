@@ -5,11 +5,11 @@ import { test, type TestContext } from "node:test";
 import { createApplication } from "../src/server/application";
 import { hashToken, newToken } from "../src/server/auth/crypto";
 import type { AuthStore, User } from "../src/server/auth/store";
-import { defaultFinanceSettings, type FinanceSettings, type Income, type Plan, type IncomeInput, type IncomePage, type RepeatRule, type RepeatRuleInput, type Spending, type SpendingInput } from "../src/server/finance/model";
+import { defaultFinanceSettings, type FinanceSettings, type Income, type Plan, type IncomeInput, type IncomePage, type RepeatRule, type RepeatRuleInput, type SettingsPatch, type Spending, type SpendingInput } from "../src/server/finance/model";
 import { formatDateUtc, generateOccurrences, isRuleDueForSync } from "../src/server/finance/recurrence";
 import type { FinanceStore } from "../src/server/finance/store";
 import { incomeInput as validateIncome } from "../src/server/finance/validation";
-import { MemoryPlans } from "./support/memoryPlans";
+import { applySettingsPatch, MemoryPlans, paycheckInUse, planSpendingsBetween, resetPaycheck } from "./support/memoryPlans";
 
 class MemoryFinanceStore implements FinanceStore {
   planStore = new MemoryPlans(this);
@@ -45,11 +45,13 @@ class MemoryFinanceStore implements FinanceStore {
     if (!this.settings.has(userId)) this.settings.set(userId, defaultFinanceSettings());
     return structuredClone(this.settings.get(userId)!);
   }
-  async updateSettings(userId: string, patch: Partial<FinanceSettings>) {
-    const settings = { ...await this.getSettings(userId), ...structuredClone(patch) };
+  async updateSettings(userId: string, patch: SettingsPatch) {
+    const settings = applySettingsPatch(await this.getSettings(userId), patch, this.incomeRows(userId));
+    if (settings === "invalid-budget-period") return settings;
     this.settings.set(userId, settings);
     return structuredClone(settings);
   }
+  async listPlanSpendings(userId: string, from: string, to: string) { this.check(); return planSpendingsBetween(this.rows(userId).values(), from, to); }
   async listSpendings(userId: string, limit: number, cursor?: string, startDate?: string, endDate?: string) {
     this.check();
     await this.syncRepeatSpendings(userId);
@@ -95,11 +97,16 @@ class MemoryFinanceStore implements FinanceStore {
   async updateIncome(userId: string, id: string, input: IncomeInput) {
     this.check();
     if (!this.incomeRows(userId).has(id)) return undefined;
+    if (paycheckInUse(this.settings.get(userId), id, input)) return "paycheck-in-use" as const;
     const income = { id, ...input };
     this.incomeRows(userId).set(id, income);
     return structuredClone(income);
   }
-  async deleteIncome(userId: string, id: string) { this.check(); return this.incomeRows(userId).delete(id); }
+  async deleteIncome(userId: string, id: string) {
+    this.check();
+    resetPaycheck(this.settings.get(userId), id);
+    return this.incomeRows(userId).delete(id);
+  }
   async listRepeatRules(userId: string) {
     this.check();
     await this.syncRepeatSpendings(userId);
@@ -222,7 +229,7 @@ async function fixture(t: TestContext) {
 async function settings(response: Response): Promise<FinanceSettings> {
   assert.equal(response.status, 200);
   const settings = (await response.json() as { settings: FinanceSettings }).settings;
-  assert.deepEqual(Object.keys(settings).sort(), ["avatar", "categories", "timezone"]);
+  assert.deepEqual(Object.keys(settings).sort(), ["avatar", "budgetPeriod", "categories", "timezone"]);
   return settings;
 }
 async function created(response: Response): Promise<Spending> {
@@ -773,4 +780,149 @@ test("plans can be commitments and an upcoming occurrence can be recorded as don
   const rows = (await (await request("/spendings")).json() as { spendings: Spending[] }).spendings.filter(row => row.planId === lunch.id);
   assert.deepEqual(rows.map(row => row.planDate).sort(), ["2026-11-04", "2026-11-05", "2026-11-06"]);
   assert.equal((await request(`/plans/${randomUUID()}/occurrences/2026-11-06/done`, "POST")).status, 404);
+});
+
+type Json = Record<string, unknown>;
+const weeklyPay: IncomeInput = { source: "Salary", name: "Shop", amount: 500, frequency: "weekly", startDate: "2026-01-02", endDate: null };
+
+async function rawIncome(response: Response): Promise<Income> {
+  assert.equal(response.status, 201);
+  return (await response.json() as { income: Income }).income;
+}
+
+async function incomeId(request: (path: string, method?: string, body?: unknown, user?: number) => Promise<Response>, body: unknown, user = 0): Promise<string> {
+  const response = await request("/incomes", "POST", body, user);
+  assert.equal(response.status, 201);
+  return (await response.json() as { income: Income }).income.id;
+}
+
+test("income pay schedule fields round trip, defaults are omitted and bad combinations are rejected", async t => {
+  const { request } = await fixture(t);
+  // An old payload round trips with no new keys, and explicit defaults are normalized away.
+  const plain = await createdIncome(await request("/incomes", "POST", { ...incomeInput, interval: 1, weekendShift: false }));
+  assert.deepEqual(plain, { id: plain.id, ...incomeInput });
+  const biweekly = await rawIncome(await request("/incomes", "POST", { ...weeklyPay, interval: 2, weekendShift: true }));
+  assert.deepEqual(biweekly, { id: biweekly.id, ...weeklyPay, interval: 2, weekendShift: true });
+  const twice = await rawIncome(await request("/incomes", "POST", { ...incomeInput, frequency: "semimonthly", semimonthlyDays: [15, 31], weekendShift: true }));
+  assert.deepEqual(twice.semimonthlyDays, [15, 31]);
+  assert.equal(twice.weekendShift, true);
+  const updated = await request(`/incomes/${twice.id}`, "PUT", { ...incomeInput, frequency: "semimonthly", semimonthlyDays: [1, 16] });
+  assert.deepEqual(((await updated.json()) as { income: Income }).income, { id: twice.id, ...incomeInput, frequency: "semimonthly", semimonthlyDays: [1, 16] });
+
+  const bad: unknown[] = [
+    { ...weeklyPay, interval: 3 }, { ...weeklyPay, interval: 0 }, { ...weeklyPay, interval: 8 }, { ...weeklyPay, interval: "2" },
+    { ...incomeInput, interval: 2 },
+    { ...incomeInput, frequency: "semimonthly" },
+    ...[[31, 15], [15, 15], [0, 5], [1, 32], [1.5, 20], ["1", "2"], [1], [1, 2, 3]].map(days => ({ ...incomeInput, frequency: "semimonthly", semimonthlyDays: days })),
+    { ...incomeInput, semimonthlyDays: [1, 15] },
+    { ...incomeInput, frequency: "once", weekendShift: true }, { ...incomeInput, frequency: "daily", weekendShift: true },
+    { ...incomeInput, weekendShift: "yes" }, { ...incomeInput, weekendShift: null },
+    { ...incomeInput, unknown: 1 },
+  ];
+  for (const body of bad) assert.equal((await request("/incomes", "POST", body)).status, 400, JSON.stringify(body));
+  assert.equal((await request("/incomes", "POST", { ...incomeInput, weekendShift: true })).status, 201);
+});
+
+test("budget period settings validate, guard the paycheck income and reset when it is deleted", async t => {
+  const { request, store, users } = await fixture(t);
+  const put = (budgetPeriod: unknown) => request("/settings", "PUT", { budgetPeriod });
+  assert.deepEqual((await settings(await request("/settings"))).budgetPeriod, { mode: "calendar", startDay: 1, paycheckIncomeId: null });
+  assert.deepEqual((await settings(await put({ mode: "monthly_from_day", startDay: 25 }))).budgetPeriod, { mode: "monthly_from_day", startDay: 25, paycheckIncomeId: null });
+
+  for (const body of [{ startDay: 0 }, { startDay: 29 }, { startDay: 1.5 }, { startDay: "5" }, { mode: "weekly" }, { extra: 1 },
+    { mode: "paycheck", paycheckIncomeId: null }, { paycheckIncomeId: "nope" }, "text", null]) {
+    assert.equal((await put(body)).status, 400, JSON.stringify(body));
+  }
+  // Paycheck mode needs one of the user's own weekly, twice-a-month or monthly incomes.
+  assert.equal((await put({ mode: "paycheck" })).status, 400);
+  assert.equal((await put({ mode: "paycheck", paycheckIncomeId: randomUUID() })).status, 400);
+  const foreign = await incomeId(request, weeklyPay, 1);
+  assert.equal((await put({ mode: "paycheck", paycheckIncomeId: foreign })).status, 400);
+  const daily = await incomeId(request, { ...weeklyPay, frequency: "daily" });
+  assert.equal((await put({ mode: "paycheck", paycheckIncomeId: daily })).status, 400);
+  assert.equal(store.settings.get(users[0].id)!.budgetPeriod.mode, "monthly_from_day", "a rejected patch writes nothing");
+
+  const pay = await incomeId(request, weeklyPay);
+  assert.deepEqual((await settings(await put({ mode: "paycheck", paycheckIncomeId: pay }))).budgetPeriod, { mode: "paycheck", startDay: 25, paycheckIncomeId: pay });
+  // An absent sub-key keeps the stored id, and an explicit null clears it.
+  assert.equal((await settings(await put({ startDay: 3 }))).budgetPeriod.paycheckIncomeId, pay);
+  assert.equal((await put({ paycheckIncomeId: null })).status, 400, "paycheck mode without an income");
+  assert.deepEqual((await settings(await put({ mode: "calendar", paycheckIncomeId: null }))).budgetPeriod, { mode: "calendar", startDay: 3, paycheckIncomeId: null });
+  await settings(await put({ mode: "paycheck", paycheckIncomeId: pay }));
+
+  // The chosen income can change freely except to a frequency that cannot be a paycheck.
+  assert.equal((await request(`/incomes/${pay}`, "PUT", { ...weeklyPay, amount: 600, frequency: "monthly" })).status, 200);
+  for (const frequency of ["daily", "once", "yearly"]) {
+    assert.equal((await request(`/incomes/${pay}`, "PUT", { ...weeklyPay, frequency, endDate: null })).status, 400, frequency);
+  }
+  assert.equal((await request(`/incomes/${daily}`, "PUT", { ...weeklyPay, frequency: "yearly" })).status, 200, "other incomes change freely");
+
+  // Deleting another income leaves the setting alone, deleting the paycheck income resets it.
+  assert.equal((await request(`/incomes/${daily}`, "DELETE")).status, 204);
+  assert.equal((await settings(await request("/settings"))).budgetPeriod.mode, "paycheck");
+  assert.equal((await request(`/incomes/${pay}`, "DELETE")).status, 204);
+  assert.deepEqual((await settings(await request("/settings"))).budgetPeriod, { mode: "calendar", startDay: 3, paycheckIncomeId: null });
+});
+
+test("GET /plans/summary is routed before the plan id matcher and sums one budget period", async t => {
+  const { request, store } = await fixture(t);
+  store.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+  await request("/settings", "PUT", { timezone: "UTC" });
+  const pay = await incomeId(request, { source: "Salary", name: "", amount: 1000, frequency: "monthly", startDate: "2026-01-25", endDate: null });
+  assert.equal((await request("/settings", "PUT", { budgetPeriod: { mode: "paycheck", paycheckIncomeId: pay } })).status, 200);
+  const rent = { ...lunchPlan, description: "Rent", amount: 400, frequency: "monthly", startDate: "2026-11-01", time: "08:00", sure: true };
+  assert.equal((await request("/plans", "POST", rent)).status, 201);
+  assert.equal((await request("/plans", "POST", { ...lunchPlan, description: "Coffee", amount: 50, frequency: "once", startDate: "2026-12-10", time: "09:00" })).status, 201);
+
+  const response = await request("/plans/summary?date=2026-12-10");
+  assert.equal(response.status, 200);
+  const { summary } = await response.json() as { summary: Json & { occurrences: { description: string; date: string }[]; period: Json; payments: Json[] } };
+  assert.deepEqual(summary.period, { start: "2026-11-25", end: "2026-12-24", nextStart: "2026-12-25", mode: "paycheck" });
+  assert.deepEqual(summary.payments.map(payment => payment.date), ["2026-11-25"]);
+  // The bill due on the 1st belongs to the paycheck before it.
+  assert.deepEqual(summary.occurrences.map(item => [item.description, item.date]), [["Rent", "2026-12-01"], ["Coffee", "2026-12-10"]]);
+  assert.deepEqual([summary.income, summary.spent, summary.committed, summary.tentative, summary.left], [1000, 0, 400, 50, 550]);
+
+  // No date means today in the saved time zone.
+  const now = (await (await request("/plans/summary")).json() as { summary: { today: string; period: { start: string; end: string } } }).summary;
+  assert.equal(now.today, new Date().toISOString().slice(0, 10));
+  assert.ok(now.period.start <= now.today && now.today <= now.period.end);
+
+  assert.equal((await request("/plans/summary?date=2026-13-40")).status, 400);
+  assert.equal((await request("/plans/summary?date=nope")).status, 400);
+  assert.equal((await request("/plans/summary", "POST", {})).status, 404);
+  assert.equal((await request("/plans/summary", "DELETE")).status, 404);
+  // Plan ids still route to the plan.
+  assert.equal((await request(`/plans/${randomUUID()}`, "PUT", lunchPlan)).status, 404);
+  assert.equal((await request("/plans/summary?date=2026-12-10", "GET", undefined, 1)).status, 200);
+});
+
+test("leaving paycheck mode clears the paycheck income, so editing or deleting it later changes nothing else", async t => {
+  const { request, store, users } = await fixture(t);
+  const pay = await incomeId(request, weeklyPay);
+  assert.equal((await request("/settings", "PUT", { budgetPeriod: { mode: "paycheck", paycheckIncomeId: pay } })).status, 200);
+  // Switch without sending paycheckIncomeId: the id is cleared with the mode.
+  const left = await settings(await request("/settings", "PUT", { budgetPeriod: { mode: "monthly_from_day", startDay: 10 } }));
+  assert.deepEqual(left.budgetPeriod, { mode: "monthly_from_day", startDay: 10, paycheckIncomeId: null });
+  assert.equal((await request(`/incomes/${pay}`, "PUT", { ...weeklyPay, frequency: "daily" })).status, 200, "no longer guarded");
+  assert.equal((await request(`/incomes/${pay}`, "DELETE")).status, 204);
+  assert.deepEqual((await settings(await request("/settings"))).budgetPeriod, { mode: "monthly_from_day", startDay: 10, paycheckIncomeId: null });
+  // A stored paycheck mode without an income never blocks other settings writes.
+  store.settings.get(users[0].id)!.budgetPeriod = { mode: "paycheck", startDay: 1, paycheckIncomeId: null };
+  assert.equal((await request("/settings", "PUT", { avatar: "https://example.test/a.png" })).status, 200);
+});
+
+test("an occurrence marked done early is not projected again in the period of its plan date", async t => {
+  const { request, store } = await fixture(t);
+  store.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+  await request("/settings", "PUT", { timezone: "UTC", budgetPeriod: { mode: "monthly_from_day", startDay: 5 } });
+  const rent = (await (await request("/plans", "POST", { ...lunchPlan, description: "Rent", amount: 400, frequency: "monthly", startDate: "2026-11-05", time: "08:00", sure: true })).json() as { plan: Plan }).plan;
+  const before = (await (await request("/plans/summary?date=2026-11-05")).json() as { summary: { committed: number } }).summary;
+  assert.equal(before.committed, 400);
+  assert.equal((await request(`/plans/${rent.id}/occurrences/2026-11-05/done`, "POST")).status, 201);
+  // The spending is dated 2026-11-04 (previous period) but belongs to the plan date 2026-11-05.
+  const next = (await (await request("/plans/summary?date=2026-11-05")).json() as { summary: { committed: number; spent: number; left: number; period: { start: string } } }).summary;
+  assert.deepEqual([next.period.start, next.committed, next.spent], ["2026-11-05", 0, 0]);
+  const prior = (await (await request("/plans/summary?date=2026-11-04")).json() as { summary: { spent: number; committed: number } }).summary;
+  assert.deepEqual([prior.spent, prior.committed], [400, 0], "counted once, in the period it was paid");
 });

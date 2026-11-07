@@ -21,7 +21,7 @@ test("Neon finance: defaults, cross-worker partial settings, scoped CRUD, histor
     const [initial, sameInitial] = await Promise.all([store.getSettings(users[0]), otherWorker.getSettings(users[0])]);
     assert.deepEqual(initial, defaultFinanceSettings());
     assert.deepEqual(sameInitial, initial);
-    assert.deepEqual(Object.keys(initial).sort(), ["avatar", "categories", "timezone"]);
+    assert.deepEqual(Object.keys(initial).sort(), ["avatar", "budgetPeriod", "categories", "timezone"]);
     const legacyColumns = "SELECT base_daily_spending, max_daily_spending FROM finance_settings WHERE user_id = $1";
     const legacyDefaults = await sql.query(legacyColumns, [users[0]]);
     assert.equal(Number(legacyDefaults[0].base_daily_spending), 0);
@@ -32,7 +32,7 @@ test("Neon finance: defaults, cross-worker partial settings, scoped CRUD, histor
     assert.deepEqual(await store.listSpendings(users[0], 500), { spendings: [], nextCursor: null });
     const avatar = "https://example.test/avatar.png";
     const updates = await Promise.all([store.updateSettings(users[0], { categories: initial.categories }), otherWorker.updateSettings(users[0], { avatar })]);
-    for (const updated of updates) assert.deepEqual(Object.keys(updated).sort(), ["avatar", "categories", "timezone"]);
+    for (const updated of updates) assert.deepEqual(Object.keys(updated).sort(), ["avatar", "budgetPeriod", "categories", "timezone"]);
     const updated = { ...initial, avatar };
     assert.deepEqual(await otherWorker.getSettings(users[0]), updated);
     assert.deepEqual(await store.updateSettings(users[0], {}), updated);
@@ -333,7 +333,8 @@ test("Neon finance: plans materialize once per occurrence, honour exceptions, an
     const kept = await sql.query("SELECT plan_id FROM finance_spendings WHERE user_id = $1", [users[0]]);
     assert.equal(kept.length, 2);
     assert.equal(kept.every(row => row.plan_id === null), true);
-    assert.equal((await store.updateSettings(users[0], { timezone: "UTC" })).timezone, "UTC");
+    const zoned = await store.updateSettings(users[0], { timezone: "UTC" });
+    assert.equal(typeof zoned === "string" ? zoned : zoned.timezone, "UTC");
   } finally {
     for (const id of users) await sql.query("DELETE FROM auth_users WHERE id = $1", [id]);
   }
@@ -363,5 +364,68 @@ test("Neon finance: 008 turns repeat rules into sure plans, keeps the past, drop
     assert.deepEqual(await store.listRepeatRules(user), []);
   } finally {
     await sql.query("DELETE FROM auth_users WHERE id = $1", [user]);
+  }
+});
+
+test("Neon pay schedules and budget period (needs migration 009): income options, settings guard, paycheck mode reset", { skip: !databaseUrl, timeout: 30000 }, async () => {
+  const sql = neon(databaseUrl!);
+  const store = createFinanceStore(databaseUrl!);
+  const users = [randomUUID(), randomUUID()];
+  const base: IncomeInput = { source: "Salary", name: "", amount: 100, frequency: "weekly", startDate: "2026-01-02", endDate: null };
+  try {
+    for (const id of users) await sql.query("INSERT INTO auth_users (id, name, email, password_hash) VALUES ($1, 'Period test', $2, 'unused')", [id, `period-${id}@example.test`]);
+
+    // Income options round trip, defaults are not returned.
+    const plain = await store.createIncome(users[0], base);
+    assert.deepEqual(plain, { id: plain.id, ...base });
+    const biweekly = await store.createIncome(users[0], { ...base, interval: 2, weekendShift: true });
+    assert.deepEqual(biweekly, { id: biweekly.id, ...base, interval: 2, weekendShift: true });
+    const twice = await store.createIncome(users[0], { ...base, frequency: "semimonthly", semimonthlyDays: [15, 31], weekendShift: true });
+    assert.deepEqual(twice, { id: twice.id, ...base, frequency: "semimonthly", semimonthlyDays: [15, 31], weekendShift: true });
+    assert.deepEqual(await store.updateIncome(users[0], twice.id, { ...base, frequency: "monthly" }), { id: twice.id, ...base, frequency: "monthly" });
+    await assert.rejects(store.createIncome(users[0], { ...base, frequency: "monthly", interval: 2 }), "interval needs weekly");
+    await assert.rejects(store.createIncome(users[0], { ...base, frequency: "daily", weekendShift: true }), "shift is not for daily income");
+    await assert.rejects(store.createIncome(users[0], { ...base, frequency: "semimonthly", semimonthlyDays: [20, 10] }), "days must be ordered");
+
+    // Settings: defaults, save, absent key keeps, explicit null clears, invalid ids are rejected without writing.
+    assert.deepEqual((await store.getSettings(users[0])).budgetPeriod, { mode: "calendar", startDay: 1, paycheckIncomeId: null });
+    assert.equal(await store.updateSettings(users[0], { budgetPeriod: { mode: "paycheck" } }), "invalid-budget-period", "paycheck mode needs an income");
+    assert.equal(await store.updateSettings(users[0], { budgetPeriod: { mode: "paycheck", paycheckIncomeId: randomUUID() } }), "invalid-budget-period");
+    const foreign = await store.createIncome(users[1], base);
+    assert.equal(await store.updateSettings(users[0], { budgetPeriod: { mode: "paycheck", paycheckIncomeId: foreign.id } }), "invalid-budget-period");
+    const daily = await store.createIncome(users[0], { ...base, frequency: "daily" });
+    assert.equal(await store.updateSettings(users[0], { budgetPeriod: { mode: "paycheck", paycheckIncomeId: daily.id } }), "invalid-budget-period");
+    assert.equal((await store.getSettings(users[0])).budgetPeriod.mode, "calendar", "nothing was written");
+    assert.deepEqual((await store.updateSettings(users[0], { budgetPeriod: { mode: "paycheck", paycheckIncomeId: plain.id, startDay: 20 } }) as { budgetPeriod: unknown }).budgetPeriod,
+      { mode: "paycheck", startDay: 20, paycheckIncomeId: plain.id });
+    assert.equal(((await store.updateSettings(users[0], { budgetPeriod: { startDay: 3 } })) as { budgetPeriod: { paycheckIncomeId: string } }).budgetPeriod.paycheckIncomeId, plain.id, "an absent key keeps the id");
+    assert.equal(await store.updateSettings(users[0], { budgetPeriod: { paycheckIncomeId: null } }), "invalid-budget-period", "paycheck mode cannot lose its income");
+    // Other settings never fail on the budget period.
+    assert.notEqual(await store.updateSettings(users[0], { avatar: "https://example.test/a.png" }), "invalid-budget-period");
+
+    // The paycheck income cannot become daily, once or yearly.
+    for (const frequency of ["daily", "once", "yearly"] as const) {
+      assert.equal(await store.updateIncome(users[0], plain.id, { ...base, frequency }), "paycheck-in-use", frequency);
+    }
+    assert.ok(typeof await store.updateIncome(users[0], plain.id, { ...base, frequency: "monthly" }) === "object");
+    assert.ok(typeof await store.updateIncome(users[0], daily.id, { ...base, frequency: "yearly" }) === "object", "other incomes change freely");
+
+    // Leaving paycheck mode clears the id: edit and delete then change nothing in settings.
+    const left = await store.updateSettings(users[0], { budgetPeriod: { mode: "monthly_from_day", startDay: 10 } }) as { budgetPeriod: unknown };
+    assert.deepEqual(left.budgetPeriod, { mode: "monthly_from_day", startDay: 10, paycheckIncomeId: null });
+    assert.ok(typeof await store.updateIncome(users[0], plain.id, { ...base, frequency: "daily" }) === "object");
+    assert.equal(await store.deleteIncome(users[0], plain.id), true);
+    assert.deepEqual((await store.getSettings(users[0])).budgetPeriod, { mode: "monthly_from_day", startDay: 10, paycheckIncomeId: null });
+
+    // Deleting the paycheck income in paycheck mode resets the period, and no settings row is created for other users.
+    const pay = await store.createIncome(users[0], base);
+    assert.notEqual(await store.updateSettings(users[0], { budgetPeriod: { mode: "paycheck", paycheckIncomeId: pay.id } }), "invalid-budget-period");
+    assert.equal(await store.deleteIncome(users[0], pay.id), true);
+    assert.deepEqual((await store.getSettings(users[0])).budgetPeriod, { mode: "calendar", startDay: 10, paycheckIncomeId: null });
+    assert.deepEqual(await sql.query("SELECT user_id FROM finance_settings WHERE user_id = $1", [users[1]]), [], "deleting an income creates no settings row");
+    assert.equal(await store.deleteIncome(users[1], foreign.id), true);
+    assert.deepEqual(await sql.query("SELECT user_id FROM finance_settings WHERE user_id = $1", [users[1]]), []);
+  } finally {
+    for (const id of users) await sql.query("DELETE FROM auth_users WHERE id = $1", [id]);
   }
 });

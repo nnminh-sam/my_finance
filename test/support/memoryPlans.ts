@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { addDays, dueOccurrences, isPlanDate, localNowStamp, planOccurrences, stampOf } from "../../src/lib/plans";
-import type { FinanceSettings, Plan, PlanExceptionInput, PlanInput, Spending } from "../../src/server/finance/model";
+import type { FinanceSettings, Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, SettingsPatch, Spending } from "../../src/server/finance/model";
 
 interface Host {
   getSettings(userId: string): Promise<FinanceSettings>;
@@ -128,4 +128,40 @@ export class MemoryPlans {
     }
     return created;
   }
+}
+
+const PAYCHECK_FREQUENCIES = ["weekly", "semimonthly", "monthly"];
+
+/**
+ * In-memory twin of the store's updateSettings. Only a patch with budgetPeriod is checked; a mode other than
+ * paycheck clears the id, and paycheck mode needs one of the user's usable incomes.
+ */
+export function applySettingsPatch(current: FinanceSettings, patch: SettingsPatch, incomes: Map<string, Income>): FinanceSettings | "invalid-budget-period" {
+  const { budgetPeriod, ...rest } = structuredClone(patch);
+  const next: FinanceSettings = { ...current, ...rest };
+  if (budgetPeriod) {
+    const merged = { ...current.budgetPeriod, ...budgetPeriod };
+    if (merged.mode !== "paycheck") merged.paycheckIncomeId = null;
+    const income = merged.paycheckIncomeId ? incomes.get(merged.paycheckIncomeId) : undefined;
+    if (merged.mode === "paycheck" && !(income && PAYCHECK_FREQUENCIES.includes(income.frequency))) return "invalid-budget-period";
+    next.budgetPeriod = merged;
+  }
+  return next;
+}
+
+/** In-memory twin of the store's updateIncome guard (paycheck mode only). */
+export function paycheckInUse(settings: FinanceSettings | undefined, id: string, input: IncomeInput): boolean {
+  return settings?.budgetPeriod.mode === "paycheck" && settings.budgetPeriod.paycheckIncomeId === id && !PAYCHECK_FREQUENCIES.includes(input.frequency);
+}
+
+/** In-memory twin of the store's deleteIncome reset (only an existing settings row in paycheck mode is touched). */
+export function resetPaycheck(settings: FinanceSettings | undefined, id: string): void {
+  if (settings?.budgetPeriod.mode === "paycheck" && settings.budgetPeriod.paycheckIncomeId === id) {
+    settings.budgetPeriod = { ...settings.budgetPeriod, mode: "calendar", paycheckIncomeId: null };
+  }
+}
+
+/** In-memory twin of listPlanSpendings. */
+export function planSpendingsBetween(rows: Iterable<Spending>, from: string, to: string): Spending[] {
+  return structuredClone([...rows].filter(row => row.planId && row.planDate && row.planDate >= from && row.planDate <= to));
 }

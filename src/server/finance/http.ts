@@ -1,7 +1,8 @@
 import { authenticateRequest, HttpError } from "../auth/http";
 import type { AuthStore } from "../auth/store";
+import { loadPlanPeriodSummary } from "./periodSummary";
 import type { FinanceStore } from "./store";
-import { incomeInput, pagination, planDate, planExceptionInput, planInput, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
+import { incomeInput, pagination, planDate, planExceptionInput, planInput, planSummaryDate, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
 
 function planId(value: unknown): string {
   try { return uuid(value); }
@@ -63,7 +64,9 @@ export async function handleFinanceRequest(
       return jsonResponse({ settings: await store.getSettings(user.id) });
     }
     if (method === "PUT") {
-      return jsonResponse({ settings: await store.updateSettings(user.id, settingsPatch(body)) });
+      const settings = await store.updateSettings(user.id, settingsPatch(body));
+      if (settings === "invalid-budget-period") throw new HttpError(400, "Paycheck period needs one of your weekly, twice-a-month or monthly incomes");
+      return jsonResponse({ settings });
     }
   }
 
@@ -115,6 +118,7 @@ export async function handleFinanceRequest(
     if (method === "PUT") {
       const income = await store.updateIncome(user.id, incomeId(rawId), incomeInput(body));
       if (!income) throw new HttpError(404, "Income not found");
+      if (income === "paycheck-in-use") throw new HttpError(400, "This income sets the paycheck budget period, so it must stay weekly, twice a month or monthly");
       return jsonResponse({ income });
     }
     if (method === "DELETE") {
@@ -162,6 +166,11 @@ export async function handleFinanceRequest(
       if (plan === "invalid-category") throw new HttpError(400, "Category must exist in current settings");
       return jsonResponse({ plan }, 201);
     }
+  }
+
+  // Before the /plans/<id> matcher below, otherwise "summary" would be read as a plan id.
+  if (subpath === "/plans/summary" && (method === "GET" || method === "HEAD")) {
+    return jsonResponse({ summary: await loadPlanPeriodSummary(store, user.id, planSummaryDate(query)) });
   }
 
   const planSplitMatch = /^\/plans\/([^/]+)\/split$/.exec(subpath);

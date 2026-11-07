@@ -1,3 +1,4 @@
+import type { BudgetPeriodSetting } from './lib/periods';
 import type { PlanException, PlanFrequency } from './lib/plans';
 
 export type Category = string;
@@ -70,14 +71,19 @@ export interface RepeatRule extends RepeatRuleInput {
 }
 
 export type IncomeFrequency = 'once' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+// Quick entry only offers IncomeFrequency; a twice-a-month schedule needs two days, so it is set in the income form.
+export type IncomeScheduleFrequency = IncomeFrequency | 'semimonthly';
 
 export interface IncomeInput {
   source: string; // e.g. Salary, Freelance, Gift
   name: string; // e.g. employer or client; may be empty
   amount: number; // paid per occurrence
-  frequency: IncomeFrequency;
+  frequency: IncomeScheduleFrequency;
   startDate: string; // YYYY-MM-DD; the payment date for one-time income
   endDate: string | null; // YYYY-MM-DD inclusive; null = no end (always null for one-time income)
+  interval?: 1 | 2 | 4; // weekly only: every N weeks; omitted = 1
+  semimonthlyDays?: [number, number]; // semimonthly only: two days of the month (1-31, first < second; 31 = last day)
+  weekendShift?: boolean; // paid on the Friday before a Saturday or Sunday payday; omitted = false
 }
 
 export interface Income extends IncomeInput {
@@ -92,4 +98,5 @@ export interface UserSettings {
   email: string;
   avatar: string;
   categories: CategoryData[];
+  budgetPeriod: BudgetPeriodSetting;
 }

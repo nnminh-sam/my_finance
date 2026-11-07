@@ -1,19 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { addDays, dueOccurrences, isPlanDate, localNowStamp, planOccurrences, stampOf, type PlanException } from "../../lib/plans";
-import { defaultFinanceSettings, type FinanceSettings, type Income, type IncomeInput, type IncomePage, type Plan, type PlanExceptionInput, type PlanInput, type RepeatRule, type RepeatRuleInput, type Spending, type SpendingInput, type SpendingPage } from "./model";
+import { defaultFinanceSettings, type FinanceSettings, type Income, type IncomeInput, type IncomePage, type Plan, type PlanExceptionInput, type PlanInput, type RepeatRule, type RepeatRuleInput, type SettingsPatch, type Spending, type SpendingInput, type SpendingPage } from "./model";
 import { formatDateUtc, generateOccurrences, isRuleDueForSync, type RecurrenceState } from "./recurrence";
 
 export interface FinanceStore {
   getSettings(userId: string): Promise<FinanceSettings>;
-  updateSettings(userId: string, patch: Partial<FinanceSettings>): Promise<FinanceSettings>;
+  /** "invalid-budget-period": the paycheck income is missing, not the user's, or not weekly, semimonthly or monthly. Nothing is written. */
+  updateSettings(userId: string, patch: SettingsPatch): Promise<FinanceSettings | "invalid-budget-period">;
+  /** Spendings made from a plan whose occurrence date is in [fromDate, toDate], whatever date they were paid on (early "Done now"). */
+  listPlanSpendings(userId: string, fromDate: string, toDate: string): Promise<Spending[]>;
   listSpendings(userId: string, limit: number, cursor?: string, startDate?: string, endDate?: string): Promise<SpendingPage>;
   createSpending(userId: string, input: SpendingInput): Promise<Spending | undefined>;
   updateSpending(userId: string, id: string, input: SpendingInput): Promise<Spending | "not-found" | "invalid-category">;
   deleteSpending(userId: string, id: string): Promise<boolean>;
   listIncomes(userId: string, limit: number, cursor?: string): Promise<IncomePage>;
   createIncome(userId: string, input: IncomeInput): Promise<Income>;
-  updateIncome(userId: string, id: string, input: IncomeInput): Promise<Income | undefined>;
+  /** "paycheck-in-use": the income is the paycheck of the budget period and the new frequency cannot be one. */
+  updateIncome(userId: string, id: string, input: IncomeInput): Promise<Income | undefined | "paycheck-in-use">;
+  /** Also resets the budget period to calendar when this income was its paycheck. */
   deleteIncome(userId: string, id: string): Promise<boolean>;
   listRepeatRules(userId: string): Promise<RepeatRule[]>;
   createRepeatRule(userId: string, input: RepeatRuleInput): Promise<{ repeatRule: RepeatRule; spendings: Spending[] } | undefined>;
@@ -39,6 +44,11 @@ function settings(row: Row): FinanceSettings {
     avatar: String(row.avatar),
     categories: row.categories as FinanceSettings["categories"],
     timezone: String(row.timezone),
+    budgetPeriod: {
+      mode: String(row.budget_period_mode) as FinanceSettings["budgetPeriod"]["mode"],
+      startDay: Number(row.budget_period_start_day),
+      paycheckIncomeId: row.paycheck_income_id ? String(row.paycheck_income_id) : null,
+    },
   };
 }
 function spending(row: Row): Spending {
@@ -68,12 +78,18 @@ function plan(row: Row): Plan {
     })),
   };
 }
+// Schedule options that equal their default are left out, so incomes that do not use them look as before.
 function income(row: Row): Income {
-  return {
+  const result: Income = {
     id: String(row.id), source: String(row.source), name: String(row.name), amount: Number(row.amount),
     frequency: String(row.frequency) as Income["frequency"], startDate: String(row.start_date),
     endDate: row.end_date ? String(row.end_date) : null,
   };
+  const interval = Number(row.interval);
+  if (interval === 2 || interval === 4) result.interval = interval;
+  if (result.frequency === "semimonthly") result.semimonthlyDays = [Number(row.semimonthly_day_1), Number(row.semimonthly_day_2)];
+  if (row.weekend_shift === true) result.weekendShift = true;
+  return result;
 }
 function repeatRule(row: Row): RepeatRule {
   return {
@@ -96,7 +112,12 @@ function repeatRule(row: Row): RepeatRule {
   };
 }
 
-const incomeColumns = "id, source, name, amount, frequency, to_char(start_date, 'YYYY-MM-DD') AS start_date, to_char(end_date, 'YYYY-MM-DD') AS end_date";
+const incomeColumns = "id, source, name, amount, frequency, to_char(start_date, 'YYYY-MM-DD') AS start_date, to_char(end_date, 'YYYY-MM-DD') AS end_date, interval, semimonthly_day_1, semimonthly_day_2, weekend_shift";
+const settingsColumns = "avatar, categories, timezone, budget_period_mode, budget_period_start_day, paycheck_income_id::text AS paycheck_income_id";
+// Income columns shared by the INSERT and UPDATE parameter lists ($9..$12).
+function scheduleValues(input: IncomeInput): unknown[] {
+  return [input.interval ?? 1, input.semimonthlyDays?.[0] ?? null, input.semimonthlyDays?.[1] ?? null, input.weekendShift === true];
+}
 const spendingColumns = "id, amount, description, category, to_char(date, 'YYYY-MM-DD') AS date, to_char(date + time, 'HH24:MI') AS time, repeat_rule_id::text AS repeat_rule_id, plan_id::text AS plan_id, to_char(plan_date, 'YYYY-MM-DD') AS plan_date";
 // Selected from an alias/CTE named `p`; exceptions already materialized are omitted.
 const planColumns = `p.id, p.amount, p.description, p.category, to_char(p.start_date + p.time, 'HH24:MI') AS time,
@@ -133,19 +154,42 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
   const store: FinanceStore = {
     async getSettings(userId) {
       const results = await sql.transaction([
-        ensure(userId), sql.query("SELECT avatar, categories, timezone FROM finance_settings WHERE user_id = $1", [userId]),
+        ensure(userId), sql.query(`SELECT ${settingsColumns} FROM finance_settings WHERE user_id = $1`, [userId]),
       ], { isolationLevel: "ReadCommitted" });
       return settings(results[1][0]);
     },
     async updateSettings(userId, patch) {
+      const period = patch.budgetPeriod;
+      const setsPaycheck = period !== undefined && Object.hasOwn(period, "paycheckIncomeId");
+      // Only a patch that names budgetPeriod is checked, so avatar, categories and timezone saves never fail on it.
+      // The resulting mode and id must agree: a mode other than paycheck clears the id, paycheck mode needs one
+      // of the user's own weekly, semimonthly or monthly incomes.
+      const mode = "COALESCE($5::text, budget_period_mode)";
+      const nextId = `(CASE WHEN NOT $9::boolean THEN paycheck_income_id WHEN ${mode} <> 'paycheck' THEN NULL
+        WHEN $7::boolean THEN $8::uuid ELSE paycheck_income_id END)`;
       const results = await sql.transaction([
         ensure(userId), lock(userId),
         sql.query(`UPDATE finance_settings SET
-          avatar = COALESCE($2::text, avatar), categories = COALESCE($3::jsonb, categories), timezone = COALESCE($4::text, timezone)
-          WHERE user_id = $1 RETURNING avatar, categories, timezone`, [userId,
-          patch.avatar ?? null, patch.categories === undefined ? null : JSON.stringify(patch.categories), patch.timezone ?? null]),
+          avatar = COALESCE($2::text, avatar), categories = COALESCE($3::jsonb, categories), timezone = COALESCE($4::text, timezone),
+          budget_period_mode = ${mode},
+          budget_period_start_day = COALESCE($6::integer, budget_period_start_day),
+          paycheck_income_id = ${nextId}
+          WHERE user_id = $1 AND (
+            NOT $9::boolean
+            OR (${nextId} IS NULL AND ${mode} <> 'paycheck')
+            OR EXISTS (SELECT 1 FROM finance_incomes i WHERE i.user_id = $1
+              AND i.id = ${nextId}
+              AND i.frequency IN ('weekly', 'semimonthly', 'monthly')))
+          RETURNING ${settingsColumns}`, [userId,
+          patch.avatar ?? null, patch.categories === undefined ? null : JSON.stringify(patch.categories), patch.timezone ?? null,
+          period?.mode ?? null, period?.startDay ?? null, setsPaycheck, period?.paycheckIncomeId ?? null, period !== undefined]),
       ], { isolationLevel: "ReadCommitted" });
-      return settings(results[2][0]);
+      return results[2][0] ? settings(results[2][0]) : "invalid-budget-period";
+    },
+    async listPlanSpendings(userId, fromDate, toDate) {
+      const rows = await query(`SELECT ${spendingColumns} FROM finance_spendings
+        WHERE user_id = $1 AND plan_id IS NOT NULL AND plan_date BETWEEN $2::date AND $3::date ORDER BY id ASC LIMIT 10000`, [userId, fromDate, toDate]);
+      return rows.map(spending);
     },
     async listSpendings(userId, limit, cursor, startDate, endDate) {
       await store.syncRepeatSpendings(userId).catch(() => 0);
@@ -191,21 +235,36 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
       return { incomes, nextCursor: rows.length > limit ? incomes[incomes.length - 1].id : null };
     },
     async createIncome(userId, input) {
-      const rows = await query(`INSERT INTO finance_incomes (user_id, id, source, name, amount, frequency, start_date, end_date)
-        VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8::date) RETURNING ${incomeColumns}`,
-        [userId, randomUUID(), input.source, input.name, input.amount, input.frequency, input.startDate, input.endDate]);
+      const rows = await query(`INSERT INTO finance_incomes (user_id, id, source, name, amount, frequency, start_date, end_date,
+          interval, semimonthly_day_1, semimonthly_day_2, weekend_shift)
+        VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8::date, $9, $10, $11, $12) RETURNING ${incomeColumns}`,
+        [userId, randomUUID(), input.source, input.name, input.amount, input.frequency, input.startDate, input.endDate, ...scheduleValues(input)]);
       return income(rows[0]);
     },
     async updateIncome(userId, id, input) {
-      const rows = await query(`UPDATE finance_incomes SET source = $3, name = $4, amount = $5, frequency = $6,
-          start_date = $7::date, end_date = $8::date
-        WHERE user_id = $1 AND id = $2 RETURNING ${incomeColumns}`,
-        [userId, id, input.source, input.name, input.amount, input.frequency, input.startDate, input.endDate]);
-      return rows[0] ? income(rows[0]) : undefined;
+      // While the budget period is in paycheck mode, its paycheck income cannot become a frequency that is not usable as one.
+      const rows = await query(`WITH updated AS (
+          UPDATE finance_incomes SET source = $3, name = $4, amount = $5, frequency = $6,
+            start_date = $7::date, end_date = $8::date,
+            interval = $9, semimonthly_day_1 = $10, semimonthly_day_2 = $11, weekend_shift = $12
+          WHERE user_id = $1 AND id = $2
+            AND NOT (EXISTS (SELECT 1 FROM finance_settings s WHERE s.user_id = $1 AND s.paycheck_income_id = $2 AND s.budget_period_mode = 'paycheck')
+              AND $6 NOT IN ('weekly', 'semimonthly', 'monthly'))
+          RETURNING ${incomeColumns}
+        ) SELECT (SELECT row_to_json(updated) FROM updated) AS income,
+          EXISTS (SELECT 1 FROM finance_incomes WHERE user_id = $1 AND id = $2) AS found`,
+        [userId, id, input.source, input.name, input.amount, input.frequency, input.startDate, input.endDate, ...scheduleValues(input)]);
+      if (rows[0].income) return income(rows[0].income as Row);
+      return rows[0].found ? "paycheck-in-use" : undefined;
     },
     async deleteIncome(userId, id) {
-      const rows = await query("DELETE FROM finance_incomes WHERE user_id = $1 AND id = $2 RETURNING id", [userId, id]);
-      return rows.length > 0;
+      // Only updates an existing settings row (and only in paycheck mode), so deleting an income never creates or locks one.
+      const results = await sql.transaction([
+        sql.query(`UPDATE finance_settings SET budget_period_mode = 'calendar', paycheck_income_id = NULL
+          WHERE user_id = $1 AND paycheck_income_id = $2 AND budget_period_mode = 'paycheck'`, [userId, id]),
+        sql.query("DELETE FROM finance_incomes WHERE user_id = $1 AND id = $2 RETURNING id", [userId, id]),
+      ], { isolationLevel: "ReadCommitted" });
+      return results[1].length > 0;
     },
     async deleteSpending(userId, id) {
       const results = await sql.transaction([
