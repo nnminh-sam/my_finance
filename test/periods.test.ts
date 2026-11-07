@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { monthRange } from '../src/lib/income';
-import { periodOf, periodsBetween, type BudgetPeriodSetting, type PeriodIncome } from '../src/lib/periods';
+import { getMonthIncome, monthRange } from '../src/lib/income';
+import {
+  adjacentPeriod, adjacentPeriodDate, DEFAULT_SHOW_BY, markerSets, periodDayLabel, periodOf, periodRangeLabel, periodsBetween, SHOW_BY, viewPeriodIncome, viewPeriodOf,
+  type BudgetPeriodSetting, type PeriodIncome,
+} from '../src/lib/periods';
 import { addDays, MAX_RANGE_DAYS } from '../src/lib/plans';
 
 function pay(id: string, frequency: PeriodIncome['frequency'], startDate: string, extra: Partial<PeriodIncome> = {}): PeriodIncome {
@@ -111,4 +114,84 @@ test('periodsBetween returns contiguous overlapping periods and caps the range',
   const from = '2020-01-01';
   assert.ok(periodsBetween(calendar, [], from, addDays(from, MAX_RANGE_DAYS)).length > 100);
   assert.throws(() => periodsBetween(calendar, [], from, addDays(from, MAX_RANGE_DAYS + 1)), RangeError);
+});
+
+test('viewPeriodOf: pay cycle follows the saved setting, calendar month ignores it', () => {
+  assert.deepEqual(bounds(viewPeriodOf(fromDay(25), 'pay_cycle', [], '2026-11-30')), ['2026-11-25', '2026-12-24']);
+  assert.deepEqual(bounds(viewPeriodOf(fromDay(25), 'calendar_month', [], '2026-11-30')), ['2026-11-01', '2026-11-30']);
+  const calendarOfDefault = viewPeriodOf(calendar, 'pay_cycle', [], '2026-11-30');
+  assert.deepEqual(bounds(calendarOfDefault), ['2026-11-01', '2026-11-30']);
+  assert.equal(calendarOfDefault.mode, 'calendar');
+  // A deleted paycheck income falls back to the calendar month and reports it.
+  assert.equal(viewPeriodOf(paycheck('gone'), 'pay_cycle', [], '2026-11-10').mode, 'calendar');
+  const salary = pay('s', 'monthly', '2026-01-25');
+  assert.equal(viewPeriodOf(paycheck('s'), 'pay_cycle', [salary], '2026-11-30').mode, 'paycheck');
+  assert.equal(DEFAULT_SHOW_BY, 'calendar_month');
+  assert.deepEqual([...SHOW_BY], ['calendar_month', 'pay_cycle']);
+});
+
+test('adjacentPeriod: previous of next is the original in every mode and across February', () => {
+  const salary = pay('s', 'monthly', '2026-01-25');
+  const settings: [BudgetPeriodSetting, PeriodIncome[]][] = [[calendar, []], [fromDay(25), []], [fromDay(28), []], [paycheck('s'), [salary]]];
+  for (const [setting, incomes] of settings) {
+    const resolve = (date: string) => periodOf(setting, incomes, date);
+    for (const date of ['2026-02-14', '2026-03-01', '2026-11-25', '2027-01-03', '2028-02-29']) {
+      const period = resolve(date);
+      const next = adjacentPeriod(resolve, period, 'next');
+      const previous = adjacentPeriod(resolve, period, 'previous');
+      assert.equal(next.start, period.nextStart);
+      assert.equal(previous.nextStart, period.start);
+      assert.deepEqual(adjacentPeriod(resolve, next, 'previous'), period);
+      assert.deepEqual(adjacentPeriod(resolve, previous, 'next'), period);
+    }
+  }
+  assert.equal(adjacentPeriodDate({ start: '2026-11-25', nextStart: '2026-12-25' }, 'previous'), '2026-11-24');
+  assert.equal(adjacentPeriodDate({ start: '2026-11-25', nextStart: '2026-12-25' }, 'next'), '2026-12-25');
+});
+
+test('markerSets: one start and end per overlapping period, nothing in calendar mode', () => {
+  const marks = markerSets(fromDay(25), [], '2026-11-01', '2027-01-10');
+  assert.deepEqual([...marks.starts].sort(), ['2026-10-25', '2026-11-25', '2026-12-25']);
+  assert.deepEqual([...marks.ends].sort(), ['2026-11-24', '2026-12-24', '2027-01-24']);
+  assert.ok(!marks.starts.has('2026-11-26') && !marks.ends.has('2026-11-26'), 'a day inside a period is in neither set');
+  const none = markerSets(calendar, [], '2026-11-01', '2027-01-10');
+  assert.equal(none.starts.size + none.ends.size, 0);
+  const salary = pay('s', 'weekly', '2026-01-02');
+  const weekly = markerSets(paycheck('s'), [salary], '2026-03-01', '2026-03-14');
+  assert.ok(weekly.starts.has('2026-03-06') && weekly.ends.has('2026-03-12'));
+  // A paycheck setting that fell back to calendar has no markers either.
+  const fallback = markerSets(paycheck('gone'), [], '2026-03-01', '2026-03-31');
+  assert.equal(fallback.starts.size + fallback.ends.size, 0);
+  assert.equal(markerSets(fromDay(25), [], '2026-05-10', '2026-05-09').starts.size, 0);
+});
+
+test('viewPeriodIncome: calendar month equals the old month income, pay cycle covers the period', () => {
+  const salary = { id: 's', source: 'Salary', name: '', amount: 1000, frequency: 'monthly' as const, startDate: '2026-01-25', endDate: null };
+  for (const month of ['2026-02', '2026-03', '2026-10']) {
+    assert.deepEqual(viewPeriodIncome(fromDay(25), 'calendar_month', [salary], `${month}-17`), getMonthIncome(month, [salary]));
+  }
+  // The 25th..24th period holds exactly one payday, as does every calendar month.
+  assert.equal(viewPeriodIncome(fromDay(25), 'pay_cycle', [salary], '2026-03-30').totalIncome, 1000);
+  const once = { ...salary, id: 'o', frequency: 'once' as const, startDate: '2026-03-26' };
+  assert.equal(viewPeriodIncome(fromDay(25), 'pay_cycle', [once], '2026-03-30').totalIncome, 1000);
+  assert.equal(viewPeriodIncome(fromDay(25), 'pay_cycle', [once], '2026-04-30').totalIncome, 0);
+});
+
+test('markerSets walks a window longer than the range cap in chunks and never throws', () => {
+  const from = '2000-01-01';
+  const to = addDays(from, MAX_RANGE_DAYS * 2 + 50);
+  const marks = markerSets(fromDay(25), [], from, to);
+  assert.ok(marks.starts.has('2000-01-25') && marks.starts.has(addDays('2000-01-25', 0)));
+  const last = periodOf(fromDay(25), [], to);
+  assert.ok(marks.starts.has(last.start) && marks.ends.has(last.end), 'the last period of the window is marked');
+  assert.ok(marks.starts.size > 200);
+  assert.equal(markerSets(calendar, [], from, to).starts.size, 0);
+});
+
+test('period range labels are day-first and independent of the runtime locale', () => {
+  const range = { start: '2026-11-25', end: '2026-12-24' };
+  assert.equal(periodDayLabel('2026-01-05'), '5 Jan');
+  assert.equal(periodRangeLabel(range), '25 Nov – 24 Dec');
+  assert.equal(periodRangeLabel(range, true), '25 Nov – 24 Dec 2026');
+  assert.equal(periodRangeLabel({ start: '2026-12-25', end: '2027-01-24' }, true), '25 Dec – 24 Jan 2027');
 });

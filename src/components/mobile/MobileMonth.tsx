@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { addMonths, eachDayOfInterval, endOfMonth, format, getDay, isAfter, isSameDay, startOfDay, startOfMonth } from 'date-fns';
 import { CalendarRange, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { useFinance } from '../../contexts/FinanceContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { useFinanceShell } from '../../contexts/FinanceShellContext';
 import { pageHref } from '../../lib/navigation';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodOf } from '../../lib/periods';
 import { pages } from '../../lib/pages';
 import { fmtCompact, fmtVND } from '../../lib/analytics';
 import '../../styles/Mobile.css';
@@ -15,17 +17,29 @@ const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 /** F · Month: a plain calendar of dates; daily spending lives in the bar chart above it. */
 export function MobileMonth() {
-  const { currentDate, onActiveDateChange, openPlanGuide } = useFinanceShell();
-  const { spendings, plans, fetchWeeksSpendings, projectedBetween } = useFinance();
+  const { currentDate, activeDate, onActiveDateChange, openPlanPeriod } = useFinanceShell();
+  const { spendings, plans, incomes, fetchWeeksSpendings, projectedBetween } = useFinance();
+  const { settings } = useSettings();
   const router = useRouter();
   const [month, setMonth] = useState(() => startOfMonth(currentDate));
   const today = startOfDay(new Date());
 
+  // The month total and the planned row follow Show by: the calendar month, or the pay period of the month shown.
+  // The anchor is the day the header or this screen moved to, else the first of the month.
+  const anchor = activeDate && format(activeDate, 'yyyy-MM') === format(month, 'yyyy-MM') ? format(activeDate, 'yyyy-MM-dd') : format(month, 'yyyy-MM-dd');
+  const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
+  const period = useMemo(
+    () => viewPeriodOf(budgetPeriod, settings.showBy ?? DEFAULT_SHOW_BY, incomes, anchor),
+    [budgetPeriod, settings.showBy, incomes, anchor],
+  );
+
   useEffect(() => {
-    const start = format(month, 'yyyy-MM-dd');
-    const end = format(addMonths(month, 1), 'yyyy-MM-dd');
+    const monthStart = format(month, 'yyyy-MM-dd');
+    const monthEnd = format(addMonths(month, 1), 'yyyy-MM-dd');
+    const start = period.start < monthStart ? period.start : monthStart;
+    const end = period.nextStart > monthEnd ? period.nextStart : monthEnd;
     void fetchWeeksSpendings(start, end).catch(() => []);
-  }, [month, fetchWeeksSpendings]);
+  }, [month, period, fetchWeeksSpendings]);
 
   const days = useMemo(() => eachDayOfInterval({ start: month, end: endOfMonth(month) }), [month]);
   const totals = useMemo(() => {
@@ -46,8 +60,9 @@ export function MobileMonth() {
   }, [projectedBetween, month]);
 
   const max = Math.max(1, ...totals.values(), ...planned.values());
-  const monthTotal = [...totals.values()].reduce((sum, value) => sum + value, 0);
-  const plannedTotal = [...planned.values()].reduce((sum, value) => sum + value, 0);
+  const monthTotal = spendings.filter(s => s.date >= period.start && s.date <= period.end).reduce((sum, s) => sum + s.amount, 0);
+  const plannedTotal = projectedBetween(period.start, period.end).reduce((sum, item) => sum + item.amount, 0);
+  const periodWord = period.mode === 'calendar' ? 'month' : 'period';
   const lead = (getDay(month) + 6) % 7;
 
   const changeMonth = (by: number) => {
@@ -121,12 +136,12 @@ export function MobileMonth() {
         <div className="m-list">
           <div className="m-row" role="button" tabIndex={0} onClick={() => router.push(pages.plans.path)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); router.push(pages.plans.path); } }}>
             <span className="m-ic" style={{ ['--c' as string]: 'var(--primary)' }}><CalendarRange size={16} /></span>
-            <span className="m-rt"><b>Plans</b><small>{plans.length} {plans.length === 1 ? 'plan' : 'plans'} · ~{fmtCompact(plannedTotal)} ₫ still planned this month</small></span>
+            <span className="m-rt"><b>Plans</b><small>{plans.length} {plans.length === 1 ? 'plan' : 'plans'} · ~{fmtCompact(plannedTotal)} ₫ still planned this {periodWord}</small></span>
             <ChevronRight size={18} className="m-muted" aria-hidden="true" />
           </div>
-          <div className="m-row" role="button" tabIndex={0} style={{ borderTop: '1px solid var(--border-color)' }} onClick={() => openPlanGuide(format(month, 'yyyy-MM'))} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPlanGuide(format(month, 'yyyy-MM')); } }}>
+          <div className="m-row" role="button" tabIndex={0} style={{ borderTop: '1px solid var(--border-color)' }} onClick={() => openPlanPeriod(format(new Date(), 'yyyy-MM-dd'))} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPlanPeriod(format(new Date(), 'yyyy-MM-dd')); } }}>
             <span className="m-ic" style={{ ['--c' as string]: 'var(--warning)' }}><Sparkles size={16} /></span>
-            <span className="m-rt"><b>Plan your month</b><small>Income, bills, daily habits, one-offs</small></span>
+            <span className="m-rt"><b>Plan this period</b><small>Bills, everyday spending, extras</small></span>
             <ChevronRight size={18} className="m-muted" aria-hidden="true" />
           </div>
         </div>

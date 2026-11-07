@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
+import { addMonths, endOfMonth, format, parseISO, startOfMonth } from 'date-fns';
 import {
   Briefcase, CalendarClock, Car, CircleDollarSign, Coffee, Film, Gift, Heart, Home, Pencil, Phone, Plus,
   Receipt, ShoppingBag, Trash2, Utensils, X,
@@ -9,6 +9,7 @@ import {
 import { errorMessage } from '../services/auth';
 import { useFinance } from '../contexts/FinanceContext';
 import { addDays, describePlanSchedule, planOccurrences, type PlanFrequency } from '../lib/plans';
+import { DEFAULT_BUDGET_PERIOD, periodOf, type BudgetPeriod } from '../lib/periods';
 import {
   createPlanDraft, describePlanDraft, isPlanDraftDirty, PLAN_FREQUENCY_LABELS, PLAN_PRESETS, validatePlanDraft,
   type PlanDraft,
@@ -25,6 +26,12 @@ interface Props {
   onEditorStateChange: (state: PlanEditorState) => void;
   /** Open this plan's editor on mount; `from` pre-selects "change from this date". */
   initialEdit?: { id: string; from?: string } | null;
+  /** The budget period shown on the page. Without it the totals cover the current calendar month. */
+  period?: BudgetPeriod | null;
+  /** Today in the user's time zone, from the same summary as `period`. */
+  today?: string;
+  /** A past period: the list and totals stay, plan create, edit and delete controls are hidden. */
+  readOnly?: boolean;
 }
 
 type Editor = { draft: PlanDraft; snapshot: PlanDraft };
@@ -34,8 +41,8 @@ const money = (amount: number) => `${amount.toLocaleString('vi-VN', { maximumFra
 const iso = (date: Date) => format(date, 'yyyy-MM-dd');
 const UNIT: Partial<Record<PlanFrequency, string>> = { daily: 'days', weekly: 'weeks', monthly: 'months' };
 
-export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit }: Props) {
-  const { plans, settings, projectedBetween, createPlan, updatePlan, splitPlan, deletePlan } = useFinance();
+export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, period = null, today: serverToday, readOnly = false }: Props) {
+  const { plans, incomes, settings, projectedBetween, createPlan, updatePlan, splitPlan, deletePlan } = useFinance();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [operation, setOperation] = useState<'save' | 'delete' | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -45,15 +52,22 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit }:
   const id = useId();
   const dirty = editor !== null && isPlanDraftDirty(editor.draft, editor.snapshot);
   const busy = operation !== null;
-  const blocked = disabled || busy;
+  const blocked = disabled || busy || readOnly;
   const categories = settings.categories;
 
   const now = new Date();
-  const today = iso(now);
-  const monthEnd = iso(endOfMonth(now));
+  const today = serverToday ?? iso(now);
+  // Totals cover the period on the page. Calendar-month periods keep the "month" wording.
   const nextMonthStart = startOfMonth(addMonths(now, 1));
-  const restOfMonth = projectedBetween(today, monthEnd);
-  const nextMonth = projectedBetween(iso(nextMonthStart), iso(endOfMonth(nextMonthStart)));
+  const restFrom = period ? (today > period.start ? today : period.start) : today;
+  const restTo = period ? period.end : iso(endOfMonth(now));
+  const restOfMonth = restFrom > restTo ? [] : projectedBetween(restFrom, restTo);
+  const following = period ? periodOf(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, incomes, period.nextStart) : null;
+  const nextMonth = following ? projectedBetween(following.start, following.end) : projectedBetween(iso(nextMonthStart), iso(endOfMonth(nextMonthStart)));
+  const calendarWording = !period || period.mode === 'calendar';
+  const restLabel = calendarWording ? `Rest of ${format(period ? parseISO(period.start) : now, 'MMMM')}` : 'Rest of period';
+  const nextLabel = calendarWording ? format(following ? parseISO(following.start) : nextMonthStart, 'MMMM') : 'Next period';
+  const periodWord = calendarWording ? 'month' : 'period';
   const sum = (items: { amount: number }[]) => items.reduce((total, item) => total + item.amount, 0);
   const remainingByPlan = useMemo(() => {
     const byPlan = new Map<string, { count: number; total: number }>();
@@ -63,6 +77,11 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit }:
     }
     return byPlan;
   }, [restOfMonth]);
+
+  // Moving to a past period closes the editor, so its unsaved-changes guard cannot stay on.
+  useEffect(() => {
+    if (readOnly) setEditor(null);
+  }, [readOnly]);
 
   useLayoutEffect(() => {
     onEditorStateChange({ dirty, busy });
@@ -180,7 +199,7 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit }:
   const draft = editor?.draft;
   const adding = editor !== null && editor.snapshot.id === undefined;
   const summary = draft ? describePlanDraft(draft) : null;
-  const sorted = [...plans].sort((a, b) => a.time.localeCompare(b.time) || a.description.localeCompare(b.description));
+  const sorted = [...plans].sort((a, b) => Number(b.sure) - Number(a.sure) || a.time.localeCompare(b.time) || a.description.localeCompare(b.description));
 
   return (
     <section className="profile-panel" aria-labelledby={`${id}-heading`} aria-busy={busy}>
@@ -190,7 +209,7 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit }:
           <p id={`${id}-help`}>What you expect to spend: <b>commitments</b> like rent and bills, and <b>estimates</b> like breakfast and lunch every weekday. Planned days show on the calendar and count in projected totals; each one becomes a real spending once its date and time pass.</p>
         </div>
         <div className="profile-panel-tools">
-          {!editor && (
+          {!editor && !readOnly && (
             <button type="button" className="profile-button profile-button-primary" disabled={blocked || categories.length === 0} onClick={() => openEditor()}>
               <Plus size={16} aria-hidden="true" />Add plan
             </button>
@@ -199,12 +218,12 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit }:
       </div>
 
       <dl className="profile-card profile-summary" aria-label="Planned spending totals">
-        <div><dt>Rest of {format(now, 'MMMM')}</dt><dd>{money(sum(restOfMonth))}</dd></div>
-        <div><dt>{format(nextMonthStart, 'MMMM')}</dt><dd>{money(sum(nextMonth))}</dd></div>
+        <div><dt>{restLabel}</dt><dd>{money(sum(restOfMonth))}</dd></div>
+        <div><dt>{nextLabel}</dt><dd>{money(sum(nextMonth))}</dd></div>
         <div><dt>Active plans</dt><dd>{plans.length}</dd></div>
       </dl>
 
-      {editor && draft && (
+      {editor && draft && !readOnly && (
         <form className="profile-card income-form" noValidate aria-labelledby={`${id}-form-title`} aria-busy={busy} onSubmit={event => { event.preventDefault(); void save(); }}>
           <div className="income-form-head">
             <h3 id={`${id}-form-title`}>{adding ? 'Add plan' : `Edit ${editor.snapshot.description || 'plan'}`}</h3>
@@ -354,14 +373,9 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit }:
       {sorted.length === 0 ? (
         <p className="profile-card profile-empty">No plans yet. Add one to forecast regular costs, like a 15,000 ₫ breakfast and a 35,000 ₫ lunch every weekday.</p>
       ) : (
-        <>{GROUPS.map(group => {
-          const groupPlans = sorted.filter(plan => plan.sure === group.sure);
-          if (groupPlans.length === 0) return null;
-          return (
-        <div key={group.title} className="profile-stack">
-        <h3 className="plans-group">{group.title} <small>{group.hint}</small></h3>
-        <ul className="profile-card profile-list" aria-label={group.title}>
-          {groupPlans.map(plan => {
+        <div className="profile-stack">
+        <ul className="profile-card profile-list" aria-label="Spending plans">
+          {sorted.map(plan => {
             const category = categories.find(item => item.id === plan.category);
             const color = category?.color ?? '#64748b';
             const Icon = (category && ICONS[category.icon as keyof typeof ICONS]) || CircleDollarSign;
@@ -375,6 +389,7 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit }:
                 <div className="profile-list-main">
                   <strong>{plan.description || category?.name || 'Plan'}</strong>
                   <span className="profile-meta">
+                    {plan.sure && <span className="profile-pill">Sure</span>}
                     <span className="profile-pill profile-pill-on">{describePlanSchedule(plan)}</span>
                     <span>{plan.time}</span>
                     <span>{category?.name ?? plan.category}</span>
@@ -385,26 +400,22 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit }:
                 <div className="profile-amount">
                   {money(plan.amount)}
                   <small>{remaining
-                    ? `${remaining.count} left this month · ${money(remaining.total)}`
+                    ? `${remaining.count} left this ${periodWord} · ${money(remaining.total)}`
                     : nextUp ? `Next on ${nextUp.date}` : 'Nothing upcoming'}</small>
                 </div>
+                {!readOnly && (
                 <div className="profile-row-actions">
                   <button type="button" className="profile-icon-button" disabled={blocked} aria-label={`Edit ${plan.description || 'plan'}`} onClick={() => openEditor(plan)}><Pencil size={16} aria-hidden="true" /></button>
                   <button type="button" className="profile-icon-button profile-icon-button-danger" disabled={blocked || editor !== null} aria-label={deletingId === plan.id ? `Deleting ${plan.description}` : `Delete ${plan.description || 'plan'}`} onClick={() => { void remove(plan); }}><Trash2 size={16} aria-hidden="true" /></button>
                 </div>
+                )}
               </li>
             );
           })}
         </ul>
         </div>
-          );
-        })}</>
       )}
     </section>
   );
 }
 
-const GROUPS = [
-  { title: 'Commitments', hint: 'sure: rent, bills, subscriptions', sure: true },
-  { title: 'Estimates', hint: 'roughly: food, coffee, fuel, one-offs', sure: false },
-];

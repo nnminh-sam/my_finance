@@ -668,6 +668,9 @@ test("MCP Tools, Resources, and Prompts end-to-end finance workflows", async t =
   });
   assert.equal(cycleSummary.isError, false);
   assert.equal(cycleSummary.structuredContent.cycleMonth, "2026-10");
+  // The override parameters are accepted and ignored: the report follows the saved budget period (calendar by default).
+  assert.deepEqual((cycleSummary.structuredContent.dates as { startDate: string; endDate: string }).startDate, "2026-10-01");
+  assert.deepEqual((cycleSummary.structuredContent.config as { ignoredParameters: string[] }).ignoredParameters, ["salaryDay"]);
 
   // 8. Read MCP Resources (static and templated)
   for (const uri of [
@@ -865,8 +868,71 @@ test("MCP budget period tool, resource and plan period summary; list_plans keys 
   const readRes = await mcpCall({ jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri: "finance://budget-period" } }, accessToken);
   const content = JSON.parse(((await readRes.json()) as { result: { contents: { text: string }[] } }).result.contents[0].text);
   assert.equal(content.budgetPeriod.mode, "paycheck");
-  assert.deepEqual(Object.keys(content).sort(), ["budgetPeriod", "currentPeriod", "summary", "today"]);
+  assert.deepEqual(Object.keys(content).sort(), ["budgetPeriod", "currentPeriod", "showBy", "summary", "today"]);
 
   const plans = await call("list_plans");
   for (const key of ["timezone", "today", "count", "plannedRestOfMonth", "plannedNextMonth", "plans"]) assert.ok(key in plans.structuredContent, key);
+});
+
+test("MCP pay cycle report follows the saved budget period and ignores the old override parameters", async t => {
+  const { accessToken, mcpCall, financeStore } = await createTestFixture(t);
+  async function call(name: string, args: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call", params: { name, arguments: args } }, accessToken);
+    return ((await res.json()) as { result: any }).result;
+  }
+  assert.equal((await call("update_settings", { timezone: "UTC" })).isError, false);
+  const [owner] = [...financeStore.settings.keys()];
+  assert.ok(owner, "the settings call created the user row");
+  for (const [date, amount] of [["2026-09-24", 1], ["2026-09-25", 10], ["2026-10-24", 100], ["2026-10-25", 1000]] as const) {
+    assert.equal((await call("create_spending", { amount, description: date, category: "Food", date, time: "08:00" })).isError, false);
+  }
+  assert.equal((await call("create_income", { source: "Salary", amount: 5000, frequency: "monthly", startDate: "2026-01-25" })).isError, false);
+
+  const calendarReport = (await call("get_salary_cycle_summary", { cycleMonth: "2026-10" })).structuredContent;
+  assert.deepEqual([calendarReport.dates.startDate, calendarReport.dates.endDate], ["2026-10-01", "2026-10-31"]);
+  assert.deepEqual(calendarReport.config.ignoredParameters, [], "no options means nothing ignored");
+  assert.equal(calendarReport.spending.total, 1100, "calendar October holds the 24th and the 25th");
+
+  const saved = await financeStore.updateSettings(owner, { budgetPeriod: { mode: "monthly_from_day", startDay: 25 } });
+  assert.notEqual(saved, "invalid-budget-period");
+  const report = (await call("get_salary_cycle_summary", { cycleMonth: "2026-10", salaryDay: 5, shiftWeekendToMonday: false, delayDays: 3 })).structuredContent;
+  assert.equal(report.cycleMonth, "2026-10");
+  assert.deepEqual([report.dates.startDate, report.dates.endDate, report.dates.nextPayday], ["2026-09-25", "2026-10-24", "2026-10-25"], "the period that contains 2026-10-01");
+  assert.deepEqual(report.config.ignoredParameters, ["salaryDay", "shiftWeekendToMonday", "delayDays"]);
+  assert.deepEqual([report.config.mode, report.config.startDay, report.config.paycheckIncomeId], ["monthly_from_day", 25, null]);
+  assert.equal(report.spending.total, 110, "the 24th of September and the 25th of October are outside");
+  assert.equal(report.income.total, 5000, "one payday in the period");
+  assert.equal(report.dates.totalDays, 30);
+
+  const boundary = (await call("get_salary_cycle_summary", { cycleMonth: "2026-11" })).structuredContent;
+  assert.deepEqual([boundary.dates.startDate, boundary.dates.endDate], ["2026-10-25", "2026-11-24"]);
+  assert.equal(boundary.spending.total, 1000);
+
+  const prompt = await mcpCall({ jsonrpc: "2.0", id: 1, method: "prompts/get", params: { name: "salary_cycle_checkup", arguments: { cycleMonth: "2026-10", salaryDay: 5 } } }, accessToken);
+  const text = ((await prompt.json()) as { result: { messages: { content: { text: string } }[] } }).result.messages[0].content.text;
+  assert.ok(text.includes("2026-09-25 to 2026-10-24"));
+  assert.ok(text.includes("ignoredParameters"));
+});
+
+test("MCP budget period output carries showBy and update_settings stores it", async t => {
+  const { accessToken, mcpCall, financeStore } = await createTestFixture(t);
+  async function call(name: string, args: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call", params: { name, arguments: args } }, accessToken);
+    return ((await res.json()) as { result: any }).result;
+  }
+  assert.equal((await call("update_settings", { timezone: "UTC" })).isError, false);
+  assert.equal((await call("get_budget_period")).structuredContent.showBy, "calendar_month");
+  assert.equal((await call("update_settings", { showBy: "pay_cycle" })).isError, false);
+  assert.equal((await call("get_budget_period")).structuredContent.showBy, "pay_cycle");
+  assert.equal((await call("update_settings", { showBy: "weekly" })).isError, true);
+  assert.equal((await call("get_budget_period")).structuredContent.showBy, "pay_cycle", "a rejected value writes nothing");
+  assert.ok(financeStore.settings.size > 0);
+});
+
+test("MCP update_settings schema lists showBy with its two values", async t => {
+  const { accessToken, mcpCall } = await createTestFixture(t);
+  const res = await mcpCall({ jsonrpc: "2.0", id: 1, method: "tools/list" }, accessToken);
+  const tools = ((await res.json()) as { result: { tools: { name: string; inputSchema: { properties: Record<string, { enum?: string[] }> } }[] } }).result.tools;
+  const update = tools.find(tool => tool.name === "update_settings");
+  assert.deepEqual(update?.inputSchema.properties.showBy.enum, ["calendar_month", "pay_cycle"]);
 });

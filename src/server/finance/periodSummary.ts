@@ -1,4 +1,4 @@
-import { periodOf, type BudgetPeriod, type BudgetPeriodSetting } from "../../lib/periods";
+import { periodOf, type BudgetPeriod, type BudgetPeriodSetting, type ShowBy } from "../../lib/periods";
 import { summarizePlanPeriod, type PlanPeriodSummary } from "../../lib/periodSummary";
 import { localNowStamp } from "../../lib/plans";
 import type { Income, Spending } from "./model";
@@ -54,8 +54,8 @@ export async function loadPlanPeriodSummary(store: FinanceStore, userId: string,
 }
 
 /** The budget period setting and the period containing today, for the MCP tool and resource. */
-export async function loadBudgetPeriod(store: FinanceStore, userId: string): Promise<{ setting: BudgetPeriodSetting; today: string; period: BudgetPeriod }> {
+export async function loadBudgetPeriod(store: FinanceStore, userId: string): Promise<{ setting: BudgetPeriodSetting; showBy: ShowBy; today: string; period: BudgetPeriod }> {
   const [settings, incomes] = await Promise.all([store.getSettings(userId), fetchAllIncomes(store, userId)]);
   const today = localNowStamp(settings.timezone).slice(0, 10);
-  return { setting: settings.budgetPeriod, today, period: periodOf(settings.budgetPeriod, incomes, today) };
+  return { setting: settings.budgetPeriod, showBy: settings.showBy, today, period: periodOf(settings.budgetPeriod, incomes, today) };
 }

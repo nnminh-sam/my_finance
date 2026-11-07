@@ -1,4 +1,4 @@
-import type { BudgetPeriodSetting } from "../../lib/periods";
+import type { BudgetPeriodSetting, ShowBy } from "../../lib/periods";
 import type { PlanException, PlanFrequency } from "../../lib/plans";
 
 export interface Category { id: string; name: string; color: string; icon: string }
@@ -8,12 +8,14 @@ export interface FinanceSettings {
   categories: Category[];
   timezone: string; // IANA zone used to decide when planned spendings become real
   budgetPeriod: BudgetPeriodSetting;
+  showBy: ShowBy; // which period Calendar, Week, Day, Analytics and the phone screens group by
 }
 export interface SettingsPatch {
   avatar?: string;
   categories?: Category[];
   timezone?: string;
   budgetPeriod?: { mode?: BudgetPeriodSetting["mode"]; startDay?: number; paycheckIncomeId?: string | null };
+  showBy?: ShowBy;
 }
 export interface SpendingInput { amount: number; description: string; category: string; date: string; time: string; repeatRuleId?: string | null }
 export interface Spending extends SpendingInput {
@@ -95,6 +97,7 @@ export function defaultFinanceSettings(): FinanceSettings {
     avatar: "",
     timezone: "Asia/Ho_Chi_Minh",
     budgetPeriod: { mode: "calendar", startDay: 1, paycheckIncomeId: null },
+    showBy: "calendar_month",
     categories: [
       { id: "Food", name: "Food", color: "#10b981", icon: "Utensils" },
       { id: "Transport", name: "Transport", color: "#3b82f6", icon: "Car" },

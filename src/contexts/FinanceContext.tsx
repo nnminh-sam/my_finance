@@ -6,7 +6,7 @@ import { errorMessage, getAuthState } from '../services/auth';
 import { createFinanceApi } from '../services/finance';
 import type { FinanceSettings, FinanceSettingsUpdate, SpendingInput } from '../services/finance';
 import type { Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, Spending } from '../types';
-import { DEFAULT_BUDGET_PERIOD } from '../lib/periods';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY } from '../lib/periods';
 import { isValidTimeZone, projectPlans, type PlanOccurrence } from '../lib/plans';
 
 interface FinanceContextValue {
@@ -41,7 +41,7 @@ interface FinanceContextValue {
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
 const api = createFinanceApi();
 const emptySettings: FinanceSettings = {
-  avatar: '', categories: [], budgetPeriod: DEFAULT_BUDGET_PERIOD,
+  avatar: '', categories: [], budgetPeriod: DEFAULT_BUDGET_PERIOD, showBy: DEFAULT_SHOW_BY,
 };
 
 export function FinanceProvider({ userId, children }: { userId: string; children: ReactNode }) {

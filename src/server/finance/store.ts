@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { addDays, dueOccurrences, isPlanDate, localNowStamp, planOccurrences, stampOf, type PlanException } from "../../lib/plans";
+import { SHOW_BY } from "../../lib/periods";
 import { defaultFinanceSettings, type FinanceSettings, type Income, type IncomeInput, type IncomePage, type Plan, type PlanExceptionInput, type PlanInput, type RepeatRule, type RepeatRuleInput, type SettingsPatch, type Spending, type SpendingInput, type SpendingPage } from "./model";
 import { formatDateUtc, generateOccurrences, isRuleDueForSync, type RecurrenceState } from "./recurrence";
 
@@ -49,6 +50,8 @@ function settings(row: Row): FinanceSettings {
       startDay: Number(row.budget_period_start_day),
       paycheckIncomeId: row.paycheck_income_id ? String(row.paycheck_income_id) : null,
     },
+    // A value outside the allow-list (an unexpected row) reads as the default.
+    showBy: (SHOW_BY as readonly string[]).includes(String(row.show_by)) ? String(row.show_by) as FinanceSettings["showBy"] : "calendar_month",
   };
 }
 function spending(row: Row): Spending {
@@ -113,7 +116,7 @@ function repeatRule(row: Row): RepeatRule {
 }
 
 const incomeColumns = "id, source, name, amount, frequency, to_char(start_date, 'YYYY-MM-DD') AS start_date, to_char(end_date, 'YYYY-MM-DD') AS end_date, interval, semimonthly_day_1, semimonthly_day_2, weekend_shift";
-const settingsColumns = "avatar, categories, timezone, budget_period_mode, budget_period_start_day, paycheck_income_id::text AS paycheck_income_id";
+const settingsColumns = "avatar, categories, timezone, budget_period_mode, budget_period_start_day, paycheck_income_id::text AS paycheck_income_id, show_by";
 // Income columns shared by the INSERT and UPDATE parameter lists ($9..$12).
 function scheduleValues(input: IncomeInput): unknown[] {
   return [input.interval ?? 1, input.semimonthlyDays?.[0] ?? null, input.semimonthlyDays?.[1] ?? null, input.weekendShift === true];
@@ -173,6 +176,7 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
           avatar = COALESCE($2::text, avatar), categories = COALESCE($3::jsonb, categories), timezone = COALESCE($4::text, timezone),
           budget_period_mode = ${mode},
           budget_period_start_day = COALESCE($6::integer, budget_period_start_day),
+          show_by = COALESCE($10::text, show_by),
           paycheck_income_id = ${nextId}
           WHERE user_id = $1 AND (
             NOT $9::boolean
@@ -182,7 +186,7 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
               AND i.frequency IN ('weekly', 'semimonthly', 'monthly')))
           RETURNING ${settingsColumns}`, [userId,
           patch.avatar ?? null, patch.categories === undefined ? null : JSON.stringify(patch.categories), patch.timezone ?? null,
-          period?.mode ?? null, period?.startDay ?? null, setsPaycheck, period?.paycheckIncomeId ?? null, period !== undefined]),
+          period?.mode ?? null, period?.startDay ?? null, setsPaycheck, period?.paycheckIncomeId ?? null, period !== undefined, patch.showBy ?? null]),
       ], { isolationLevel: "ReadCommitted" });
       return results[2][0] ? settings(results[2][0]) : "invalid-budget-period";
     },

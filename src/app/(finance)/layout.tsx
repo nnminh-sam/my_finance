@@ -4,14 +4,14 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { format, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
+import { format, addMonths, subMonths, addWeeks, subWeeks, parseISO } from 'date-fns';
 import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
-import { PlanMonthGuide } from '../../components/PlanMonthGuide';
+import { PlanPeriodGuide } from '../../components/PlanPeriodGuide';
 import { QuickEntryDialog } from '../../components/quickEntry/QuickEntryDialog';
 import type { SaveResult } from '../../components/quickEntry/useQuickEntry';
 import { MonthlyIncomeModal } from '../../components/MonthlyIncomeModal';
 import type { Spending } from '../../types';
-import { SettingsProvider } from '../../contexts/SettingsContext';
+import { SettingsProvider, useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { FinanceProvider, useFinance } from '../../contexts/FinanceContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -21,6 +21,7 @@ import { errorMessage } from '../../services/auth';
 import { pages } from '../../lib/pages';
 import type { FinancePage } from '../../lib/pages';
 import { authHref, pageHref, readPageDate } from '../../lib/navigation';
+import { adjacentPeriod, DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, periodRangeLabel, viewPeriodOf } from '../../lib/periods';
 import '../../styles/AuthScreen.css';
 import '../../styles/Plans.css';
 
@@ -125,7 +126,8 @@ function FinanceDocument({
   children: ReactNode;
 }) {
   const { theme, setTheme } = useTheme();
-  const { error, reload, fetchWeeksSpendings } = useFinance();
+  const { error, reload, fetchWeeksSpendings, incomes } = useFinance();
+  const { settings } = useSettings();
   const router = useRouter();
 
   const [expenseDialog, setExpenseDialog] = useState<{ expense?: Spending; defaults?: ExpenseDefaults } | null>(null);
@@ -143,10 +145,11 @@ function FinanceDocument({
     setIncomeDialogMonth(month);
   }, []);
 
-  // "Plan your month" guide, opened from the calendar, the Plans page and the phone Month screen.
-  const [planGuideMonth, setPlanGuideMonth] = useState<string | null>(null);
-  const openPlanGuide = useCallback((month?: string) => {
-    setPlanGuideMonth(month ?? format(new Date(), 'yyyy-MM'));
+  // "Plan this period" screen, opened from the calendar, the Plans page and the phone Month screen.
+  // The value is a date inside the wanted period (the screen resolves the period from it).
+  const [planPeriodDate, setPlanPeriodDate] = useState<string | null>(null);
+  const openPlanPeriod = useCallback((date?: string) => {
+    setPlanPeriodDate(date ?? format(new Date(), 'yyyy-MM-dd'));
   }, []);
 
   const urlDate = useMemo(() => readPageDate(fullSearch), [fullSearch]);
@@ -180,8 +183,20 @@ function FinanceDocument({
     }
   }, [page]);
 
-  const previousDate = page === 'week' ? subWeeks(activeDate, 1) : subMonths(activeDate, 1);
-  const nextDate = page === 'week' ? addWeeks(activeDate, 1) : addMonths(activeDate, 1);
+  // With Show by "Pay cycle", Calendar and Analytics move and are titled by period; the other pages keep their step.
+  const showBy = settings.showBy ?? DEFAULT_SHOW_BY;
+  const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
+  const activePeriod = useMemo(() => {
+    if (showBy !== 'pay_cycle' || (page !== 'calendar' && page !== 'analytics')) return null;
+    return viewPeriodOf(budgetPeriod, showBy, incomes, format(activeDate, 'yyyy-MM-dd'));
+  }, [showBy, budgetPeriod, incomes, page, activeDate]);
+  const stepPeriod = (direction: 'previous' | 'next') => {
+    if (!activePeriod) return null;
+    const resolve = (date: string) => viewPeriodOf(budgetPeriod, showBy, incomes, date);
+    return parseISO(adjacentPeriod(resolve, activePeriod, direction).start);
+  };
+  const previousDate = page === 'week' ? subWeeks(activeDate, 1) : stepPeriod('previous') ?? subMonths(activeDate, 1);
+  const nextDate = page === 'week' ? addWeeks(activeDate, 1) : stepPeriod('next') ?? addMonths(activeDate, 1);
   const dateNavigation = page === 'calendar' || page === 'week' || page === 'analytics';
 
   const openDate = useCallback((date: Date) => {
@@ -207,11 +222,11 @@ function FinanceDocument({
     openBackToCalendar,
     openExpense,
     openIncomeModal,
-    openPlanGuide,
+    openPlanPeriod,
     keypadOpen,
     setKeypadOpen,
     keypadPulse,
-  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, openPlanGuide, keypadOpen, keypadPulse]);
+  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, openPlanPeriod, keypadOpen, keypadPulse]);
 
   const navigation = [
     { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
@@ -239,8 +254,11 @@ function FinanceDocument({
     }
   }, [page]);
 
-  const periodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : format(activeDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy');
-  const mobilePeriodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : format(activeDate, page === 'day' ? 'MMM d, yyyy' : 'MMMM yyyy');
+  const rangeLabel = activePeriod && activePeriod.mode !== 'calendar'
+    ? periodRangeLabel(activePeriod, true)
+    : null;
+  const periodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : rangeLabel ?? format(activeDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy');
+  const mobilePeriodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : rangeLabel ?? format(activeDate, page === 'day' ? 'MMM d, yyyy' : 'MMMM yyyy');
 
   const renderPrevAction = (extraClass = '') => {
     const className = `document-action${extraClass ? ` ${extraClass}` : ''}`;
@@ -399,7 +417,7 @@ function FinanceDocument({
         </nav>
 
         {incomeDialogMonth && <MonthlyIncomeModal month={incomeDialogMonth} onClose={() => setIncomeDialogMonth(null)} />}
-        {planGuideMonth && <PlanMonthGuide month={planGuideMonth} onClose={() => setPlanGuideMonth(null)} onDone={setExpenseNotice} />}
+        {planPeriodDate && <PlanPeriodGuide date={planPeriodDate} onClose={() => setPlanPeriodDate(null)} onDone={setExpenseNotice} />}
         {expenseDialog && (
           <QuickEntryDialog
             expense={expenseDialog.expense}

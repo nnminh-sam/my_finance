@@ -229,7 +229,7 @@ async function fixture(t: TestContext) {
 async function settings(response: Response): Promise<FinanceSettings> {
   assert.equal(response.status, 200);
   const settings = (await response.json() as { settings: FinanceSettings }).settings;
-  assert.deepEqual(Object.keys(settings).sort(), ["avatar", "budgetPeriod", "categories", "timezone"]);
+  assert.deepEqual(Object.keys(settings).sort(), ["avatar", "budgetPeriod", "categories", "showBy", "timezone"]);
   return settings;
 }
 async function created(response: Response): Promise<Spending> {
@@ -925,4 +925,37 @@ test("an occurrence marked done early is not projected again in the period of it
   assert.deepEqual([next.period.start, next.committed, next.spent], ["2026-11-05", 0, 0]);
   const prior = (await (await request("/plans/summary?date=2026-11-04")).json() as { summary: { spent: number; committed: number } }).summary;
   assert.deepEqual([prior.spent, prior.committed], [400, 0], "counted once, in the period it was paid");
+});
+
+test("showBy defaults to calendar_month, accepts only its two values and survives other changes", async t => {
+  const { request, store, users } = await fixture(t);
+  const put = (body: unknown) => request("/settings", "PUT", body);
+  assert.equal((await settings(await request("/settings"))).showBy, "calendar_month");
+  assert.equal((await settings(await put({ showBy: "pay_cycle" }))).showBy, "pay_cycle");
+  assert.equal((await settings(await put({ showBy: "calendar_month" }))).showBy, "calendar_month");
+  await put({ showBy: "pay_cycle" });
+
+  for (const showBy of ["weekly", "", "Pay cycle", 1, null, true, {}, []]) {
+    assert.equal((await put({ showBy })).status, 400, JSON.stringify(showBy));
+  }
+  assert.equal(store.settings.get(users[0].id)!.showBy, "pay_cycle", "a rejected patch writes nothing");
+
+  // A patch without showBy leaves it alone, including a budget period change.
+  assert.equal((await settings(await put({ timezone: "UTC" }))).showBy, "pay_cycle");
+  const updated = await settings(await put({ budgetPeriod: { mode: "monthly_from_day", startDay: 25 }, showBy: "calendar_month" }));
+  assert.deepEqual([updated.showBy, updated.budgetPeriod.mode, updated.budgetPeriod.startDay], ["calendar_month", "monthly_from_day", 25], "one PUT carries both");
+  assert.equal((await settings(await put({ budgetPeriod: { startDay: 3 } }))).showBy, "calendar_month");
+  assert.equal((await settings(await request("/settings", "GET", undefined, 1))).showBy, "calendar_month", "another user is unchanged");
+});
+
+test("deleting the paycheck income resets the budget period and keeps showBy", async t => {
+  const { request } = await fixture(t);
+  const income = await request("/incomes", "POST", { source: "Salary", name: "", amount: 1000, frequency: "monthly", startDate: "2026-01-25", endDate: null });
+  assert.equal(income.status, 201);
+  const pay = (await income.json() as { income: { id: string } }).income.id;
+  const saved = await settings(await request("/settings", "PUT", { budgetPeriod: { mode: "paycheck", paycheckIncomeId: pay }, showBy: "pay_cycle" }));
+  assert.deepEqual([saved.budgetPeriod.mode, saved.showBy], ["paycheck", "pay_cycle"]);
+  assert.equal((await request(`/incomes/${pay}`, "DELETE")).status, 204);
+  const after = await settings(await request("/settings"));
+  assert.deepEqual([after.budgetPeriod.mode, after.budgetPeriod.paycheckIncomeId, after.showBy], ["calendar", null, "pay_cycle"]);
 });

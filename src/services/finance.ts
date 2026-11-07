@@ -1,9 +1,9 @@
 import { authenticatedFetch } from './auth';
-import type { BudgetPeriodSetting } from '../lib/periods';
+import type { BudgetPeriodSetting, ShowBy } from '../lib/periods';
 import type { PlanPeriodSummary } from '../lib/periodSummary';
 import type { Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, RepeatRule, RepeatRuleInput, Spending, UserSettings } from '../types';
 
-export type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'> & { timezone?: string; budgetPeriod?: BudgetPeriodSetting };
+export type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'> & { timezone?: string; budgetPeriod?: BudgetPeriodSetting; showBy?: ShowBy };
 /** A settings change: a budgetPeriod patch may name only the keys it changes (null clears the paycheck income). */
 export type FinanceSettingsUpdate = Partial<Omit<FinanceSettings, 'budgetPeriod'>> & {
   budgetPeriod?: Partial<Omit<BudgetPeriodSetting, 'paycheckIncomeId'>> & { paycheckIncomeId?: string | null };

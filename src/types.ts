@@ -1,4 +1,4 @@
-import type { BudgetPeriodSetting } from './lib/periods';
+import type { BudgetPeriodSetting, ShowBy } from './lib/periods';
 import type { PlanException, PlanFrequency } from './lib/plans';
 
 export type Category = string;
@@ -99,4 +99,5 @@ export interface UserSettings {
   avatar: string;
   categories: CategoryData[];
   budgetPeriod: BudgetPeriodSetting;
+  showBy: ShowBy;
 }

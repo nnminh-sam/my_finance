@@ -21,7 +21,7 @@ test("Neon finance: defaults, cross-worker partial settings, scoped CRUD, histor
     const [initial, sameInitial] = await Promise.all([store.getSettings(users[0]), otherWorker.getSettings(users[0])]);
     assert.deepEqual(initial, defaultFinanceSettings());
     assert.deepEqual(sameInitial, initial);
-    assert.deepEqual(Object.keys(initial).sort(), ["avatar", "budgetPeriod", "categories", "timezone"]);
+    assert.deepEqual(Object.keys(initial).sort(), ["avatar", "budgetPeriod", "categories", "showBy", "timezone"]);
     const legacyColumns = "SELECT base_daily_spending, max_daily_spending FROM finance_settings WHERE user_id = $1";
     const legacyDefaults = await sql.query(legacyColumns, [users[0]]);
     assert.equal(Number(legacyDefaults[0].base_daily_spending), 0);
@@ -32,7 +32,7 @@ test("Neon finance: defaults, cross-worker partial settings, scoped CRUD, histor
     assert.deepEqual(await store.listSpendings(users[0], 500), { spendings: [], nextCursor: null });
     const avatar = "https://example.test/avatar.png";
     const updates = await Promise.all([store.updateSettings(users[0], { categories: initial.categories }), otherWorker.updateSettings(users[0], { avatar })]);
-    for (const updated of updates) assert.deepEqual(Object.keys(updated).sort(), ["avatar", "budgetPeriod", "categories", "timezone"]);
+    for (const updated of updates) assert.deepEqual(Object.keys(updated).sort(), ["avatar", "budgetPeriod", "categories", "showBy", "timezone"]);
     const updated = { ...initial, avatar };
     assert.deepEqual(await otherWorker.getSettings(users[0]), updated);
     assert.deepEqual(await store.updateSettings(users[0], {}), updated);
@@ -389,6 +389,11 @@ test("Neon pay schedules and budget period (needs migration 009): income options
 
     // Settings: defaults, save, absent key keeps, explicit null clears, invalid ids are rejected without writing.
     assert.deepEqual((await store.getSettings(users[0])).budgetPeriod, { mode: "calendar", startDay: 1, paycheckIncomeId: null });
+    // Show by: default, saved with its own patch, kept by a patch without it.
+    assert.equal((await store.getSettings(users[0])).showBy, "calendar_month");
+    assert.equal(((await store.updateSettings(users[0], { showBy: "pay_cycle" })) as { showBy: string }).showBy, "pay_cycle");
+    assert.equal(((await store.updateSettings(users[0], { timezone: "UTC" })) as { showBy: string }).showBy, "pay_cycle", "an absent key keeps showBy");
+    await store.updateSettings(users[0], { showBy: "calendar_month" });
     assert.equal(await store.updateSettings(users[0], { budgetPeriod: { mode: "paycheck" } }), "invalid-budget-period", "paycheck mode needs an income");
     assert.equal(await store.updateSettings(users[0], { budgetPeriod: { mode: "paycheck", paycheckIncomeId: randomUUID() } }), "invalid-budget-period");
     const foreign = await store.createIncome(users[1], base);

@@ -1,5 +1,5 @@
 import { HttpError } from "../auth/http";
-import { BUDGET_PERIOD_MODES, type BudgetPeriodMode } from "../../lib/periods";
+import { BUDGET_PERIOD_MODES, SHOW_BY, type BudgetPeriodMode, type ShowBy } from "../../lib/periods";
 import { isValidTimeZone, PLAN_FREQUENCIES, type PlanFrequency } from "../../lib/plans";
 import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category, type IncomeFrequency, type IncomeInput, type PlanExceptionInput, type PlanInput, type SettingsPatch, type SpendingInput } from "./model";
 
@@ -50,7 +50,7 @@ function budgetPeriodPatch(value: unknown): NonNullable<SettingsPatch["budgetPer
   return patch;
 }
 export function settingsPatch(value: unknown): SettingsPatch {
-  const body = object(value, ["avatar", "categories", "timezone", "budgetPeriod"]);
+  const body = object(value, ["avatar", "categories", "timezone", "budgetPeriod", "showBy"]);
   const patch: SettingsPatch = {};
   if (Object.hasOwn(body, "avatar")) {
     const avatar = text(body.avatar, "avatar", 2048, true);
@@ -69,6 +69,11 @@ export function settingsPatch(value: unknown): SettingsPatch {
     patch.timezone = timezone;
   }
   if (Object.hasOwn(body, "budgetPeriod")) patch.budgetPeriod = budgetPeriodPatch(body.budgetPeriod);
+  if (Object.hasOwn(body, "showBy")) {
+    const showBy = body.showBy;
+    if (typeof showBy !== "string" || !(SHOW_BY as readonly string[]).includes(showBy)) return invalid("showBy");
+    patch.showBy = showBy as ShowBy;
+  }
   return patch;
 }
 function validDate(value: unknown, field: string): string {

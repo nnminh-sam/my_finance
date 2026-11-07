@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
-import { DEFAULT_BUDGET_PERIOD } from '../lib/periods';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY } from '../lib/periods';
 import type { FinanceSettingsUpdate } from '../services/finance';
 import type { UserSettings } from '../types';
 import { useAuth } from './AuthContext';
@@ -30,6 +30,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   const settings: UserSettings = {
     ...finance.settings,
     budgetPeriod: finance.settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD,
+    showBy: finance.settings.showBy ?? DEFAULT_SHOW_BY,
     theme,
     name: user?.name ?? '',
     email: user?.email ?? '',
@@ -41,6 +42,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     if (updates.avatar !== undefined) financial.avatar = updates.avatar;
     if (updates.categories !== undefined) financial.categories = updates.categories;
     if (updates.budgetPeriod !== undefined) financial.budgetPeriod = updates.budgetPeriod;
+    if (updates.showBy !== undefined) financial.showBy = updates.showBy;
     if (Object.keys(financial).length > 0) await finance.updateSettings(financial);
   };
 

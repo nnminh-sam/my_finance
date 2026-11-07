@@ -51,9 +51,10 @@ import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useSettings } from "../contexts/SettingsContext";
 import { getHeatmapColor } from "../lib/heatmap";
-import { getMonthIncome, incomeMonth } from "../lib/income";
-import { defaultSalaryCycleConfig, getSalaryCycleForMonth, loadSalaryCycleConfig } from "../lib/salaryCycle";
-import type { SalaryCycleConfig } from "../lib/salaryCycle";
+import Link from "next/link";
+import { getRangeIncome } from "../lib/income";
+import { dismissPayCycleHint, shouldShowPayCycleHint } from "../lib/legacyPayday";
+import { calendarPeriod, DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, markerSets, periodOf, periodRangeLabel } from "../lib/periods";
 import { useAuth } from "../contexts/AuthContext";
 import "../styles/CalendarView.css";
 
@@ -87,28 +88,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onDateClick,
 }) => {
   const { settings } = useSettings();
-  const { spendings, incomes, fetchWeeksSpendings, projectedBetween } = useFinance();
-  const { openPlanGuide } = useFinanceShell();
+  const { spendings, incomes, hasLoaded, fetchWeeksSpendings, projectedBetween } = useFinance();
+  const { openPlanPeriod, activeDate: shellActiveDate } = useFinanceShell();
   const { user } = useAuth();
-  const [cycleConfig, setCycleConfig] = useState<SalaryCycleConfig>(() => defaultSalaryCycleConfig());
-
-  // Pay cycle preferences are edited in Profile; load them for the signed-in user.
-  useEffect(() => {
-    setCycleConfig(loadSalaryCycleConfig(user?.id));
-  }, [user?.id]);
-
-  // A day is a cycle boundary when it is the first or last day of a cycle anchored nearby.
-  const cycleBoundary = useCallback((day: Date) => {
-    const key = format(day, "yyyy-MM-dd");
-    let isStart = false;
-    let isEnd = false;
-    for (const offset of [-1, 0, 1]) {
-      const cycle = getSalaryCycleForMonth(new Date(day.getFullYear(), day.getMonth() + offset, 1), cycleConfig);
-      if (format(cycle.startDate, "yyyy-MM-dd") === key) isStart = true;
-      if (format(cycle.endDate, "yyyy-MM-dd") === key) isEnd = true;
-    }
-    return { isStart, isEnd };
-  }, [cycleConfig]);
+  const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
+  const showBy = settings.showBy ?? DEFAULT_SHOW_BY;
+  const [hintDismissed, setHintDismissed] = useState(false);
+  // The hint only exists for a device that still holds the old pay cycle and an account on defaults.
+  const showPayCycleHint = hasLoaded && !hintDismissed && typeof window !== "undefined"
+    && shouldShowPayCycleHint(settings, user?.id, window.localStorage);
+  const dismissHint = () => {
+    dismissPayCycleHint(window.localStorage, user?.id);
+    setHintDismissed(true);
+  };
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const ignoreMonthSyncUntilRef = useRef<number>(0);
@@ -367,6 +359,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     return byDate;
   }, [allDays, projectedBetween]);
 
+  // Period start and end markers: computed once per visible window, never per cell.
+  const firstWindowDay = allDays.length ? format(allDays[0], "yyyy-MM-dd") : null;
+  const lastWindowDay = allDays.length ? format(allDays[allDays.length - 1], "yyyy-MM-dd") : null;
+  const { starts: periodStarts, ends: periodEnds } = useMemo(
+    () => firstWindowDay && lastWindowDay
+      ? markerSets(budgetPeriod, incomes, firstWindowDay, lastWindowDay)
+      : { starts: new Set<string>(), ends: new Set<string>() },
+    [budgetPeriod, incomes, firstWindowDay, lastWindowDay],
+  );
+
   // Active month date for overview metrics
   const activeDate = useMemo(() => {
     try {
@@ -376,17 +378,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
   }, [activeMonthStr, currentDate]);
 
-  // Totals can follow the calendar month or the pay cycle that starts in the active month.
-  const [basis, setBasis] = useState<"month" | "cycle">("month");
-  const cycle = useMemo(() => getSalaryCycleForMonth(activeDate, cycleConfig), [activeDate, cycleConfig]);
+  // The active day: the day the header navigated to, or the first of the month that was scrolled to.
+  const activeDay = shellActiveDate && format(shellActiveDate, "yyyy-MM") === activeMonthStr
+    ? format(shellActiveDate, "yyyy-MM-dd")
+    : format(activeDate, "yyyy-MM-dd");
+
+  // Totals follow the calendar month or the budget period. Show by picks the starting basis and the toggle switches once.
+  const [basis, setBasis] = useState<"month" | "cycle">(showBy === "pay_cycle" ? "cycle" : "month");
+  useEffect(() => {
+    setBasis(showBy === "pay_cycle" ? "cycle" : "month");
+  }, [showBy]);
+  const period = useMemo(
+    () => basis === "cycle"
+      ? periodOf(budgetPeriod, incomes, activeDay)
+      : calendarPeriod(format(activeDate, "yyyy-MM-dd")),
+    [basis, budgetPeriod, incomes, activeDay, activeDate],
+  );
   const periodDays = useMemo(
-    () => (basis === "cycle" ? cycle.days : eachDayOfInterval({ start: startOfMonth(activeDate), end: endOfMonth(activeDate) })),
-    [basis, cycle, activeDate],
+    () => eachDayOfInterval({ start: parseISO(period.start), end: parseISO(period.end) }),
+    [period],
   );
 
-  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
-    basis === "cycle" ? cycle.cycleMonth : incomeMonth(activeDate), incomes,
-  );
+  const { recurringIncome, oneTimeIncome, totalIncome } = getRangeIncome(period.start, period.end, incomes);
 
   const totalSpending = periodDays.reduce((sum, day) => sum + getTotalForDate(day, spendings), 0);
   const leftOver = totalIncome - totalSpending;
@@ -736,12 +749,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               Recur. {formatCompactSpending(recurringIncome)} · Once {formatCompactSpending(oneTimeIncome)}
             </span>
             <span className="calendar-basis-range">
-              {" · "}{basis === "cycle" ? `${format(cycle.startDate, "MMM d")} – ${format(cycle.endDate, "MMM d")}` : format(activeDate, "MMMM")}
+              {" · "}{basis === "cycle" ? periodRangeLabel(period) : format(activeDate, "MMMM")}
             </span>
             </span>
             <span className="calendar-overview-tools">
-              <button type="button" className="calendar-plan-btn" onClick={() => openPlanGuide(format(activeDate, "yyyy-MM"))}>
-                <Sparkles size={14} aria-hidden="true" /><span className="hide-mobile">Plan your month</span><span className="show-mobile">Plan</span>
+              <button type="button" className="calendar-plan-btn" onClick={() => openPlanPeriod()}>
+                <Sparkles size={14} aria-hidden="true" /><span className="hide-mobile">Plan this period</span><span className="show-mobile">Plan</span>
               </button>
               <div className="calendar-basis-toggle" role="group" aria-label="Totals calculated for">
                 <button type="button" aria-pressed={basis === "month"} onClick={() => setBasis("month")}>Month</button>
@@ -749,6 +762,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               </div>
             </span>
           </div>
+
+          {showPayCycleHint && (
+            <p className="calendar-pay-cycle-hint" role="note">
+              <span>Your payday is only saved on this device. </span>
+              <Link href="/profile#paycycle">Set up your pay cycle</Link>
+              <button type="button" onClick={dismissHint}>Dismiss</button>
+            </p>
+          )}
 
           {periodPlanned > 0 && (
             <div className="calendar-projection-row" aria-label="Projection including planned spendings">
@@ -805,7 +826,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 const isCurrentDay = isToday(day);
                 const isFirstOfMonth = day.getDate() === 1;
                 const isDifferentMonth = dayMonthStr !== activeMonthStr;
-                const { isStart: isCycleStart, isEnd: isCycleEnd } = cycleBoundary(day);
+                const isCycleStart = periodStarts.has(dayKey);
+                const isCycleEnd = periodEnds.has(dayKey);
 
                 // Stage per individual day: 'dates' (immediate) -> 'totals' (left-to-right, top-to-bottom) -> 'details'
                 const dayStage: WeekRenderStage = dayStages[dayKey] || 'dates';

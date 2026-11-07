@@ -209,9 +209,8 @@ export interface MonthIncomeItem {
   total: number;
 }
 
-/** Total income received in a calendar month (YYYY-MM), split into recurring and one-time income. */
-export function getMonthIncome(month: string, incomes: readonly Income[]) {
-  const { start, end } = monthRange(month);
+/** Total income received within [start, end] (inclusive YYYY-MM-DD), split into recurring and one-time income. */
+export function getRangeIncome(start: string, end: string, incomes: readonly Income[]) {
   const items: MonthIncomeItem[] = [];
   let recurringCents = 0;
   let oneTimeCents = 0;
@@ -229,6 +228,12 @@ export function getMonthIncome(month: string, incomes: readonly Income[]) {
     totalIncome: (recurringCents + oneTimeCents) / 100,
     items,
   };
+}
+
+/** Total income received in a calendar month (YYYY-MM), split into recurring and one-time income. */
+export function getMonthIncome(month: string, incomes: readonly Income[]) {
+  const { start, end } = monthRange(month);
+  return getRangeIncome(start, end, incomes);
 }
 
 export function describeIncomeSchedule(income: IncomeSchedule): string {

@@ -64,7 +64,7 @@ export const MCP_RESOURCE_TEMPLATES: McpResourceTemplateDefinition[] = [
   {
     uriTemplate: "finance://salary-cycle/{month}",
     name: "Salary Cycle Report by Month (YYYY-MM)",
-    description: "Pay-cycle spending, anchor month income, leftover balance, and daily burn rate for any YYYY-MM cycle month.",
+    description: "Pay-cycle spending, income paid in the period, leftover balance, and daily burn rate for the saved budget period that contains the 1st of any YYYY-MM month.",
     mimeType: "application/json",
   },
   {
@@ -121,11 +121,11 @@ export async function readMcpResource(
   }
 
   if (uri === "finance://budget-period") {
-    const [{ setting, today, period }, summary] = await Promise.all([
+    const [{ setting, showBy, today, period }, summary] = await Promise.all([
       loadBudgetPeriod(financeStore, user.id),
       loadPlanPeriodSummary(financeStore, user.id),
     ]);
-    return jsonContent(uri, { budgetPeriod: setting, today, currentPeriod: period, summary });
+    return jsonContent(uri, { budgetPeriod: setting, showBy, today, currentPeriod: period, summary });
   }
 
   if (uri === "finance://repeat-rules") {

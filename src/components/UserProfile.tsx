@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { format } from 'date-fns';
 import { User, Mail, Calendar, Tag, Plus, ChevronLeft, ChevronRight, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Wallet, SlidersHorizontal, CalendarClock, LogOut, Lock, Copy, Check, Camera, Pencil, RefreshCw, Bot } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,12 +10,11 @@ import { useFinance } from '../contexts/FinanceContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { errorMessage } from '../services/auth';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { getMonthIncome, incomeMonth } from '../lib/income';
-import { clampDelayDays, clampSalaryDay, defaultSalaryCycleConfig, getPaydayForMonth, loadSalaryCycleConfig, saveSalaryCycleConfig } from '../lib/salaryCycle';
-import type { SalaryCycleConfig } from '../lib/salaryCycle';
+import { getRangeIncome } from '../lib/income';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodOf } from '../lib/periods';
 import type { CategoryData } from '../types';
 import { EditorActions } from './ProfileSection';
-import { BudgetPeriodSection } from './BudgetPeriodSection';
+import { BudgetPeriodSection, describeBudgetPeriod } from './BudgetPeriodSection';
 import type { BudgetPeriodEditorState } from './BudgetPeriodSection';
 import { IncomeSources } from './IncomeSources';
 import type { IncomeEditorState } from './IncomeSources';
@@ -110,8 +110,6 @@ export function UserProfile() {
   const avatar = useSectionEditor<string>();
   const category = useSectionEditor<CategoryData & { isNew: boolean }>();
   const [confirmRemoveCategory, setConfirmRemoveCategory] = useState(false);
-  const [cycle, setCycle] = useState<SalaryCycleConfig>(defaultSalaryCycleConfig);
-  const [adjustMonth, setAdjustMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const loggingOut = useRef(false);
@@ -125,7 +123,9 @@ export function UserProfile() {
   const dirty = Object.values(unsaved).some(Boolean);
   const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy || budgetEditor.busy);
   const initials = (user?.name || user?.email || '').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-  const monthIncome = getMonthIncome(incomeMonth(new Date()), incomes).totalIncome;
+  // The income figure follows Show by: the calendar month, or the pay period that contains today.
+  const incomePeriod = viewPeriodOf(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, format(new Date(), 'yyyy-MM-dd'));
+  const monthIncome = getRangeIncome(incomePeriod.start, incomePeriod.end, incomes).totalIncome;
   const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: settings.categories.length, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
 
   useUnsavedChanges(!isLoggingOut && (dirty || pending));
@@ -140,10 +140,6 @@ export function UserProfile() {
     window.addEventListener('hashchange', fromHash);
     return () => window.removeEventListener('hashchange', fromHash);
   }, []);
-
-  useEffect(() => {
-    setCycle(loadSalaryCycleConfig(user?.id));
-  }, [user?.id]);
 
   const selectTab = (next: TabId, focus = false) => {
     setTab(next);
@@ -210,23 +206,6 @@ export function UserProfile() {
     setConfirmRemoveCategory(false);
   });
 
-  const updateCycle = (patch: Partial<SalaryCycleConfig>) => {
-    const next = { ...cycle, ...patch };
-    setCycle(next);
-    saveSalaryCycleConfig(next, user?.id);
-  };
-
-  const adjustKey = `${adjustMonth.getFullYear()}-${String(adjustMonth.getMonth() + 1).padStart(2, '0')}`;
-  const adjustPayday = getPaydayForMonth(adjustMonth, cycle);
-  const setMonthDelay = (delay: number) => {
-    const clamped = clampDelayDays(delay);
-    const monthDelays = { ...cycle.monthDelays };
-    if (clamped === 0) delete monthDelays[adjustKey]; else monthDelays[adjustKey] = clamped;
-    updateCycle({ monthDelays });
-  };
-  const shiftAdjustMonth = (by: number) => setAdjustMonth(current => new Date(current.getFullYear(), current.getMonth() + by, 1));
-  const delayLabel = (delay: number) => (delay === 0 ? 'On schedule' : `${delay > 0 ? '+' : '−'}${Math.abs(delay)}d`);
-
   const handleLogout = async () => {
     if (loggingOut.current || pending) return;
     if (dirty && !window.confirm('Discard unsaved profile changes and sign out?')) return;
@@ -269,7 +248,7 @@ export function UserProfile() {
     { title: 'Money', rows: [
       { id: 'income', label: 'Income sources', value: incomes.length },
       { id: 'categories', label: 'Categories', value: settings.categories.length },
-      { id: 'paycycle', label: 'Pay cycle', value: `Day ${cycle.salaryDay}` },
+      { id: 'paycycle', label: 'Pay cycle', value: describeBudgetPeriod(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, incomes) },
     ] },
     { title: 'App', rows: [
       { id: 'preferences', label: 'Appearance', value: themeLabel },
@@ -332,7 +311,7 @@ export function UserProfile() {
           </p>
         </div>
         <dl className="profile-stats">
-          <div><dt>Income this month</dt><dd>{money(monthIncome)}</dd></div>
+          <div><dt>{incomePeriod.mode === 'calendar' ? 'Income this month' : 'Income this period'}</dt><dd>{money(monthIncome)}</dd></div>
           <div><dt>Plans</dt><dd>{plans.length}</dd></div>
         </dl>
       </header>
@@ -509,39 +488,7 @@ export function UserProfile() {
           </section>
 
           <section id="profile-panel-paycycle" role="tabpanel" aria-labelledby="profile-tab-paycycle" className="profile-panel" hidden={tab !== 'paycycle'}>
-            <div className="profile-panel-head"><div><h2>Paycycle</h2><p>Changes apply right away and are saved on this device.</p></div></div>
-            <div className="profile-card profile-rows">
-              <div className="profile-pref">
-                <div><label htmlFor="profile-payday"><strong>Payday</strong></label><span className="profile-hint">The day of the month each salary cycle starts. </span></div>
-                <select id="profile-payday" value={cycle.salaryDay} onChange={event => updateCycle({ salaryDay: clampSalaryDay(Number(event.target.value)) })}>
-                  {Array.from({ length: 28 }, (_, index) => index + 1).map(day => <option key={day} value={day}>Day {day}</option>)}
-                </select>
-              </div>
-              <div className="profile-pref">
-                <div><label htmlFor="profile-weekend-shift"><strong>Move weekend paydays to Monday</strong></label><span className="profile-hint">When payday falls on a Saturday or Sunday, the cycle starts the following Monday.</span></div>
-                <input id="profile-weekend-shift" type="checkbox" role="switch" className="profile-switch" checked={cycle.shiftWeekendToMonday} onChange={event => updateCycle({ shiftWeekendToMonday: event.target.checked })} />
-              </div>
-              <div className="profile-pref">
-                <div><label htmlFor="profile-start-after"><strong>Start cycle the day after payday</strong></label><span className="profile-hint">Keeps cycles consecutive, so payday belongs to the cycle that just ended.</span></div>
-                <input id="profile-start-after" type="checkbox" role="switch" className="profile-switch" checked={cycle.startDayAfterPayday} onChange={event => updateCycle({ startDayAfterPayday: event.target.checked })} />
-              </div>
-              <div className="profile-pref">
-                <div><label htmlFor="profile-end-on-payday"><strong>End cycle on payday</strong></label><span className="profile-hint">Include the next payday as the final day of the cycle. Always on when the cycle starts the day after payday.</span></div>
-                <input id="profile-end-on-payday" type="checkbox" role="switch" className="profile-switch" checked={cycle.startDayAfterPayday ? true : cycle.includeNextPaydayInCycle} disabled={cycle.startDayAfterPayday} onChange={event => updateCycle({ includeNextPaydayInCycle: event.target.checked })} />
-              </div>
-              <div className="profile-pref">
-                <div><strong id="profile-month-payday-label">Adjust one month's payday</strong><span className="profile-hint">Pick the month, then move its payday earlier (up to 7 days) or later (up to 14 days). Only that month changes.</span></div>
-                <div className="profile-actions" role="group" aria-labelledby="profile-month-payday-label">
-                  <button type="button" className="profile-icon-button" aria-label="Previous month" onClick={() => shiftAdjustMonth(-1)}><ChevronLeft size={16} aria-hidden="true" /></button>
-                  <span>{adjustMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}: <strong>{adjustPayday.actualDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</strong></span>
-                  <button type="button" className="profile-icon-button" aria-label="Next month" onClick={() => shiftAdjustMonth(1)}><ChevronRight size={16} aria-hidden="true" /></button>
-                  <button type="button" className="profile-icon-button" aria-label="Pay one day earlier" disabled={adjustPayday.manualDelayDays <= -7} onClick={() => setMonthDelay(adjustPayday.manualDelayDays - 1)}>−</button>
-                  <span>{delayLabel(adjustPayday.manualDelayDays)}</span>
-                  <button type="button" className="profile-icon-button" aria-label="Pay one day later" disabled={adjustPayday.manualDelayDays >= 14} onClick={() => setMonthDelay(adjustPayday.manualDelayDays + 1)}>+</button>
-                  {adjustPayday.manualDelayDays !== 0 && <button type="button" className="profile-button" onClick={() => setMonthDelay(0)}>Reset</button>}
-                </div>
-              </div>
-            </div>
+            <div className="profile-panel-head"><div><h2>Paycycle</h2><p>How you are paid, and which period the calendar, week, day and analytics views show. Saved to your account.</p></div></div>
             <BudgetPeriodSection disabled={isLoggingOut} onEditorStateChange={setBudgetEditor} />
           </section>
 

@@ -14,8 +14,8 @@ export interface FinanceShellContextValue {
   openBackToCalendar: () => void;
   openExpense: (expense?: Spending, defaults?: ExpenseDefaults) => void;
   openIncomeModal: (month: string) => void;
-  /** Opens the "Plan your month" guide for a YYYY-MM month (default: this month). */
-  openPlanGuide: (month?: string) => void;
+  /** Opens the "Plan this period" screen for the budget period that contains a YYYY-MM-DD date (default: today). */
+  openPlanPeriod: (date?: string) => void;
   /** Mobile Week: whether the quick-add keypad is docked. Kept in the shell so it survives tab switches. */
   keypadOpen: boolean;
   setKeypadOpen: (open: boolean) => void;

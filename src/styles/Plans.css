@@ -1,4 +1,4 @@
-/* Planning: the "Plan your month" guide and the Plans page. Builds on QuickEntry.css and UserProfile.css; app tokens only. */
+/* Planning: the "Plan this period" guide and the Plans page. Builds on QuickEntry.css and UserProfile.css; app tokens only. */
 
 /* ---------- guide (inside the quick-entry dialog shell) ---------- */
 .qe-dialog.plan-guide { width: min(760px, 100%); }

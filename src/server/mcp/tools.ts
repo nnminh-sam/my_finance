@@ -16,6 +16,7 @@ import {
 } from "./data";
 import { JsonRpcErrorCode, McpError, type McpToolCallResult, type McpToolDefinition } from "./protocol";
 import { getMonthIncome } from "../../lib/income";
+import { SHOW_BY } from "../../lib/periods";
 
 export const MCP_TOOLS: McpToolDefinition[] = [
   {
@@ -109,6 +110,11 @@ export const MCP_TOOLS: McpToolDefinition[] = [
             },
             required: ["id", "name", "color", "icon"],
           },
+        },
+        showBy: {
+          type: "string",
+          enum: [...SHOW_BY],
+          description: "Which period Calendar, Week, Day and Analytics show: the calendar month or the pay cycle.",
         },
       },
       additionalProperties: false,
@@ -572,29 +578,29 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     name: "get_salary_cycle_summary",
-    description: "Compute a salary (pay) cycle report for a cycle month (YYYY-MM), including cycle start/end dates, payday adjustments, total spending, anchor month income, leftover balance, daily burn rate, remaining safe daily budget, and category breakdown.",
+    description: "Compute a pay cycle report for a cycle month (YYYY-MM): the saved budget period that contains the 1st of that month, with its start/end dates, total spending, income paid in the period, leftover balance, daily burn rate, remaining safe daily budget, and category breakdown. The period follows the saved budget period setting. The salaryDay, shiftWeekendToMonday, includeNextPaydayInCycle and delayDays parameters are accepted but ignored, and are echoed in config.ignoredParameters.",
     inputSchema: {
       type: "object",
       properties: {
         cycleMonth: {
           type: "string",
-          description: "Cycle anchor month in YYYY-MM format (defaults to current month).",
+          description: "Cycle month in YYYY-MM format (defaults to current month). The cycle is the saved budget period that contains the 1st of this month.",
         },
         salaryDay: {
           type: "number",
-          description: "Configured payday of the month (1–28, default 5).",
+          description: "Ignored. The cycle follows the saved budget period.",
         },
         shiftWeekendToMonday: {
           type: "boolean",
-          description: "Shift weekend paydays to the following Monday (default true).",
+          description: "Ignored. The cycle follows the saved budget period.",
         },
         includeNextPaydayInCycle: {
           type: "boolean",
-          description: "Include next month's payday as the final day of the cycle (default true).",
+          description: "Ignored. The cycle follows the saved budget period.",
         },
         delayDays: {
           type: "number",
-          description: "Optional payday delay/early payout adjustment in days for this month (-7 to +14, default 0).",
+          description: "Ignored. The cycle follows the saved budget period.",
         },
       },
       additionalProperties: false,
@@ -942,8 +948,8 @@ export async function executeMcpTool(
       }
 
       case "get_budget_period": {
-        const { setting, today, period } = await loadBudgetPeriod(financeStore, user.id);
-        return toolSuccess({ budgetPeriod: setting, today, currentPeriod: period });
+        const { setting, showBy, today, period } = await loadBudgetPeriod(financeStore, user.id);
+        return toolSuccess({ budgetPeriod: setting, showBy, today, currentPeriod: period });
       }
 
       case "get_spending_forecast": {

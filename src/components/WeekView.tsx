@@ -6,7 +6,7 @@ import { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Ho
 import { getSpendingsForDate, getTotalForDate, formatCompactSpending } from '../lib/spendings';
 import { useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { getMonthIncome, incomeMonth } from '../lib/income';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodIncome } from '../lib/periods';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import '../styles/WeekView.css';
@@ -59,9 +59,8 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
     }
   };
 
-  const { totalIncome } = getMonthIncome(
-    incomeMonth(currentDate), incomes,
-  );
+  // Income follows Show by: the calendar month, or the pay period that contains the date shown.
+  const { totalIncome } = viewPeriodIncome(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, format(currentDate, 'yyyy-MM-dd'));
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: startDate, end: endDate });

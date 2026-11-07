@@ -3,7 +3,7 @@
 import React, { useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { getSpendingsForDate, getTotalForDate, formatCompactSpending } from '../lib/spendings';
-import { getMonthIncome, incomeMonth } from '../lib/income';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodIncome } from '../lib/periods';
 import {
   ArrowDown,
   ArrowUp,
@@ -82,8 +82,9 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
   const router = useRouter();
   const daySpendings = getSpendingsForDate(date, spendings);
   const totalSpent = getTotalForDate(date, spendings);
-  const { totalIncome } = getMonthIncome(incomeMonth(date), incomes);
   const dayKey = format(date, 'yyyy-MM-dd');
+  // Income follows Show by: the calendar month, or the pay period that contains the day.
+  const { totalIncome } = viewPeriodIncome(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, dayKey);
   const planned = projectedBetween(dayKey, dayKey);
   const plannedTotal = planned.reduce((sum, item) => sum + item.amount, 0);
   // Skipped days are hidden from projections, so list them here to allow undoing.
