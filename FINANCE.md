@@ -18,7 +18,7 @@ npm run db:migrate
 npm run dev
 ```
 
-The migration command (`scripts/migrate.ts`) discovers checked-in `migrations/<number>_<name>.sql` files and applies them in numeric order: `001_auth.sql`, `002_finance.sql`, `003_month_income.sql`, `004_repeat_spendings.sql`, then `005_incomes.sql`. Each file runs in its own transaction. All schema files use `CREATE TABLE/INDEX IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS`, so rerunning the command safely preserves existing records. There are no destructive drops and no general migration ledger; these files are rerunnable, not a mechanism for altering an existing table definition. Future schema changes need their own ordered, rerunnable migration. The script's simple statement splitter supports these DDL files, not procedural SQL or semicolons inside literals/comments.
+The migration command (`scripts/migrate.ts`) discovers checked-in `migrations/<number>_<name>.sql` files and applies them in numeric order: `001_auth.sql`, `002_finance.sql`, `003_month_income.sql`, `004_repeat_spendings.sql`, `005_incomes.sql`, `006_api_tokens.sql`, `007_plans.sql` (planned spendings, plan exceptions, `finance_spendings.plan_id`/`plan_date` with a unique occurrence index, and `finance_settings.timezone`), then `008_plan_commitments.sql` (`finance_plans.sure`, and the one-time conversion of repeat rules into plans described under **Planned spendings**). Each file runs in its own transaction. All schema files use `CREATE TABLE/INDEX IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS`, so rerunning the command safely preserves existing records. There are no destructive drops and no general migration ledger; these files are rerunnable, not a mechanism for altering an existing table definition. Future schema changes need their own ordered, rerunnable migration. The script's simple statement splitter supports these DDL files, not procedural SQL or semicolons inside literals/comments.
 
 `002_finance.sql` adds:
 
@@ -59,7 +59,7 @@ The login and sign-up screens expose a light/dark toggle. Appearance follows the
 
 All finance views load real records through `FinanceContext` and the authenticated API client. The initial load fetches settings, incomes, and repeat rules; spendings are fetched per date range (`startDate`/`endDate`) as pages and the calendar need them, then merged by ID. Pagination is followed until `nextCursor` is null. Initial load errors show a retry/sign-out screen, not a misleading empty dataset; later refresh failures retain the last successfully loaded records with a warning. Reloads and writes are serialized so an older GET cannot overwrite a saved expense. Records refresh on window focus or the header refresh button.
 
-Use the header **Add expense** button on any finance page, or the **Add expense** button in day details, to open a modal without navigating. Each new modal defaults to the current local date and time at opening—even when viewing a historical day—and both fields are editable. Editing a transaction uses the same modal with its existing values. Cancel/Escape confirm before discarding changed fields; pending saves cannot be dismissed. Validation or API failures keep the modal and entered values available. Save/edit/delete operations wait for the server response. Personalized settings live on `/profile`, with independent income-source, avatar, categories, and appearance editors. Click a section's heading/Edit control to edit it; each has its own Save/Cancel, busy state, and errors. Income sources, avatar, and categories persist in Neon; appearance remains device-local. Name and email stay read-only. Empty accounts show no transactions and no income; only category definitions are supplied as defaults. Theme, auth coordination metadata, and the salary cycle configuration are the only app data persisted in browser storage.
+Use the header **Add expense** button on any finance page, or the **Add expense** button in day details, to open a modal without navigating. Each new modal defaults to the current local date and time at opening—even when viewing a historical day—and both fields are editable. Editing a transaction uses the same modal with its existing values. Cancel/Escape confirm before discarding changed fields; pending saves cannot be dismissed. Validation or API failures keep the modal and entered values available. Save/edit/delete operations wait for the server response. Personalized settings live on `/profile`, with independent income-source, avatar, categories, and appearance editors. Click a section's heading/Edit control to edit it; each has its own Save/Cancel, busy state, and errors. Income sources, avatar, and categories persist in Neon; appearance remains device-local. Name and email stay read-only. Empty accounts show no transactions and no income; only category definitions are supplied as defaults. Theme, auth coordination metadata and two small flags about the payday an older version saved on the device (it is read once as a suggestion, never deleted, and a flag remembers a dismissed hint) are the only app data persisted in browser storage.
 
 Calendar/week heatmaps show relative spending intensity against the selected month's highest daily total, not budget compliance. Analytics reference monthly income only when the month has any, omit daily-limit lines/classifications, and show active/no-spend days and no-spend streaks.
 
@@ -72,31 +72,123 @@ A user can have any number of income sources: a 9–5 salary, freelance clients,
 | Source | Required, 1–100 characters (suggestions: Salary, Freelance, Bonus, Allowance, Gift, Investment, Other; any text is allowed) |
 | Name | Optional, up to 500 characters (e.g. employer, client, or person) |
 | Amount | Paid **per payment**: positive, up to 1,000,000,000,000 ₫, at most two decimals |
-| Frequency | `once`, `daily`, `weekly`, `monthly`, or `yearly` |
+| Frequency | `once`, `daily`, `weekly`, `semimonthly` (twice a month), `monthly`, or `yearly` |
+| Interval | Optional, `weekly` only: `1` (every week, the default), `2` (every 2 weeks) or `4` (every 4 weeks). Other frequencies accept only the default `1`, which is normalized away |
+| Semimonthly days | Required for `semimonthly`; other frequencies accept only `null` or absent. Two whole days `1`-`31`, the first before the second (for example `15` and `31`) |
+| Weekend shift | Optional boolean, default off, meaningful for `weekly`, `semimonthly`, `monthly` and `yearly` (other frequencies accept only `false`, normalized away): a payday on a Saturday or Sunday is paid on the Friday before |
 | Start date | The first payment (the only one for `once`) |
 | End date | Optional, inclusive, not before the start date; not allowed for `once` |
 
-**Payments per month:** one-time income counts in the month of its date; daily income counts every day in the period; weekly income repeats every 7 days on the start date's weekday (4 or 5 times a month); monthly income pays on the start date's day of the month, moved to the last day in shorter months (a 31st salary pays Feb 28/29 and Apr 30); yearly income pays once a year on the start month and day (Feb 29 → Feb 28 in common years).
+**Payments per month:** one-time income counts in the month of its date; daily income counts every day in the period; weekly income repeats every 7 days (every 14 with interval 2, every 28 with interval 4) on the start date's weekday, so a plain weekly income pays 4 or 5 times a month and a 4-week one has 13 or 14 paydays in a year; twice-a-month income pays on its two days of each month, and a day beyond the month's length moves to the last day (day 31 pays Feb 28/29 and Apr 30), so when both days clamp to the same date in a short month, both payments are kept; monthly income pays on the start date's day of the month, moved to the last day in shorter months (a 31st salary pays Feb 28/29 and Apr 30); yearly income pays once a year on the start month and day (Feb 29 → Feb 28 in common years).
+
+**Weekend shift (opt-in, per income):** with the shift on, a Saturday payday is paid on the Friday before (1 day earlier) and a Sunday payday on the Friday before (2 days earlier). There is no holiday calendar. The start and end dates apply to the scheduled payday, not the paid date: a first payday on a Saturday is still paid, on the Friday before the start date, while a payday after the end date pays nothing even if its Friday is not. A shift moves money into the earlier period: a payday on Saturday 2026-08-01 is paid on Friday 2026-07-31, so it counts in July, not August, in the calendar-month views (Calendar, Week, Day, Analytics, the MCP income totals) and in the pay period that starts on that Friday. Incomes that do not use the interval, semimonthly or weekend shift options are counted exactly as before (`src/lib/income.ts`).
 
 **Month income = Σ amount × payments in that month**, summed in exact cents (`src/lib/income.ts`). For example, a 20,000,000 ₫ monthly salary, a 1,000,000 ₫ weekly part-time wage starting Monday 2026-10-05, and a 5,000,000 ₫ one-time bonus on 2026-10-20 give October 2026: 20,000,000 + 4 × 1,000,000 + 5,000,000 = 29,000,000 ₫.
 
 Where it is used:
 
 - `/profile` → **Income sources**: pick a month to see recurring, one-time, and total income for it, list every source with its schedule and what it pays in that month, and add, edit, or delete sources.
-- Calendar, Week, and Pay Cycle overview cards show **Income**, **Spending**, and **Left Over = income − spending** for the month (the pay cycle uses its anchor month's income), with a recurring / one-time breakdown. Their **Edit** button opens a dialog listing that month's income with an add form whose date defaults to that month.
+- Calendar and Week overview cards, the Day view and the Profile summary show **Income** for the period chosen by [Show by](#show-by-and-the-pay-cycle) (the calendar month by default, or the pay period), summed with `getRangeIncome` (`src/lib/income.ts`). Calendar also shows **Spending** and **Left Over = income − spending**, with a recurring / one-time breakdown. The **Edit** button opens a dialog listing that month's income with an add form whose date defaults to that month.
 - Analytics use the month income for the income reference line, projected savings, and overspending insights.
 
 Forms confirm before discarding changes, block closing while saving, keep drafts on validation or server errors, and take part in the profile's leave-page and logout guards.
 
-## Salary (pay) cycle view
+## Show by and the pay cycle
 
-`/cycle` groups spending by pay period instead of calendar month. It is computed in the browser (`src/lib/salaryCycle.ts`) from existing spendings and income; there is no server API or table for it.
+There is one pay-cycle setting, saved to the account: **Profile → Paycycle → How are you paid?** (`src/components/BudgetPeriodSection.tsx`). It holds the [budget period](#budget-period-setting) (calendar month, monthly on a fixed day, or every paycheck of an income) and **Show by**. The cycle is no longer kept on the device (see the payday note below).
 
-- **Payday**: configurable day 1–28 (default 5), clamped to the month length. With **shift weekend to Monday** (default on), Saturday paydays move to Monday (+2) and Sunday paydays to Monday (+1).
-- **Per-month adjustment**: a delay or early payout of −7…+14 days for a specific month, set with a mini-calendar or ±1-day buttons, and resettable.
-- **Cycle range**: from this month's actual payday to next month's actual payday, including that payday by default (**include next payday in cycle**), or ending the day before when turned off.
-- **Totals**: cycle spending, top categories, and peak day across the cycle days; income for the cycle's anchor month (all income sources' payments in that `YYYY-MM`); leftover = income − cycle spending.
-- **Storage**: the configuration is saved in `localStorage` under `tracker_salary_cycle_v1_<userId>`. It is per device and browser and is not synced through Neon.
+**Show by** is the per-user setting `showBy`, stored in `finance_settings.show_by` (migration `010_show_by.sql`) and returned as a top-level key of `settings`:
+
+| Value | Calendar, Week, Day, Analytics, Profile summary and phone screens use |
+| ----- | ---------------------------------------------------------------------- |
+| `calendar_month` (default) | The calendar month |
+| `pay_cycle` | The budget period containing the date shown (`viewPeriodOf` in `src/lib/periods.ts`). If the budget period is the calendar month, or a paycheck setting that fell back to it, this equals the calendar month |
+
+- One engine: `src/lib/periods.ts` (`periodOf`, `periodsBetween`, `viewPeriodOf`, `adjacentPeriod`, `markerSets`) gives every boundary, and `getRangeIncome` gives the income paid inside it. The `/plans` page, the Calendar markers, the planner, Analytics, Week, Day, the Profile summary, the phone screens and the MCP pay-cycle report all use them, so their period figures agree.
+- With **Pay cycle**, the header arrows and title on Calendar and Analytics move by period, Calendar opens on the cycle basis (the Month / Pay cycle toggle still switches once and is not saved), Analytics covers the period's days, spending and income, and Week and Day income is the income of the period containing the date. Week still shows Monday to Sunday and Day still shows one day.
+- **Calendar markers**: Calendar marks the first and last day of every pay period in the visible window (one computation per window, no per-cell work). In calendar mode there are no markers. **Change for existing users on the default setting**: the old device-local markers (a Monday-shifted payday, drawn from a setting kept in the browser) are gone, so a default user sees no markers.
+- **What the setting does not touch**: MCP monthly analytics (`get_monthly_analytics`, `finance://analytics/<month>`), `list_incomes` and `finance://incomes` stay on calendar months; the Calendar scroll window stays month-based; Week spending is the Monday to Sunday week; `/plans` always follows the budget period, whatever Show by says.
+- **Weekend rule**: the old "move a weekend payday to Monday" option is gone. A payday on a weekend is paid on the Friday before only when that income's own **Weekend shift** is on; a monthly-from-day boundary is never shifted.
+- **Payday kept by an older version**: if the browser still holds `tracker_salary_cycle_v1_<userId>` and the account is still on the defaults, the pay cycle form opens with a monthly-from-that-day suggestion, unsaved, and says that only the payday is carried over (the weekend and per-month adjustments are dropped). The key is read, never changed or removed. Calendar shows a one-line hint linking to `/profile#paycycle` until the user saves a non-default setting or dismisses it (flag `tracker_pay_cycle_hint_dismissed_v1_<userId>`).
+
+## Budget period setting
+
+The **budget period** decides which days the Plans page and the plan summary group together. It is saved per user in `finance_settings` and returned in `settings.budgetPeriod`:
+
+```json
+{ "mode": "calendar", "startDay": 1, "paycheckIncomeId": null }
+```
+
+| Mode | Period |
+| ---- | ------ |
+| `calendar` (default) | The calendar month, 1st to last day |
+| `monthly_from_day` | From `startDay` of one month to the day before `startDay` of the next. `startDay` is a whole day `1`-`28`, so every month has it; `1` equals `calendar`. Never weekend-shifted |
+| `paycheck` | From a payday of the income in `paycheckIncomeId` to the day before its next payday. Paydays include the weekend shift and are extended before the income's start date and after its end date, so every day belongs to a period. Two paydays shifted onto the same Friday count as one boundary |
+
+Rules:
+
+- `paycheckIncomeId` must be one of the user's own `weekly`, `semimonthly` or `monthly` incomes. Paycheck mode without one is rejected (`400`), and the id is cleared when the mode is changed away from `paycheck`.
+- While an income is the paycheck income, changing its frequency to `once`, `daily` or `yearly` is rejected with `400`. Deleting it resets the mode to `calendar` in the same transaction.
+- `PUT /settings` takes `budgetPeriod` with any subset of `mode`, `startDay` and `paycheckIncomeId`; an absent key keeps the stored value, and an explicit `null` clears the paycheck income. A `startDay` outside `1`-`28`, an unknown mode or an unknown key returns `400`. Existing and new users start on `calendar`, so nothing changes until the setting is saved.
+- If paycheck mode cannot be resolved (unknown income, unusable frequency), the periods fall back to calendar months instead of failing (`src/lib/periods.ts`).
+- `/plans`, the plan summary and the planner always follow this setting. Calendar, Week, Day, Analytics and the phone screens follow it only when [Show by](#show-by-and-the-pay-cycle) is `pay_cycle`; with the default `calendar_month` they keep calendar-month grouping.
+- `PUT /settings` also takes the top-level `showBy` (`calendar_month` or `pay_cycle`; any other value returns `400`). An absent key keeps the stored value. Both can be sent in one request, which is what the pay cycle form does. Existing and new users start on `calendar_month`.
+
+## Plans by budget period
+
+`GET /plans/summary?date=YYYY-MM-DD` returns `{ summary }` for the budget period containing `date` (default: today in the user's `timezone`; an invalid date returns `400`). `HEAD` is allowed too. It is routed before `/plans/:id`.
+
+```json
+{ "summary": { "period": { "start": "2026-11-25", "end": "2026-12-24", "mode": "paycheck", "nextStart": "2026-12-25" },
+  "today": "2026-12-01", "payments": [{ "incomeId": "…", "source": "Salary", "name": "", "date": "2026-11-25", "amount": 20000000 }],
+  "income": 20000000, "spent": 0, "committed": 0, "tentative": 0, "left": 20000000, "occurrences": [] } }
+```
+
+- `payments`: every payment of every income paid inside the period (by paid date, after the weekend shift), including payments still to come. `income` is their sum.
+- `spent`: real spendings dated inside the period.
+- `occurrences`: planned occurrences still to happen inside the period. `committed` is the total of those marked sure and `tentative` the total of estimates. An occurrence that already became a real spending, including one marked done early, is not projected again, so it is never counted twice. A past period has no planned amounts.
+- `left = income - spent - committed - tentative`, in exact cents.
+- A bill due on the 1st falls in the period of the paycheck before it when the periods run paycheck to paycheck (a period that starts on the 25th ends on the 24th).
+
+MCP: the read-only tools `get_plan_period_summary` (optional `date`) and `get_budget_period` (the setting, `showBy` and the period containing today), and the resource `finance://budget-period` (setting, `showBy`, current period and its summary). `list_plans` is unchanged and still reports the calendar-month figures `plannedRestOfMonth` and `plannedNextMonth`.
+
+`get_salary_cycle_summary`, `finance://salary-cycle/{month}` and the `salary_cycle_checkup` prompt keep their names and result keys (`cycleMonth`, `dates`, `income`, `spending`, `categories`, `leftover`). The cycle of a month `YYYY-MM` is the saved budget period that contains `YYYY-MM-01`: spending dated in the period, income from `getRangeIncome` over the period, burn rate over its days. `config` now reports `{ mode, startDay, paycheckIncomeId, ignoredParameters }`. The old override parameters `salaryDay`, `shiftWeekendToMonday`, `includeNextPaydayInCycle` and `delayDays` are still accepted so existing callers do not fail, but they are ignored and listed in `config.ignoredParameters`; `dates` no longer has `nominalPayday`, `weekendShiftDays` or `manualDelayDays`.
+
+Show by comes from migration `010_show_by.sql` (`finance_settings.show_by` with a default and a named CHECK, rerunnable). The code reads that column in every settings query, so run `npm run db:migrate` before or together with deploying it. The pay-schedule fields and the budget period setting come from migration `009_pay_schedules_and_budget_period.sql`, which is rerunnable. Branches that have not merged this change keep working against a migrated database, but they do not know `semimonthly`: avoid creating a twice-a-month income on a shared database until this change is merged, because older code cannot count it.
+
+## Planned spendings (forecasts)
+
+A plan forecasts a spending, such as 15,000 ₫ breakfast at 07:30 and 35,000 ₫ lunch at 12:00 every weekday, with no end. Plans differ from repeat spendings, which are commitments (bills, subscriptions) written ahead as real rows:
+
+| | Repeat spendings | Planned spendings |
+| --- | --- | --- |
+| Purpose | Costs that will happen | Forecasting and preparation |
+| Future occurrences | Real `finance_spendings` rows, written up to 14 days ahead | Never stored; computed for whatever range is shown |
+| Counted as spent | Immediately, even for future dates | Only once the occurrence's local date and time pass |
+| End | `unlimited` = keeps topping up a 100-row buffer | Truly open-ended |
+
+**Schedule** (`src/lib/plans.ts`, shared by the server and the browser): `once` (start date only), `daily` every N days, `weekdays` (Mon–Fri), `weekly` every N weeks on chosen weekdays (default: the start date's weekday, weeks anchored to the start week), `monthly` every N months on the start date's day, moved to the last day in shorter months. Optional inclusive end date.
+
+**Becoming real (materialization):** each plan keeps a `materialized_through` watermark, a local timestamp in the user's `timezone` setting. Every `GET /spendings`, `GET /plans` and MCP read turns each occurrence with `watermark < date+time ≤ now` into a normal spending (`plan_id`, `plan_date` set), then advances the watermark. This runs in one transaction. Three guards keep it exactly-once: the watermark check inside the `INSERT` stops a stale request from recreating an occurrence the user deleted, the unique `(plan_id, plan_date)` index absorbs concurrent requests, and `ON CONFLICT DO NOTHING` does the rest. A new plan's watermark starts at the user's local "now", so creating a plan never back-fills past dates. After a long absence, every missed occurrence is created on the next read.
+
+**Changing one day:** skip an upcoming occurrence, or override its amount (and optionally its description). These are `finance_plan_exceptions` rows, applied when projecting and materializing, and removed once their day has passed. Only an upcoming date of that plan's schedule can be changed.
+
+**Changing the plan:** editing applies to every upcoming occurrence. Past ones are already real and never change. Editing "from a date" (`POST /plans/:id/split`) ends the plan the day before and starts a new plan from that date, moving that date's and later exceptions along. Deleting a plan removes its projection only. Its past spendings stay, unlinked (`ON DELETE SET NULL`).
+
+**Time zone:** `finance_settings.timezone` (IANA, default `Asia/Ho_Chi_Minh`). The browser sends its device zone on load when it differs.
+
+**Commitments and estimates:** every plan is either **sure** (`sure: true`, a commitment with a fixed amount and date such as rent, bills and subscriptions) or an **estimate** (food, coffee, fuel, one-offs). Both work the same way; commitments are drawn with a solid outline, estimates dashed and prefixed with `~`. New quick-entry plans default to sure for categories named like bills, rent, home, subscriptions, internet, phone, electricity, insurance, tuition, loans or debt.
+
+**Done now:** `POST /plans/:id/occurrences/:date/done` records an upcoming occurrence as a real spending immediately (paid early, or logged by hand). A past occurrence keeps its own date and time; a future one is recorded at the user's local "now". It stays linked by `plan_id`/`plan_date`, so later materialization skips it (unique index) and it is never counted twice.
+
+**Repeat spendings became plans (`008_plan_commitments.sql`):** each existing repeat rule is copied into `finance_plans` with the same id, schedule and `sure = true` (an `occurrences` rule ends on its last generated date, an `until_date` rule on its end date). Its spendings dated after the user's local now, which were written ahead, are deleted because they are now projections; earlier ones are linked to the plan (`plan_id`, `plan_date`). The rule is stamped `migrated_at`, and migrated rules are no longer listed or synced. The migration is rerunnable. The repeat-rule HTTP routes remain for compatibility, but the app and MCP no longer use them; MCP's repeat tools were removed in favour of the plan tools.
+
+**Where plans show:**
+- **Add transaction** (header + / phone Add): a **Spending · Income · Plan** toggle. A spending becomes a plan when **Plan** is selected, **Repeat** is on, or its date and time are still ahead; otherwise it is recorded as real. The **Repeat** box offers Weekdays, Weekly, Monthly or Every N days with an optional end date, a **How sure is it? Sure / Estimate** choice, and a status line saying whether the entry is recorded now or planned and when it becomes real. Choosing **Plan** on a time that has passed moves the entry to tomorrow 12:00. Editing an existing spending never turns it into a plan.
+- **`/plans`** (navigation; phone Month → Plans): opens on the current [budget period](#budget-period-setting) with previous and next period buttons. `/plans?period=YYYY-MM-DD` shows the period containing that date (a missing or invalid value means the current period). It lists income, spent so far, committed, estimates and what is left (see [Plans by budget period](#plans-by-budget-period)) and one list of spending plans with a **Sure** badge on commitments (add, edit all upcoming or from a date, delete). A period that ended before today is read-only: figures and the list stay, the planner button and plan create, edit and delete controls are hidden. Income sources moved to Profile, linked from the page (`/profile#income`). `/plans?edit=<id>&from=<date>` opens a plan's editor changing from that date, in a period that is not past.
+- **Plan this period** (calendar overview card, `/plans`, phone Month; `src/components/PlanPeriodGuide.tsx`, logic in `src/lib/periodPlan.ts`): one screen for the period selected on `/plans` (the current period from Calendar and the phone). Income is read-only with a link to Profile. **Bills** (name, amount, date) create sure monthly plans starting on that date, the **daily amount** creates one estimate `daily` plan from the later of today and the period start to the period end, **extras** create one-off plans on their dates, and every date must be inside the period. A plan with the same trimmed, case-insensitive description that is still active is listed as already planned and not created again. **Left until next payday** updates as items are added (the server's figure minus the draft's occurrences inside the period). Plans are created one at a time; if one fails the earlier ones stay, the screen lists what was created and what failed, and pressing Create again skips the created ones.
+- The calendar shows `~amount` in faded, dashed day cells, and the overview shows **Still planned**, **Projected spending** and **Projected left over** for the month or pay cycle. The week, day and phone Month/Week views show planned rows and faded bars. The day view offers **Done**, **Change**, **Usual**, **Skip** and **Series** (opens the plan from that date); the phone Week sheet offers the same. A planned item is hidden once its real spending is loaded, so it never shows twice. After a reload that moves a watermark, the client fetches the newly created spendings.
+- Income is still planned with income sources (counted for the whole month); turning income into plans that become real income transactions is a later phase.
 
 ## API
 
@@ -124,6 +216,17 @@ Write requests additionally require `Origin` equal to `APP_ORIGIN` and JSON bodi
 | POST   | `/repeat-rules`                           | Full repeat rule input                                | `201 {repeatRule, spendings}`                  |
 | DELETE | `/repeat-rules/:id?deleteFuture=true`     | —                                                     | `204`, empty body                              |
 | POST   | `/repeat-rules/sync`                      | `{asOfDate?}`                                         | `200 {spendingsCreated}`                       |
+| GET    | `/plans`                                  | — (materializes passed occurrences first)             | `200 {plans}`                                  |
+| GET    | `/plans/summary?date=<date>`              | — (`date` optional)                                   | `200 {summary}`                                |
+| POST   | `/plans`                                  | Plan input                                            | `201 {plan}`                                   |
+| PUT    | `/plans/:id`                              | Plan input (applies to upcoming occurrences)          | `200 {plan}`                                   |
+| POST   | `/plans/:id/split`                        | Plan input; `startDate` = first day of the new plan   | `201 {ended, created}`                         |
+| POST   | `/plans/:id/occurrences/:date/done`       | — (records that occurrence as real now)               | `201 {spending}`                               |
+| DELETE | `/plans/:id`                              | —                                                     | `204`, empty body                              |
+| PUT    | `/plans/:id/exceptions/:date`             | `{kind: "skip"}` or `{kind: "override", amount, description?}` | `200 {plan}`                          |
+| DELETE | `/plans/:id/exceptions/:date`             | —                                                     | `200 {plan}`                                   |
+
+Plan input: `{amount, description, category, time: "HH:mm", startDate, frequency: once|daily|weekdays|weekly|monthly, interval?: 1–365, daysOfWeek?: [0–6], endDate?: date|null, sure?: boolean}`. A plan response adds `id`, `materializedThrough` (`YYYY-MM-DDTHH:mm` local), `createdAt` and `exceptions` (upcoming only). Spendings created from a plan carry read-only `planId` and `planDate`, and editing such a spending keeps them. Settings accept and return `timezone`, `budgetPeriod` and `showBy`. MCP adds `get_plan_period_summary`, `get_budget_period`, `list_plans`, `get_spending_forecast`, `create_plan`, `update_plan` (with `effectiveFrom` to split), `delete_plan` and `update_plan_occurrence` (skip, override, restore or done); `create_plan`/`update_plan` accept `sure`. The repeat-rule tools were removed.
 
 Settings shape:
 
@@ -131,6 +234,7 @@ Settings shape:
 {
   "settings": {
     "avatar": "",
+    "budgetPeriod": { "mode": "calendar", "startDay": 1, "paycheckIncomeId": null },
     "categories": [
       { "id": "Food", "name": "Food", "color": "#10b981", "icon": "Utensils" }
     ]
@@ -138,7 +242,7 @@ Settings shape:
 }
 ```
 
-The example abbreviates the categories; defaults contain all six listed above. PUT merges provided scalar fields and replaces the entire category array when provided. An empty object is a no-op; an empty category array is allowed. Responses contain only the active finance settings: `avatar` and `categories`. Requests containing the removed `income`, `baseDailySpending`, or `maxDailySpending` fields return `400`; manage income through `/incomes`. The old `/income-entries` routes were removed and return `404`.
+The example abbreviates the categories; defaults contain all six listed above. PUT merges provided scalar fields and replaces the entire category array when provided. An empty object is a no-op; an empty category array is allowed. Responses contain only the active finance settings: `avatar`, `budgetPeriod`, `categories`, `showBy` and `timezone`. Requests containing the removed `income`, `baseDailySpending`, or `maxDailySpending` fields return `400`; manage income through `/incomes`. The old `/income-entries` routes were removed and return `404`.
 
 Spending input (the response adds a server-generated UUID `id`):
 
@@ -164,7 +268,7 @@ Validation:
 - JSON request bodies are limited to 128 KB for finance routes (auth retains its existing 16 KB limit).
 - Invalid bodies, IDs, query limits/cursors, or categories return `400`; invalid/missing bearer sessions return `401`; disallowed/missing write origins return `403`; missing or another user's spending ID returns `404`; oversized JSON returns `413`; database failures return a generic `503` without private database details.
 
-### Repeat spending rules and incremental auto-apply tracking
+### Repeat spending rules (legacy: converted to plans by `008_plan_commitments.sql`)
 
 Users can configure repeat spendings (breakfast, lunch, coffee, gas, rent, etc.) via the Add Expense modal or by selecting one of the Quick Repeat presets.
 
@@ -197,7 +301,7 @@ Income input (the response adds a server-generated UUID `id`; `name` defaults to
 }
 ```
 
-`source` and `name` are trimmed; `source` must be nonblank and at most 100 characters, `name` at most 500; neither may contain control characters. `frequency` must be one of `once`, `daily`, `weekly`, `monthly`, `yearly`. `startDate` and `endDate` are real `YYYY-MM-DD` dates (years `0001`–`9999`) without timezone conversion; `endDate` must not precede `startDate` and must be absent or `null` for `once`. Unknown fields, including ownership IDs, are rejected. Mutations use both the income ID and the authenticated user ID. Malformed, missing, and other-user income IDs receive `404`; invalid bodies or query pagination receive `400`. Income writes never lock or change settings.
+`source` and `name` are trimmed; `source` must be nonblank and at most 100 characters, `name` at most 500; neither may contain control characters. `frequency` must be one of `once`, `daily`, `weekly`, `semimonthly`, `monthly`, `yearly`. Optional `interval` (`1`, `2` or `4`, weekly only), `semimonthlyDays` (`[first, second]`, required for and only for `semimonthly`) and `weekendShift` (boolean; weekly, semimonthly, monthly, yearly only) follow the field table above; a value equal to its default (`interval: 1`, `weekendShift: false`) is normalized away, so an income that does not use them is returned without those keys. `PUT /incomes/:id` and MCP `update_income` replace the whole income: for a semimonthly income `semimonthlyDays` is required on every update (omitting it is a `400`); for other frequencies the omitted `interval`, `semimonthlyDays` and `weekendShift` reset to their defaults, so send them again to keep them. `startDate` and `endDate` are real `YYYY-MM-DD` dates (years `0001`–`9999`) without timezone conversion; `endDate` must not precede `startDate` and must be absent or `null` for `once`. Unknown fields, including ownership IDs, are rejected. Mutations use both the income ID and the authenticated user ID. Malformed, missing, and other-user income IDs receive `404`; invalid bodies or query pagination receive `400`. Income writes never lock or change settings.
 
 ### Pagination
 
@@ -223,7 +327,7 @@ npm test
 npm run build
 ```
 
-Client `test/finance.test.ts` checks complete pagination, server-authoritative CRUD, and failed requests; `test/spendings.test.ts` verifies empty-data and controlled-data totals/analytics; `test/salary-cycle.test.ts` covers pay cycle calculations.
+Client `test/finance.test.ts` checks complete pagination, server-authoritative CRUD, and failed requests; `test/spendings.test.ts` verifies empty-data and controlled-data totals/analytics; `test/periods.test.ts`, `test/income.test.ts`, `test/analytics-period.test.ts`, `test/legacy-payday.test.ts`, `test/plans-nav.test.ts` and `test/period-plan.test.ts` cover the period engine, income over a range, period analytics, the device payday suggestion, `/plans` navigation and the planner.
 
 `test/finance-http.test.ts` uses injectable stores to cover authenticated routes, origin/CORS behavior, defaults, partial/full settings, isolation, CRUD, historical category handling, validation, and pagination across more than 500 records.
 

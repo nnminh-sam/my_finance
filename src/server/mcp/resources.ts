@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import type { User } from "../auth/store";
 import { CATEGORY_ICONS } from "../finance/model";
+import { loadBudgetPeriod, loadPlanPeriodSummary } from "../finance/periodSummary";
 import type { FinanceStore } from "../finance/store";
 import { getMonthIncome } from "../../lib/income";
 import { monthlyRepeatCost } from "../../lib/repeatRules";
@@ -40,6 +41,12 @@ export const MCP_RESOURCES: McpResourceDefinition[] = [
     mimeType: "application/json",
   },
   {
+    uri: "finance://budget-period",
+    name: "Budget Period",
+    description: "The budget period setting (calendar month, monthly from a start day, or paycheck to paycheck), the period containing today, and its plan summary.",
+    mimeType: "application/json",
+  },
+  {
     uri: "finance://repeat-rules",
     name: "Recurring Spending Rules",
     description: "All active repeat spending rules, schedules, and estimated monthly recurring cost.",
@@ -57,7 +64,7 @@ export const MCP_RESOURCE_TEMPLATES: McpResourceTemplateDefinition[] = [
   {
     uriTemplate: "finance://salary-cycle/{month}",
     name: "Salary Cycle Report by Month (YYYY-MM)",
-    description: "Pay-cycle spending, anchor month income, leftover balance, and daily burn rate for any YYYY-MM cycle month.",
+    description: "Pay-cycle spending, income paid in the period, leftover balance, and daily burn rate for the saved budget period that contains the 1st of any YYYY-MM month.",
     mimeType: "application/json",
   },
   {
@@ -111,6 +118,14 @@ export async function readMcpResource(
       oneTimeIncome: monthBreakdown.oneTimeIncome,
       incomes: incomes.map(inc => enrichIncome(inc, month)),
     });
+  }
+
+  if (uri === "finance://budget-period") {
+    const [{ setting, showBy, today, period }, summary] = await Promise.all([
+      loadBudgetPeriod(financeStore, user.id),
+      loadPlanPeriodSummary(financeStore, user.id),
+    ]);
+    return jsonContent(uri, { budgetPeriod: setting, showBy, today, currentPeriod: period, summary });
   }
 
   if (uri === "finance://repeat-rules") {

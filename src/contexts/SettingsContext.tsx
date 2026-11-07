@@ -2,16 +2,18 @@
 
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY } from '../lib/periods';
+import type { FinanceSettingsUpdate } from '../services/finance';
 import type { UserSettings } from '../types';
 import { useAuth } from './AuthContext';
 import { useFinance } from './FinanceContext';
 import { useTheme } from './ThemeContext';
 
-type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'>;
+type SettingsUpdate = Partial<Omit<UserSettings, 'budgetPeriod'>> & Pick<FinanceSettingsUpdate, 'budgetPeriod'>;
 
 interface SettingsContextType {
   settings: UserSettings;
-  updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
+  updateSettings: (newSettings: SettingsUpdate) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -27,16 +29,20 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   const { theme, setTheme } = useTheme();
   const settings: UserSettings = {
     ...finance.settings,
+    budgetPeriod: finance.settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD,
+    showBy: finance.settings.showBy ?? DEFAULT_SHOW_BY,
     theme,
     name: user?.name ?? '',
     email: user?.email ?? '',
   };
 
-  const updateSettings = async (updates: Partial<UserSettings>): Promise<void> => {
+  const updateSettings = async (updates: SettingsUpdate): Promise<void> => {
     if (updates.theme !== undefined) setTheme(updates.theme);
-    const financial: Partial<FinanceSettings> = {};
+    const financial: FinanceSettingsUpdate = {};
     if (updates.avatar !== undefined) financial.avatar = updates.avatar;
     if (updates.categories !== undefined) financial.categories = updates.categories;
+    if (updates.budgetPeriod !== undefined) financial.budgetPeriod = updates.budgetPeriod;
+    if (updates.showBy !== undefined) financial.showBy = updates.showBy;
     if (Object.keys(financial).length > 0) await finance.updateSettings(financial);
   };
 

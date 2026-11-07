@@ -6,7 +6,7 @@ import { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Ho
 import { getSpendingsForDate, getTotalForDate, formatCompactSpending } from '../lib/spendings';
 import { useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { getMonthIncome, incomeMonth } from '../lib/income';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodIncome } from '../lib/periods';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import '../styles/WeekView.css';
@@ -31,7 +31,7 @@ interface WeekViewProps {
 
 export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, onNavigateDate }) => {
   const { settings } = useSettings();
-  const { spendings, incomes } = useFinance();
+  const { spendings, incomes, projectedBetween } = useFinance();
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const mobileDayCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -59,14 +59,15 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
     }
   };
 
-  const { totalIncome } = getMonthIncome(
-    incomeMonth(currentDate), incomes,
-  );
+  // Income follows Show by: the calendar month, or the pay period that contains the date shown.
+  const { totalIncome } = viewPeriodIncome(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, format(currentDate, 'yyyy-MM-dd'));
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: startDate, end: endDate });
 
   const totalWeekSpending = days.reduce((sum, day) => sum + getTotalForDate(day, spendings), 0);
+  const weekPlanned = projectedBetween(format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'));
+  const weekPlannedTotal = weekPlanned.reduce((sum, item) => sum + item.amount, 0);
   const weekRangeLabel = `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d')}`;
 
   return (
@@ -123,6 +124,11 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
           <span className="week-mobile-stat">
             Income: <strong className="week-mobile-stat-income">+{formatCompactSpending(totalIncome)}</strong>
           </span>
+          {weekPlannedTotal > 0 && (
+            <span className="week-mobile-stat">
+              Planned: <strong className="week-mobile-stat-planned">~{formatCompactSpending(weekPlannedTotal)}</strong>
+            </span>
+          )}
         </div>
       </div>
 
@@ -131,6 +137,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
         {days.map((day) => {
           const dayKey = format(day, 'yyyy-MM-dd');
           const daySpendings = getSpendingsForDate(day, spendings);
+          const dayPlanned = weekPlanned.filter(item => item.date === dayKey);
           const isCurrentDay = isToday(day);
 
           return (
@@ -154,7 +161,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
               </div>
 
               <div className="week-feed-tx-col">
-                {daySpendings.length === 0 ? (
+                {daySpendings.length === 0 && dayPlanned.length === 0 ? (
                   <div className="week-feed-empty-row">
                     <span>No spending</span>
                     <span className="week-feed-empty-amount">0</span>
@@ -184,7 +191,23 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
                         </span>
                       </div>
                     );
-                  })
+                  }).concat(dayPlanned.map((p) => {
+                    const catData = settings.categories?.find((c) => c.id === p.category);
+                    const color = catData?.color ?? 'var(--primary)';
+                    return (
+                      <div key={`plan-${p.planId}`} className="week-feed-tx-row is-planned" title="Planned, not spent yet">
+                        <span
+                          className="week-feed-tx-badge"
+                          style={{ backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`, color }}
+                          aria-hidden="true"
+                        >
+                          <CategoryIcon iconName={catData?.icon ?? 'CircleDollarSign'} size={15} />
+                        </span>
+                        <span className="week-feed-tx-desc">{p.description}<span className="sr-only"> (planned)</span></span>
+                        <span className="week-feed-tx-amount">~{formatCompactSpending(p.amount)}</span>
+                      </div>
+                    );
+                  }))
                 )}
               </div>
             </div>

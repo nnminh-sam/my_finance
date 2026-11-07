@@ -1,53 +1,14 @@
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { computeMonthlyAnalytics } from "../../lib/analytics";
-import { countIncomeOccurrences, describeIncomeSchedule, getMonthIncome } from "../../lib/income";
+import { countIncomeOccurrences, describeIncomeSchedule, getMonthIncome, getRangeIncome } from "../../lib/income";
 import { describeRepeatFrequency, monthlyRepeatCost, repeatProgress } from "../../lib/repeatRules";
-import {
-  clampDelayDays,
-  clampSalaryDay,
-  defaultSalaryCycleConfig,
-  getSalaryCycleForMonth,
-  getSpendingsForSalaryCycle,
-  parseCycleMonth,
-  type SalaryCycleConfig,
-} from "../../lib/salaryCycle";
+import { periodOf } from "../../lib/periods";
 import type { FinanceSettings, Income, RepeatRule, Spending } from "../finance/model";
+import { fetchAllIncomes, fetchAllSpendings } from "../finance/periodSummary";
 import type { FinanceStore } from "../finance/store";
 
-export async function fetchAllSpendings(
-  store: FinanceStore,
-  userId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Spending[]> {
-  const results: Spending[] = [];
-  const seenCursors = new Set<string>();
-  let cursor: string | undefined;
-  while (results.length < 10_000) {
-    const page = startDate || endDate
-      ? await store.listSpendings(userId, 500, cursor, startDate, endDate)
-      : await store.listSpendings(userId, 500, cursor);
-    results.push(...page.spendings);
-    if (!page.nextCursor || seenCursors.has(page.nextCursor)) break;
-    seenCursors.add(page.nextCursor);
-    cursor = page.nextCursor;
-  }
-  return results;
-}
-
-export async function fetchAllIncomes(store: FinanceStore, userId: string): Promise<Income[]> {
-  const results: Income[] = [];
-  const seenCursors = new Set<string>();
-  let cursor: string | undefined;
-  while (results.length < 5_000) {
-    const page = await store.listIncomes(userId, 500, cursor);
-    results.push(...page.incomes);
-    if (!page.nextCursor || seenCursors.has(page.nextCursor)) break;
-    seenCursors.add(page.nextCursor);
-    cursor = page.nextCursor;
-  }
-  return results;
-}
+// Moved next to the plan summary that also needs them, re-exported for existing imports.
+export { fetchAllIncomes, fetchAllSpendings };
 
 export function enrichRepeatRule(rule: RepeatRule, settings: FinanceSettings) {
   const category = settings.categories.find(c => c.id === rule.category);
@@ -173,6 +134,10 @@ export async function buildMonthlyAnalyticsReport(
   };
 }
 
+/** Parameters older clients still send. They are accepted and ignored: the report follows the saved budget period. */
+const IGNORED_CYCLE_OPTIONS = ["salaryDay", "shiftWeekendToMonday", "includeNextPaydayInCycle", "delayDays"] as const;
+const DAY_MS = 86_400_000;
+
 export async function buildSalaryCycleReport(
   store: FinanceStore,
   userId: string,
@@ -184,39 +149,26 @@ export async function buildSalaryCycleReport(
     delayDays?: number;
   },
 ) {
-  const baseConfig: SalaryCycleConfig = {
-    ...defaultSalaryCycleConfig(),
-    salaryDay: options?.salaryDay !== undefined ? clampSalaryDay(options.salaryDay) : 5,
-    shiftWeekendToMonday: options?.shiftWeekendToMonday ?? true,
-    includeNextPaydayInCycle: options?.includeNextPaydayInCycle ?? true,
-    monthDelays: options?.delayDays
-      ? { [cycleMonth]: clampDelayDays(options.delayDays) }
-      : {},
-  };
+  // A malformed month falls back to the current one, as before.
+  const month = /^\d{4}-(?:0[1-9]|1[0-2])$/.test(cycleMonth) ? cycleMonth : format(new Date(), "yyyy-MM");
+  const ignoredParameters = IGNORED_CYCLE_OPTIONS.filter(key => options?.[key] !== undefined);
 
-  const monthDate = parseCycleMonth(cycleMonth);
-  const cycle = getSalaryCycleForMonth(monthDate, baseConfig);
-  const startDate = format(cycle.startDate, "yyyy-MM-dd");
-  const endDate = format(cycle.endDate, "yyyy-MM-dd");
+  const [settings, incomes] = await Promise.all([store.getSettings(userId), fetchAllIncomes(store, userId)]);
+  // The cycle of a month is the saved budget period that contains the 1st of that month.
+  const period = periodOf(settings.budgetPeriod, incomes, `${month}-01`);
+  const startDate = period.start;
+  const endDate = period.end;
+  const spendings = await fetchAllSpendings(store, userId, startDate, endDate);
 
-  const [settings, spendings, incomes] = await Promise.all([
-    store.getSettings(userId),
-    fetchAllSpendings(store, userId, startDate, endDate),
-    fetchAllIncomes(store, userId),
-  ]);
-
-  const cycleSpendings = getSpendingsForSalaryCycle(cycle, spendings);
+  const cycleSpendings = spendings.filter(item => item.date >= startDate && item.date <= endDate);
   const totalSpending = Math.round(cycleSpendings.reduce((s, item) => s + item.amount, 0) * 100) / 100;
-  const monthIncome = getMonthIncome(cycle.cycleMonth, incomes);
+  const monthIncome = getRangeIncome(startDate, endDate, incomes);
   const leftover = Math.round((monthIncome.totalIncome - totalSpending) * 100) / 100;
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
-  const totalDays = cycle.days.length;
-  const elapsedDays = todayStr < startDate
-    ? 0
-    : todayStr > endDate
-      ? totalDays
-      : cycle.days.filter(d => format(d, "yyyy-MM-dd") <= todayStr).length;
+  const daysFromStart = (date: string) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / DAY_MS);
+  const totalDays = daysFromStart(endDate) + 1;
+  const elapsedDays = todayStr < startDate ? 0 : todayStr > endDate ? totalDays : daysFromStart(todayStr) + 1;
   const remainingDays = Math.max(0, totalDays - elapsedDays);
   const dailyBurnRate = elapsedDays > 0 ? Math.round((totalSpending / elapsedDays) * 100) / 100 : 0;
   const safeDailyBudgetRemaining = remainingDays > 0 && leftover > 0
@@ -253,20 +205,17 @@ export async function buildSalaryCycleReport(
     .sort((a, b) => b.total - a.total);
 
   return {
-    cycleMonth: cycle.cycleMonth,
+    cycleMonth: month,
     config: {
-      salaryDay: baseConfig.salaryDay,
-      shiftWeekendToMonday: baseConfig.shiftWeekendToMonday,
-      includeNextPaydayInCycle: baseConfig.includeNextPaydayInCycle,
-      delayDays: cycle.manualDelayDays,
+      mode: period.mode,
+      startDay: settings.budgetPeriod.startDay,
+      paycheckIncomeId: settings.budgetPeriod.paycheckIncomeId,
+      ignoredParameters,
     },
     dates: {
-      nominalPayday: format(cycle.nominalStartDate, "yyyy-MM-dd"),
       startDate,
       endDate,
-      nextPayday: format(cycle.nextStartDate, "yyyy-MM-dd"),
-      weekendShiftDays: cycle.weekendShiftDays,
-      manualDelayDays: cycle.manualDelayDays,
+      nextPayday: period.nextStart,
       totalDays,
       elapsedDays,
       remainingDays,

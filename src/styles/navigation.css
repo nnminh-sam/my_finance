@@ -382,3 +382,24 @@
     font-size: 0.64rem;
   }
 }
+
+/* Direction F: each phone screen draws its own large title, so the desktop header steps aside. */
+@media (max-width: 768px) {
+  .finance-document > .document-header {
+    display: none;
+  }
+
+  .document-bottom-add-circle {
+    box-shadow: 0 6px 16px var(--primary-glow), 0 0 0 4px var(--bg-main);
+  }
+}
+
+/* Desktop Calendar: the page's period, named in full between the arrows, with the Month / Pay cycle switch. */
+.document-period { display: flex; align-items: center; gap: 6px; margin-right: 8px; }
+.document-basis-toggle { display: inline-flex; padding: 2px; margin-right: 6px; border-radius: 999px; background: color-mix(in srgb, var(--text-muted) 14%, transparent); }
+.document-basis-toggle button { padding: 5px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.document-basis-toggle button[aria-pressed="true"] { background: var(--bg-card); color: var(--text-main); box-shadow: 0 1px 2px rgb(0 0 0 / 15%); }
+.document-period-label { display: flex; flex-direction: column; align-items: center; min-width: 11.5rem; line-height: 1.2; text-align: center; }
+.document-period-label b { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.document-period-label span { font-size: 0.72rem; color: var(--text-muted); }
+@media (min-width: 769px) { .document-subtitle-mobile { display: none; } }

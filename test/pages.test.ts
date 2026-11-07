@@ -12,6 +12,7 @@ const expectedPages = {
   week: { path: '/week', html: 'week.html', title: 'Week · MyFinance', protected: true },
   day: { path: '/day', html: 'day.html', title: 'Day details · MyFinance', protected: true },
   analytics: { path: '/analytics', html: 'analytics.html', title: 'Analytics · MyFinance', protected: true },
+  plans: { path: '/plans', html: 'plans.html', title: 'Plans · MyFinance', protected: true },
   profile: { path: '/profile', html: 'profile.html', title: 'Profile · MyFinance', protected: true },
 };
 
@@ -23,6 +24,7 @@ const appRouterFiles: Record<keyof typeof pages, string> = {
   week: 'src/app/(finance)/week/page.tsx',
   day: 'src/app/(finance)/day/page.tsx',
   analytics: 'src/app/(finance)/analytics/page.tsx',
+  plans: 'src/app/(finance)/plans/page.tsx',
   profile: 'src/app/(finance)/profile/page.tsx',
 };
 

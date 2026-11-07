@@ -40,7 +40,7 @@ flowchart TB
         end
 
         subgraph PersistentModals["Shared Modals (Stay Mounted)"]
-            ExpModal["ExpenseModal (Single & Repeat Expense Form)"]
+            ExpModal["QuickEntryDialog (keypad quick entry: spending, repeat, income, queue)"]
             IncModal["MonthlyIncomeModal (Income Sources for One Month)"]
         end
     end
@@ -68,7 +68,7 @@ flowchart TB
 3. **Finance Persistent Shell (`src/app/(finance)/layout.tsx`)**:
    - Enforces authentication: unauthenticated visitors are redirected to `/login?next=...`.
    - Wraps the tree in `FinanceProvider` (keyed by user ID), a `FinanceGate` that shows a loading/retry/sign-out screen until the first load succeeds, `SettingsProvider`, and `FinanceShellContext`.
-   - Keeps the navigation bar (Calendar, Pay Cycle, Week, Analytics, Profile) and global modal components (`ExpenseModal`, `MonthlyIncomeModal`) mounted across client transitions. Clicking between `/calendar`, `/cycle`, `/week`, `/day`, `/analytics`, and `/profile` uses `next/link` to swap page views without re-fetching settings, income entries, or rules.
+   - Keeps the navigation bar (Calendar, Pay Cycle, Week, Analytics, Profile) and global modal components (`QuickEntryDialog`, `MonthlyIncomeModal`) mounted across client transitions. Clicking between `/calendar`, `/cycle`, `/week`, `/day`, `/analytics`, and `/profile` uses `next/link` to swap page views without re-fetching settings, income entries, or rules.
    - On `/cycle`, `/week`, `/day`, and `/analytics` it prefetches spendings for the window from one month before to two months after the URL date (`fetchWeeksSpendings`). `/calendar` ignores `?date=`, always starts on the current month, and loads its own week batches while scrolling.
 
 ---
@@ -97,7 +97,7 @@ flowchart LR
         DayUI["DayDetails.tsx"]
         AnalyticsUI["AnalyticsView.tsx & charts.tsx"]
         ProfileUI["UserProfile.tsx, IncomeSources.tsx ProfileUI["UserProfile.tsx & ProfileSection.tsx"] ProfileSection.tsx"]
-        ExpenseUI["ExpenseModal.tsx"]
+        ExpenseUI["quickEntry/QuickEntryDialog.tsx"]
         IncomeUI["MonthlyIncomeModal.tsx & IncomeSources.tsx"]
     end
 

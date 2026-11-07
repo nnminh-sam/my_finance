@@ -288,3 +288,19 @@
     height: 28px;
   }
 }
+
+/* Planned (forecast) rows: faded and dashed. */
+.week-feed-tx-row.is-planned {
+  opacity: 0.7;
+}
+
+.week-feed-tx-row.is-planned .week-feed-tx-badge {
+  border: 1.5px dashed currentColor;
+}
+
+.week-feed-tx-row.is-planned .week-feed-tx-desc,
+.week-feed-tx-row.is-planned .week-feed-tx-amount,
+.week-mobile-stat-planned {
+  color: var(--primary);
+  font-style: italic;
+}

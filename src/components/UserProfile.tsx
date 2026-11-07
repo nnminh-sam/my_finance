@@ -2,19 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { User, Mail, Calendar, Tag, Plus, ChevronLeft, ChevronRight, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Repeat, Wallet, SlidersHorizontal, CalendarClock, LogOut, Lock, Copy, Check, Camera, Pencil, CircleStop, RefreshCw, Bot } from 'lucide-react';
+import { format } from 'date-fns';
+import { User, Mail, Calendar, Tag, Plus, ChevronLeft, ChevronRight, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Wallet, SlidersHorizontal, CalendarClock, LogOut, Lock, Copy, Check, Camera, Pencil, RefreshCw, Bot } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { errorMessage } from '../services/auth';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { getMonthIncome, incomeMonth } from '../lib/income';
-import { describeRepeatFrequency, monthlyRepeatCost, repeatProgress } from '../lib/repeatRules';
-import { clampDelayDays, clampSalaryDay, defaultSalaryCycleConfig, getPaydayForMonth, loadSalaryCycleConfig, saveSalaryCycleConfig } from '../lib/salaryCycle';
-import type { SalaryCycleConfig } from '../lib/salaryCycle';
+import { getRangeIncome } from '../lib/income';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodOf } from '../lib/periods';
 import type { CategoryData } from '../types';
 import { EditorActions } from './ProfileSection';
+import { BudgetPeriodSection, describeBudgetPeriod } from './BudgetPeriodSection';
+import type { BudgetPeriodEditorState } from './BudgetPeriodSection';
 import { IncomeSources } from './IncomeSources';
 import type { IncomeEditorState } from './IncomeSources';
 import { McpAccessSection } from './McpAccessSection';
@@ -28,7 +29,6 @@ const TABS = [
   { id: 'account', label: 'Account', icon: User },
   { id: 'income', label: 'Income', icon: Wallet },
   { id: 'categories', label: 'Categories', icon: Tag },
-  { id: 'repeats', label: 'Repeat spendings', icon: Repeat },
   { id: 'paycycle', label: 'Paycycle', icon: CalendarClock },
   { id: 'mcp', label: 'AI & MCP', icon: Bot },
   { id: 'preferences', label: 'Preferences', icon: SlidersHorizontal },
@@ -101,33 +101,32 @@ export function UserProfile() {
   const { settings, updateSettings } = useSettings();
   const { user, logout } = useAuth();
   const { theme, preference, setTheme } = useTheme();
-  const { incomes, repeatRules, deleteRepeatRule, reload } = useFinance();
+  const { incomes, plans, reload } = useFinance();
   const [tab, setTab] = useState<TabId>('account');
+  // Phones show a grouped list first; choosing a row pushes that section (null = the list).
+  const [mobileSection, setMobileSection] = useState<TabId | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement | null>>>({});
   const avatar = useSectionEditor<string>();
   const category = useSectionEditor<CategoryData & { isNew: boolean }>();
   const [confirmRemoveCategory, setConfirmRemoveCategory] = useState(false);
-  const [confirmStopId, setConfirmStopId] = useState<string | null>(null);
-  const [stoppingRepeatId, setStoppingRepeatId] = useState<string | null>(null);
-  const [repeatError, setRepeatError] = useState<string | null>(null);
-  const [cycle, setCycle] = useState<SalaryCycleConfig>(defaultSalaryCycleConfig);
-  const [adjustMonth, setAdjustMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const loggingOut = useRef(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const [incomeEditor, setIncomeEditor] = useState<IncomeEditorState>({ dirty: false, busy: false });
+  const [budgetEditor, setBudgetEditor] = useState<BudgetPeriodEditorState>({ dirty: false, busy: false });
   const [mcpTokenCount, setMcpTokenCount] = useState<number | undefined>(undefined);
   const categoryDirty = category.state !== null && (category.state.draft.isNew || category.dirty);
-  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, repeats: false, paycycle: false, mcp: false, preferences: false };
+  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, paycycle: budgetEditor.dirty, mcp: false, preferences: false };
   const dirty = Object.values(unsaved).some(Boolean);
-  const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy || stoppingRepeatId);
+  const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy || budgetEditor.busy);
   const initials = (user?.name || user?.email || '').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-  const monthIncome = getMonthIncome(incomeMonth(new Date()), incomes).totalIncome;
-  const monthlyRepeats = repeatRules.reduce((sum, rule) => sum + monthlyRepeatCost(rule), 0);
-  const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: settings.categories.length, repeats: repeatRules.length, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
+  // The income figure follows Show by: the calendar month, or the pay period that contains today.
+  const incomePeriod = viewPeriodOf(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, format(new Date(), 'yyyy-MM-dd'));
+  const monthIncome = getRangeIncome(incomePeriod.start, incomePeriod.end, incomes).totalIncome;
+  const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: settings.categories.length, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
 
   useUnsavedChanges(!isLoggingOut && (dirty || pending));
 
@@ -135,16 +134,12 @@ export function UserProfile() {
   useEffect(() => {
     const fromHash = () => {
       const hash = window.location.hash.slice(1);
-      if (isTab(hash)) setTab(hash);
+      if (isTab(hash)) { setTab(hash); setMobileSection(hash); } else setMobileSection(null);
     };
     fromHash();
     window.addEventListener('hashchange', fromHash);
     return () => window.removeEventListener('hashchange', fromHash);
   }, []);
-
-  useEffect(() => {
-    setCycle(loadSalaryCycleConfig(user?.id));
-  }, [user?.id]);
 
   const selectTab = (next: TabId, focus = false) => {
     setTab(next);
@@ -211,36 +206,6 @@ export function UserProfile() {
     setConfirmRemoveCategory(false);
   });
 
-  const stopRepeat = async (id: string) => {
-    setStoppingRepeatId(id);
-    setRepeatError(null);
-    try {
-      await deleteRepeatRule(id, true);
-      setConfirmStopId(null);
-    } catch (failure) {
-      setRepeatError(`Could not stop the repeat: ${errorMessage(failure)}`);
-    } finally {
-      setStoppingRepeatId(null);
-    }
-  };
-
-  const updateCycle = (patch: Partial<SalaryCycleConfig>) => {
-    const next = { ...cycle, ...patch };
-    setCycle(next);
-    saveSalaryCycleConfig(next, user?.id);
-  };
-
-  const adjustKey = `${adjustMonth.getFullYear()}-${String(adjustMonth.getMonth() + 1).padStart(2, '0')}`;
-  const adjustPayday = getPaydayForMonth(adjustMonth, cycle);
-  const setMonthDelay = (delay: number) => {
-    const clamped = clampDelayDays(delay);
-    const monthDelays = { ...cycle.monthDelays };
-    if (clamped === 0) delete monthDelays[adjustKey]; else monthDelays[adjustKey] = clamped;
-    updateCycle({ monthDelays });
-  };
-  const shiftAdjustMonth = (by: number) => setAdjustMonth(current => new Date(current.getFullYear(), current.getMonth() + by, 1));
-  const delayLabel = (delay: number) => (delay === 0 ? 'On schedule' : `${delay > 0 ? '+' : '−'}${Math.abs(delay)}d`);
-
   const handleLogout = async () => {
     if (loggingOut.current || pending) return;
     if (dirty && !window.confirm('Discard unsaved profile changes and sign out?')) return;
@@ -265,8 +230,72 @@ export function UserProfile() {
 
   const editing = category.state?.draft;
 
+  const openMobileSection = (next: TabId) => {
+    selectTab(next);
+    setMobileSection(next);
+    document.querySelector('.user-profile')?.scrollTo({ top: 0 });
+  };
+  const closeMobileSection = () => {
+    if (mobileSection && unsaved[mobileSection] && !window.confirm('Discard unsaved changes in this section?')) return;
+    if (mobileSection === 'categories' && category.state) category.cancel();
+    if (mobileSection === 'account' && avatar.state) avatar.cancel();
+    setMobileSection(null);
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  };
+  const themeLabel = preference === null ? `System (${theme})` : preference === 'dark' ? 'Dark' : 'Light';
+  const mobileGroups: { title: string; rows: { id: TabId; label: string; value?: string | number }[] }[] = [
+    { title: 'Account', rows: [{ id: 'account', label: 'Personal info' }] },
+    { title: 'Money', rows: [
+      { id: 'income', label: 'Income sources', value: incomes.length },
+      { id: 'categories', label: 'Categories', value: settings.categories.length },
+      { id: 'paycycle', label: 'Pay cycle', value: describeBudgetPeriod(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, incomes) },
+    ] },
+    { title: 'App', rows: [
+      { id: 'preferences', label: 'Appearance', value: themeLabel },
+      { id: 'mcp', label: 'AI assistants (MCP)', value: mcpTokenCount },
+    ] },
+  ];
+
   return (
-    <div className="user-profile hide-scrollbar animate-fade-in">
+    <div className={`user-profile hide-scrollbar animate-fade-in ${mobileSection ? 'is-m-detail' : 'is-m-list'}`}>
+      <div className="profile-m-home">
+        <h1 className="profile-m-title">Profile</h1>
+        <div className="profile-m-who">
+          <div className="profile-avatar">
+            {settings.avatar && failedAvatar !== settings.avatar ? (
+              <img src={settings.avatar} alt="" onError={() => setFailedAvatar(settings.avatar)} referrerPolicy="no-referrer" />
+            ) : <span aria-hidden="true">{initials || <User size={24} aria-hidden="true" />}</span>}
+          </div>
+          <div>
+            <b>{user?.name}</b>
+            <div className="profile-m-muted">{user?.email}</div>
+          </div>
+        </div>
+        {mobileGroups.map(group => (
+          <div key={group.title}>
+            <h2 className="profile-m-gtitle">{group.title}</h2>
+            <div className="profile-m-group">
+              {group.rows.map(row => (
+                <button key={row.id} type="button" onClick={() => openMobileSection(row.id)}>
+                  <span>{row.label}{unsaved[row.id] && <span className="profile-unsaved-dot" title="Unsaved changes"><span className="sr-only">, unsaved changes</span></span>}</span>
+                  <span className="profile-m-muted">{row.value ?? ''} <ChevronRight size={16} aria-hidden="true" /></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="profile-m-group profile-m-signout">
+          <button type="button" disabled={isLoggingOut || pending} onClick={() => { void handleLogout(); }}>
+            <span>{isLoggingOut ? 'Signing out…' : 'Sign out'}</span><LogOut size={16} aria-hidden="true" />
+          </button>
+        </div>
+        {logoutError && <p role="alert" className="profile-error">{logoutError}</p>}
+      </div>
+      {mobileSection && (
+        <button type="button" className="profile-m-back" onClick={closeMobileSection}>
+          <ChevronLeft size={18} aria-hidden="true" />Profile
+        </button>
+      )}
       <header className="profile-identity profile-card" aria-label="Your account">
         <div className="profile-avatar">
           {settings.avatar && failedAvatar !== settings.avatar ? (
@@ -282,8 +311,8 @@ export function UserProfile() {
           </p>
         </div>
         <dl className="profile-stats">
-          <div><dt>Income this month</dt><dd>{money(monthIncome)}</dd></div>
-          <div><dt>Repeats per month</dt><dd>≈ {money(monthlyRepeats)}</dd></div>
+          <div><dt>{incomePeriod.mode === 'calendar' ? 'Income this month' : 'Income this period'}</dt><dd>{money(monthIncome)}</dd></div>
+          <div><dt>Plans</dt><dd>{plans.length}</dd></div>
         </dl>
       </header>
 
@@ -458,100 +487,9 @@ export function UserProfile() {
             </div>
           </section>
 
-          <section id="profile-panel-repeats" role="tabpanel" aria-labelledby="profile-tab-repeats" className="profile-panel" hidden={tab !== 'repeats'}>
-            <div className="profile-panel-head"><div><h2>Repeat spendings</h2><p>Created when you turn on “Repeat this spending” while adding a spending. Up to 100 entries are added at a time. Stopping a repeat removes its entries from today onward.</p></div></div>
-            {repeatRules.length === 0 ? (
-              <p className="profile-card profile-empty">No repeat spendings yet. Turn on “Repeat this spending” when you add breakfast, gas, rent and other regular costs.</p>
-            ) : (
-              <>
-                <dl className="profile-card profile-summary">
-                  <div><dt>Estimated per month</dt><dd>≈ {money(monthlyRepeats)}</dd></div>
-                  <div><dt>Active repeats</dt><dd>{repeatRules.length}</dd></div>
-                  <div><dt>Entries created</dt><dd>{repeatRules.reduce((sum, rule) => sum + rule.occurrencesCreated, 0)}</dd></div>
-                </dl>
-                <ul className="profile-card profile-list" aria-label="Repeat spendings">
-                  {repeatRules.map(rule => {
-                    const ruleCategory = settings.categories.find(item => item.id === rule.category);
-                    const progress = repeatProgress(rule);
-                    return (
-                      <li key={rule.id} className="profile-list-item">
-                        <CategoryGlyph category={ruleCategory ?? { color: '#64748b', icon: 'CircleDollarSign' }} />
-                        <div className="profile-list-main">
-                          <strong>{rule.description}</strong>
-                          <span className="profile-meta">
-                            <span className="profile-pill">{describeRepeatFrequency(rule)}</span>
-                            <span>{rule.time}</span>
-                            <span>{ruleCategory?.name ?? rule.category}</span>
-                            {rule.endType === 'until_date' && <span>Until {rule.endDate}</span>}
-                            {rule.endType === 'unlimited' && <span>No end date</span>}
-                          </span>
-                          {progress && (
-                            <span className="profile-progress" role="progressbar" aria-label={`${rule.description} repeats`} aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}>
-                              <span style={{ width: `${(progress.done / progress.total) * 100}%` }} />
-                            </span>
-                          )}
-                        </div>
-                        <div className="profile-amount">
-                          {money(rule.amount)}
-                          <small>{progress ? `${progress.done} / ${progress.total} times` : `≈ ${money(monthlyRepeatCost(rule))} / month`}</small>
-                        </div>
-                        <div className="profile-row-actions">
-                          {confirmStopId === rule.id ? (
-                            <>
-                              <button type="button" className="profile-button" disabled={stoppingRepeatId === rule.id} onClick={() => setConfirmStopId(null)}>Keep</button>
-                              <button type="button" className="profile-button profile-button-danger" disabled={stoppingRepeatId === rule.id || isLoggingOut} onClick={() => { void stopRepeat(rule.id); }}>
-                                {stoppingRepeatId === rule.id ? 'Stopping…' : 'Stop from today'}
-                              </button>
-                            </>
-                          ) : (
-                            <button type="button" className="profile-button profile-button-ghost profile-button-danger" disabled={pending || isLoggingOut} aria-label={`Stop repeating ${rule.description}`} onClick={() => { setRepeatError(null); setConfirmStopId(rule.id); }}>
-                              <CircleStop size={16} aria-hidden="true" />Stop
-                            </button>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {repeatError && <p role="alert" className="profile-error">{repeatError}</p>}
-              </>
-            )}
-          </section>
-
           <section id="profile-panel-paycycle" role="tabpanel" aria-labelledby="profile-tab-paycycle" className="profile-panel" hidden={tab !== 'paycycle'}>
-            <div className="profile-panel-head"><div><h2>Paycycle</h2><p>Changes apply right away and are saved on this device.</p></div></div>
-            <div className="profile-card profile-rows">
-              <div className="profile-pref">
-                <div><label htmlFor="profile-payday"><strong>Payday</strong></label><span className="profile-hint">The day of the month each salary cycle starts. </span></div>
-                <select id="profile-payday" value={cycle.salaryDay} onChange={event => updateCycle({ salaryDay: clampSalaryDay(Number(event.target.value)) })}>
-                  {Array.from({ length: 28 }, (_, index) => index + 1).map(day => <option key={day} value={day}>Day {day}</option>)}
-                </select>
-              </div>
-              <div className="profile-pref">
-                <div><label htmlFor="profile-weekend-shift"><strong>Move weekend paydays to Monday</strong></label><span className="profile-hint">When payday falls on a Saturday or Sunday, the cycle starts the following Monday.</span></div>
-                <input id="profile-weekend-shift" type="checkbox" role="switch" className="profile-switch" checked={cycle.shiftWeekendToMonday} onChange={event => updateCycle({ shiftWeekendToMonday: event.target.checked })} />
-              </div>
-              <div className="profile-pref">
-                <div><label htmlFor="profile-start-after"><strong>Start cycle the day after payday</strong></label><span className="profile-hint">Keeps cycles consecutive, so payday belongs to the cycle that just ended.</span></div>
-                <input id="profile-start-after" type="checkbox" role="switch" className="profile-switch" checked={cycle.startDayAfterPayday} onChange={event => updateCycle({ startDayAfterPayday: event.target.checked })} />
-              </div>
-              <div className="profile-pref">
-                <div><label htmlFor="profile-end-on-payday"><strong>End cycle on payday</strong></label><span className="profile-hint">Include the next payday as the final day of the cycle. Always on when the cycle starts the day after payday.</span></div>
-                <input id="profile-end-on-payday" type="checkbox" role="switch" className="profile-switch" checked={cycle.startDayAfterPayday ? true : cycle.includeNextPaydayInCycle} disabled={cycle.startDayAfterPayday} onChange={event => updateCycle({ includeNextPaydayInCycle: event.target.checked })} />
-              </div>
-              <div className="profile-pref">
-                <div><strong id="profile-month-payday-label">Adjust one month's payday</strong><span className="profile-hint">Pick the month, then move its payday earlier (up to 7 days) or later (up to 14 days). Only that month changes.</span></div>
-                <div className="profile-actions" role="group" aria-labelledby="profile-month-payday-label">
-                  <button type="button" className="profile-icon-button" aria-label="Previous month" onClick={() => shiftAdjustMonth(-1)}><ChevronLeft size={16} aria-hidden="true" /></button>
-                  <span>{adjustMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}: <strong>{adjustPayday.actualDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</strong></span>
-                  <button type="button" className="profile-icon-button" aria-label="Next month" onClick={() => shiftAdjustMonth(1)}><ChevronRight size={16} aria-hidden="true" /></button>
-                  <button type="button" className="profile-icon-button" aria-label="Pay one day earlier" disabled={adjustPayday.manualDelayDays <= -7} onClick={() => setMonthDelay(adjustPayday.manualDelayDays - 1)}>−</button>
-                  <span>{delayLabel(adjustPayday.manualDelayDays)}</span>
-                  <button type="button" className="profile-icon-button" aria-label="Pay one day later" disabled={adjustPayday.manualDelayDays >= 14} onClick={() => setMonthDelay(adjustPayday.manualDelayDays + 1)}>+</button>
-                  {adjustPayday.manualDelayDays !== 0 && <button type="button" className="profile-button" onClick={() => setMonthDelay(0)}>Reset</button>}
-                </div>
-              </div>
-            </div>
+            <div className="profile-panel-head"><div><h2>Paycycle</h2><p>How you are paid, and which period the calendar, week, day and analytics views show. Saved to your account.</p></div></div>
+            <BudgetPeriodSection disabled={isLoggingOut} onEditorStateChange={setBudgetEditor} />
           </section>
 
           <div id="profile-panel-mcp" role="tabpanel" aria-labelledby="profile-tab-mcp" hidden={tab !== 'mcp'}>

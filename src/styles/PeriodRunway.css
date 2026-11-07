@@ -1,0 +1,81 @@
+/* Period runway: headline left-over, one bar splitting income, labels under their own segments. */
+.runway {
+  --runway-spent: color-mix(in srgb, var(--text-main) 80%, transparent);
+  --runway-committed: var(--warning);
+  --runway-estimates: var(--warning);
+  --runway-left: var(--primary);
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--text-main);
+}
+
+.runway-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.runway-eyebrow { font-size: 0.8rem; color: var(--text-muted); }
+
+.runway-hero { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 4px 24px; margin: 12px 0 14px; }
+.runway-hero-label { display: flex; align-items: center; gap: 7px; font-size: 0.8rem; color: var(--text-muted); }
+.runway-hero-value { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.1; }
+.runway-hero-side { font-size: 0.8rem; color: var(--text-muted); text-align: right; }
+.runway-hero-side b { color: var(--text-main); font-size: 0.95rem; font-weight: 600; }
+.runway-hero-side a { color: var(--primary); font-weight: 600; }
+
+.runway-money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.runway-currency { margin-left: 0.2em; font-size: 0.62em; font-weight: 500; opacity: 0.62; }
+.runway-left { color: var(--primary); }
+.runway-negative { color: var(--danger); }
+.runway-income { color: var(--success); }
+.runway-muted { color: var(--text-muted); }
+
+.runway-swatch { width: 10px; height: 10px; flex: none; border-radius: 3px; }
+.runway-swatch-over { background: var(--danger); }
+.runway-swatch-none { background: color-mix(in srgb, var(--text-muted) 40%, transparent); }
+
+.runway-bar-wrap { position: relative; padding-top: 18px; }
+.runway-bar { position: relative; display: flex; height: 14px; overflow: hidden; border-radius: 7px; background: color-mix(in srgb, var(--text-muted) 16%, transparent); }
+.runway-seg { height: 100%; }
+.runway-seg + .runway-seg { box-shadow: inset 2px 0 0 var(--bg-card); }
+.runway-seg-spent { background: var(--runway-spent); }
+.runway-seg-committed { background: var(--runway-committed); }
+.runway-seg-estimates { background: repeating-linear-gradient(135deg, var(--runway-estimates) 0 2px, transparent 2px 5px); }
+.runway-seg-estimates:first-child, .runway-seg + .runway-seg-estimates { box-shadow: inset 0 0 0 1px var(--runway-estimates); }
+.runway-seg-left { background: var(--runway-left); }
+.runway-over { position: absolute; top: 0; right: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--danger) 0 3px, transparent 3px 6px); }
+
+.runway-mark { position: absolute; top: 12px; bottom: -5px; border-left: 2px solid var(--text-main); }
+.runway-mark > span { position: absolute; bottom: calc(100% + 1px); left: 0; transform: translateX(-50%); font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; }
+.runway-mark-start > span { transform: translateX(-2px); }
+.runway-mark-end > span { transform: translateX(-100%); }
+.runway-mark-income { border-color: var(--danger); }
+
+.runway-labels { position: relative; height: 2.6rem; margin-top: 10px; }
+.runway-labels:empty { height: 0; margin: 0; }
+.runway-label { position: absolute; top: 0; display: flex; flex-direction: column; padding-left: 9px; border-left: 2px solid var(--runway-color); line-height: 1.3; white-space: nowrap; }
+.runway-label-name { font-size: 0.75rem; color: var(--text-muted); }
+.runway-label-pct { margin-left: 5px; opacity: 0.7; }
+.runway-label-amount { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.runway-labels-stack { display: grid; gap: 6px; height: auto; }
+.runway-labels-stack .runway-label { position: static; flex-direction: row; justify-content: space-between; align-items: baseline; gap: 12px; }
+.runway-labels-stack .runway-label-amount { font-size: 0.875rem; }
+
+.runway-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border-color); font-size: 0.75rem; color: var(--text-muted); }
+.runway-foot b { font-weight: 600; }
+
+/* Hovering one amount fades the other parts of the bar and their labels. */
+.runway [data-seg] { transition: opacity 0.15s ease; }
+.runway:has([data-seg="spent"]:hover) [data-seg]:not([data-seg="spent"]),
+.runway:has([data-seg="committed"]:hover) [data-seg]:not([data-seg="committed"]),
+.runway:has([data-seg="estimates"]:hover) [data-seg]:not([data-seg="estimates"]),
+.runway:has([data-seg="left"]:hover) [data-seg]:not([data-seg="left"]) { opacity: 0.3; }
+
+@container (max-width: 560px) {
+  .runway-hero { margin: 10px 0 12px; }
+  .runway-hero-value { font-size: 1.75rem; }
+  .runway-hero-side { text-align: left; }
+  .runway-foot { margin-top: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runway [data-seg] { transition: none; }
+}

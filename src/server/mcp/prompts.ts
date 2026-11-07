@@ -30,16 +30,16 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
   },
   {
     name: "salary_cycle_checkup",
-    description: "Review payday-to-payday spending, burn rate, remaining balance, and daily safe-to-spend budget.",
+    description: "Review spending, burn rate, remaining balance, and daily safe-to-spend budget for the saved budget period of a month.",
     arguments: [
       {
         name: "cycleMonth",
-        description: "Cycle anchor month in YYYY-MM format (defaults to the current month).",
+        description: "Cycle month in YYYY-MM format (defaults to the current month).",
         required: false,
       },
       {
         name: "salaryDay",
-        description: "Day of month payday occurs (1–28, default 5).",
+        description: "Ignored. The checkup follows the saved budget period.",
         required: false,
       },
     ],
@@ -115,9 +115,10 @@ export async function getMcpPrompt(
 
   if (name === "salary_cycle_checkup") {
     const cycleMonth = validMonthOrDefault(args.cycleMonth);
-    const salaryDay = args.salaryDay !== undefined ? Number(args.salaryDay) : 5;
+    // salaryDay is still accepted so older clients do not fail, but the saved budget period decides the cycle.
+    const salaryDay = args.salaryDay !== undefined ? Number(args.salaryDay) : undefined;
     const report = await buildSalaryCycleReport(financeStore, user.id, cycleMonth, {
-      salaryDay: Number.isFinite(salaryDay) ? salaryDay : 5,
+      salaryDay: salaryDay !== undefined && Number.isFinite(salaryDay) ? salaryDay : undefined,
     });
     return {
       description: `Salary cycle checkup for ${cycleMonth}`,

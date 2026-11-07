@@ -31,7 +31,8 @@ import {
 import { useSettings } from '../contexts/SettingsContext';
 import { useFinance } from '../contexts/FinanceContext';
 import { pageHref } from '../lib/navigation';
-import { computeMonthlyAnalytics, fmtCompact, fmtPct, fmtVND } from '../lib/analytics';
+import { analysisPeriodFor, computeMonthlyAnalytics, fmtCompact, fmtPct, fmtVND } from '../lib/analytics';
+import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, periodRangeLabel } from '../lib/periods';
 import type { InsightTone } from '../lib/analytics';
 import {
   CumulativeChart,
@@ -108,9 +109,14 @@ export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) 
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+  const dateKey = format(currentDate, 'yyyy-MM-dd');
+  const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
+  const showBy = settings.showBy ?? DEFAULT_SHOW_BY;
+  // A pay period follows Show by. It is undefined for a calendar month, which keeps the month analysis.
+  const period = useMemo(() => analysisPeriodFor(budgetPeriod, showBy, incomes, dateKey), [budgetPeriod, showBy, incomes, dateKey]);
   const a = useMemo(
-    () => computeMonthlyAnalytics(new Date(year, month, 1), settings, spendings, incomes),
-    [year, month, settings, spendings, incomes],
+    () => computeMonthlyAnalytics(new Date(year, month, 1), settings, spendings, incomes, period),
+    [year, month, settings, spendings, incomes, period],
   );
 
   const categorySpendings = useMemo(() => {
@@ -159,7 +165,8 @@ export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) 
     return { name: c?.name ?? id, color: c?.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length] };
   };
 
-  const monthLabel = format(a.monthStart, 'MMMM yyyy');
+  const monthLabel = period ? periodRangeLabel({ start: a.periodStart, end: a.periodEnd }, true) : format(a.monthStart, 'MMMM yyyy');
+  const unit = period ? 'period' : 'month';
   const incomeBreakdown = `Recurring ${a.recurringIncome.toLocaleString('vi-VN')} ₫ · One-time ${a.oneTimeIncome.toLocaleString('vi-VN')} ₫`;
 
   if (a.isFutureMonth || !a.hasData) {
@@ -169,10 +176,10 @@ export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) 
           <ChartColumn size={40} />
           <h2>No spending data for {monthLabel}</h2>
           <p className="text-muted">
-            {a.isFutureMonth ? 'This month hasn’t started yet.' : 'Add some expenses and your analytics will appear here.'}
+            {a.isFutureMonth ? `This ${unit} hasn’t started yet.` : 'Add some expenses and your analytics will appear here.'}
           </p>
           <p className="text-muted text-sm">
-            Monthly income {a.income.toLocaleString('vi-VN')} ₫ · {incomeBreakdown}
+            {period ? 'Income' : 'Monthly income'} {a.income.toLocaleString('vi-VN')} ₫ · {incomeBreakdown}
           </p>
         </div>
       </div>
@@ -203,8 +210,8 @@ export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) 
           <h2 className="an-title">{monthLabel}</h2>
           <p className="text-muted text-sm">
             {partial
-              ? `Month to date · day ${a.elapsedDays} of ${a.daysInMonth} · ${a.txCount} transactions`
-              : `Full month · ${a.daysInMonth} days · ${a.txCount} transactions`}
+              ? `${period ? 'Period' : 'Month'} to date · day ${a.elapsedDays} of ${a.daysInMonth} · ${a.txCount} transactions`
+              : `Full ${unit} · ${a.daysInMonth} days · ${a.txCount} transactions`}
           </p>
         </div>
         <div className="an-hero-progress">

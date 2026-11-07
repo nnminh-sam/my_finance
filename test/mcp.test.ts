@@ -12,17 +12,21 @@ import {
   type IncomeInput,
   type RepeatRule,
   type RepeatRuleInput,
+  type SettingsPatch,
   type Spending,
   type SpendingInput,
 } from "../src/server/finance/model";
 import { formatDateUtc, generateOccurrences, isRuleDueForSync } from "../src/server/finance/recurrence";
 import type { FinanceStore } from "../src/server/finance/store";
+import { applySettingsPatch, MemoryPlans, paycheckInUse, planSpendingsBetween, resetPaycheck } from "./support/memoryPlans";
 
 class MemoryAuthStore implements AuthStore {
   accounts = new Map<string, Account>();
   attempts = new Map<string, number>();
   sessions: Array<TokenHashes & { userId: string; revoked: boolean; expired: boolean; history: Set<string> }> = [];
   apiKeys = new Map<string, ApiKeyRecord & { userId: string; keyHash: string; revokedAt: string | null }>();
+  /** Stands in for the ON DELETE CASCADE foreign keys from finance tables to auth_users. */
+  onDeleteAccount: (userId: string) => void = () => {};
 
   async reserveAttempt(key: string) {
     const count = (this.attempts.get(key) ?? 0) + 1;
@@ -63,6 +67,15 @@ class MemoryAuthStore implements AuthStore {
     const session = this.sessions.find(s => s.accessHash === hash && !s.revoked && !s.expired);
     return session ? this.publicUser(session.userId) : undefined;
   }
+  async deleteAccount(userId: string) {
+    const account = [...this.accounts.values()].find(acc => acc.id === userId);
+    if (!account) return false;
+    this.accounts.delete(account.email);
+    this.sessions = this.sessions.filter(s => s.userId !== userId);
+    for (const [id, key] of this.apiKeys) if (key.userId === userId) this.apiKeys.delete(id);
+    this.onDeleteAccount(userId);
+    return true;
+  }
   async listApiKeys(userId: string): Promise<ApiKeyRecord[]> {
     return [...this.apiKeys.values()]
       .filter(k => k.userId === userId && !k.revokedAt)
@@ -101,6 +114,16 @@ class MemoryAuthStore implements AuthStore {
 }
 
 class MemoryFinanceStore implements FinanceStore {
+  planStore = new MemoryPlans(this);
+  listPlans = this.planStore.listPlans.bind(this.planStore);
+  createPlan = this.planStore.createPlan.bind(this.planStore);
+  updatePlan = this.planStore.updatePlan.bind(this.planStore);
+  splitPlan = this.planStore.splitPlan.bind(this.planStore);
+  deletePlan = this.planStore.deletePlan.bind(this.planStore);
+  setPlanException = this.planStore.setPlanException.bind(this.planStore);
+  deletePlanException = this.planStore.deletePlanException.bind(this.planStore);
+  materializePlans = this.planStore.materializePlans.bind(this.planStore);
+  completePlanOccurrence = this.planStore.completePlanOccurrence.bind(this.planStore);
   settings = new Map<string, FinanceSettings>();
   spendings = new Map<string, Map<string, Spending>>();
   incomes = new Map<string, Map<string, Income>>();
@@ -122,12 +145,17 @@ class MemoryFinanceStore implements FinanceStore {
     if (!this.settings.has(userId)) this.settings.set(userId, defaultFinanceSettings());
     return structuredClone(this.settings.get(userId)!);
   }
-  async updateSettings(userId: string, patch: Partial<FinanceSettings>) {
-    const next = { ...(await this.getSettings(userId)), ...structuredClone(patch) };
+  async updateSettings(userId: string, patch: SettingsPatch) {
+    const next = applySettingsPatch(await this.getSettings(userId), patch, this.incomeRows(userId));
+    if (next === "invalid-budget-period") return next;
     this.settings.set(userId, next);
     return structuredClone(next);
   }
+  async listPlanSpendings(userId: string, from: string, to: string) {
+    return planSpendingsBetween(this.rows(userId).values(), from, to);
+  }
   async listSpendings(userId: string, limit: number, cursor?: string, startDate?: string, endDate?: string) {
+    await this.materializePlans(userId);
     const rows = [...this.rows(userId).values()]
       .filter(r => (!cursor || r.id > cursor) && (!startDate || r.date >= startDate) && (!endDate || r.date <= endDate))
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -166,11 +194,13 @@ class MemoryFinanceStore implements FinanceStore {
   }
   async updateIncome(userId: string, id: string, input: IncomeInput) {
     if (!this.incomeRows(userId).has(id)) return undefined;
+    if (paycheckInUse(this.settings.get(userId), id, input)) return "paycheck-in-use" as const;
     const income: Income = { id, ...input };
     this.incomeRows(userId).set(id, income);
     return structuredClone(income);
   }
   async deleteIncome(userId: string, id: string) {
+    resetPaycheck(this.settings.get(userId), id);
     return this.incomeRows(userId).delete(id);
   }
   async listRepeatRules(userId: string) {
@@ -268,6 +298,12 @@ const origin = "http://localhost:5173";
 async function createTestFixture(t: TestContext) {
   const authStore = new MemoryAuthStore();
   const financeStore = new MemoryFinanceStore();
+  authStore.onDeleteAccount = userId => {
+    financeStore.settings.delete(userId);
+    financeStore.spendings.delete(userId);
+    financeStore.incomes.delete(userId);
+    financeStore.repeatRules.delete(userId);
+  };
   const app = createApplication({ databaseUrl: "unused", appOrigin: origin, production: false }, authStore, financeStore);
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => server.once("listening", resolve));
@@ -599,17 +635,19 @@ test("MCP Tools, Resources, and Prompts end-to-end finance workflows", async t =
   assert.equal(incomesList.isError, false);
   assert.equal(incomesList.structuredContent.monthlyTotal, 30000000);
 
-  // 6. Create and list repeat rule
-  const repeatCreated = await callTool("create_repeat_rule", {
+  // 6. A monthly commitment (plan) plus this month's real payment
+  const planCreated = await callTool("create_plan", {
     amount: 200000,
     description: "Gym membership",
     category: "Other",
     startDate: "2026-10-01",
     time: "09:00",
     frequency: "monthly",
-    endType: "unlimited",
+    sure: true,
   });
-  assert.equal(repeatCreated.isError, false);
+  assert.equal(planCreated.isError, false);
+  const gymPaid = await callTool("create_spending", { amount: 200000, description: "Gym membership", category: "Other", date: "2026-10-01", time: "09:00" });
+  assert.equal(gymPaid.isError, false);
 
   // 7. Analytics & summary tools
   const rangeSummary = await callTool("get_date_range_summary", {
@@ -630,6 +668,9 @@ test("MCP Tools, Resources, and Prompts end-to-end finance workflows", async t =
   });
   assert.equal(cycleSummary.isError, false);
   assert.equal(cycleSummary.structuredContent.cycleMonth, "2026-10");
+  // The override parameters are accepted and ignored: the report follows the saved budget period (calendar by default).
+  assert.deepEqual((cycleSummary.structuredContent.dates as { startDate: string; endDate: string }).startDate, "2026-10-01");
+  assert.deepEqual((cycleSummary.structuredContent.config as { ignoredParameters: string[] }).ignoredParameters, ["salaryDay"]);
 
   // 8. Read MCP Resources (static and templated)
   for (const uri of [
@@ -667,4 +708,231 @@ test("MCP Tools, Resources, and Prompts end-to-end finance workflows", async t =
     assert.equal(body.result.messages.length, 1);
     assert.ok(body.result.messages[0].content.text.length > 20);
   }
+});
+
+test("account deletion requires the password and removes API keys and finance data", async t => {
+  const { baseUrl, financeStore, user, accessToken, mcpCall } = await createTestFixture(t);
+  const createRes = await fetch(`${baseUrl}/api/v1/auth/api-keys`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: origin, Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ name: "Agent" }),
+  });
+  const { secret } = (await createRes.json()) as { secret: string };
+  assert.ok(await financeStore.createSpending(user.id, { amount: 1000, description: "Coffee", category: "Food", date: "2026-11-03", time: "08:00" }));
+  await financeStore.createIncome(user.id, { source: "Salary", name: "", amount: 100, frequency: "monthly", startDate: "2026-11-01", endDate: null });
+  const profile = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_profile_and_settings", arguments: {} } };
+  const deleteAccount = (password: unknown) => fetch(`${baseUrl}/api/v1/auth/account`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", Origin: origin, Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ password }),
+  });
+
+  assert.equal((await deleteAccount("wrong password, long enough")).status, 401);
+  assert.equal((await mcpCall(profile, secret)).status, 200);
+  assert.equal(financeStore.spendings.get(user.id)?.size, 1);
+
+  assert.equal((await deleteAccount("correct horse battery staple")).status, 204);
+  assert.equal((await mcpCall(profile, secret)).status, 401, "API keys no longer authenticate");
+  for (const table of [financeStore.settings, financeStore.spendings, financeStore.incomes, financeStore.repeatRules]) {
+    assert.equal(table.has(user.id), false);
+  }
+});
+
+test("MCP plan tools create, forecast, adjust single days, split and delete plans", async t => {
+  const { accessToken, mcpCall, financeStore } = await createTestFixture(t);
+  // 05:00 UTC = 12:00 in Asia/Ho_Chi_Minh, Wednesday 2026-11-04.
+  financeStore.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+  async function callTool(name: string, args: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call", params: { name, arguments: args } }, accessToken);
+    assert.equal(res.status, 200);
+    return ((await res.json()) as { result: { structuredContent: Record<string, any>; isError: boolean } }).result;
+  }
+
+  const created = await callTool("create_plan", { amount: 35000, description: "Lunch", category: "Food", time: "12:30", startDate: "2026-11-02", frequency: "weekdays" });
+  assert.equal(created.isError, false);
+  const plan = created.structuredContent.plan;
+  assert.equal(plan.schedule, "Every weekday");
+  assert.equal((await callTool("create_plan", { amount: 1, category: "Nope", startDate: "2026-11-02", frequency: "daily" })).isError, true);
+
+  const skipped = await callTool("update_plan_occurrence", { id: plan.id, date: "2026-11-05", action: "skip" });
+  assert.equal(skipped.isError, false);
+  await callTool("update_plan_occurrence", { id: plan.id, date: "2026-11-06", action: "override", amount: 50000 });
+  assert.equal((await callTool("update_plan_occurrence", { id: plan.id, date: "2026-11-07", action: "skip" })).isError, true);
+
+  // Wed (12:30 still ahead), Thu skipped, Fri 50k, Mon–Fri next week.
+  const forecast = await callTool("get_spending_forecast", { startDate: "2026-11-01", endDate: "2026-11-13" });
+  assert.equal(forecast.isError, false);
+  assert.equal(forecast.structuredContent.spent, 0);
+  assert.equal(forecast.structuredContent.planned, 35000 + 50000 + 5 * 35000);
+  assert.equal(forecast.structuredContent.byCategory.Food.planned, 260000);
+
+  const listed = await callTool("list_plans");
+  assert.equal(listed.structuredContent.today, "2026-11-04");
+  assert.equal(listed.structuredContent.plans[0].nextOccurrences[0].date, "2026-11-04");
+  assert.equal(listed.structuredContent.plans[0].nextOccurrences[1].date, "2026-11-06");
+
+  const updated = await callTool("update_plan", { id: plan.id, amount: 38000 });
+  assert.equal(updated.structuredContent.plan.amount, 38000);
+  assert.equal(updated.structuredContent.plan.description, "Lunch");
+  const split = await callTool("update_plan", { id: plan.id, amount: 40000, effectiveFrom: "2026-11-16" });
+  assert.equal(split.structuredContent.ended.endDate, "2026-11-15");
+  assert.equal(split.structuredContent.created.amount, 40000);
+
+  const deleted = await callTool("delete_plan", { id: plan.id });
+  assert.equal(deleted.structuredContent.deleted, true);
+  assert.equal((await callTool("delete_plan", { id: plan.id })).isError, true);
+});
+
+test("MCP plan tools record commitments and mark an occurrence done; repeat tools are gone", async t => {
+  const { accessToken, mcpCall, financeStore } = await createTestFixture(t);
+  financeStore.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+  async function call(method: string, params: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method, params }, accessToken);
+    return ((await res.json()) as { result: any }).result;
+  }
+  const names = (await call("tools/list")).tools.map((tool: { name: string }) => tool.name);
+  assert.equal(names.some((name: string) => name.includes("repeat_rule")), false);
+  const rent = (await call("tools/call", { name: "create_plan", arguments: { amount: 4000000, description: "Rent", category: "Bills", startDate: "2026-11-05", frequency: "monthly", sure: true } })).structuredContent.plan;
+  assert.equal(rent.sure, true);
+  const done = await call("tools/call", { name: "update_plan_occurrence", arguments: { id: rent.id, date: "2026-11-05", action: "done" } });
+  assert.equal(done.isError, false);
+  assert.equal(done.structuredContent.spending.planDate, "2026-11-05");
+  const again = await call("tools/call", { name: "update_plan_occurrence", arguments: { id: rent.id, date: "2026-11-05", action: "done" } });
+  assert.equal(again.isError, true);
+  const flipped = await call("tools/call", { name: "update_plan", arguments: { id: rent.id, sure: false } });
+  assert.equal(flipped.structuredContent.plan.sure, false);
+});
+
+test("MCP income tools carry pay schedule fields and update_income keeps them", async t => {
+  const { accessToken, mcpCall } = await createTestFixture(t);
+  async function call(name: string, args: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call", params: { name, arguments: args } }, accessToken);
+    return ((await res.json()) as { result: any }).result;
+  }
+  const tools = (await mcpCall({ jsonrpc: "2.0", id: 1, method: "tools/list" }, accessToken).then(res => res.json()) as { result: { tools: { name: string; annotations: { readOnlyHint?: boolean }; inputSchema: { properties: Record<string, unknown> } }[] } }).result.tools;
+  for (const name of ["create_income", "update_income"]) {
+    const properties = Object.keys(tools.find(tool => tool.name === name)!.inputSchema.properties);
+    for (const field of ["interval", "semimonthlyDays", "weekendShift"]) assert.ok(properties.includes(field), `${name} ${field}`);
+  }
+  for (const name of ["get_plan_period_summary", "get_budget_period"]) assert.equal(tools.find(tool => tool.name === name)?.annotations.readOnlyHint, true, name);
+
+  const created = await call("create_income", { source: "Salary", amount: 1000, frequency: "semimonthly", startDate: "2026-01-01", semimonthlyDays: [15, 31], weekendShift: true });
+  assert.equal(created.isError, false);
+  const income = created.structuredContent.income as Income;
+  assert.deepEqual([income.semimonthlyDays, income.weekendShift], [[15, 31], true]);
+  // Updating only the amount through the tool must not reset the options when they are sent again.
+  const updated = await call("update_income", { id: income.id, source: "Salary", amount: 1200, frequency: "semimonthly", startDate: "2026-01-01", semimonthlyDays: [15, 31], weekendShift: true });
+  assert.equal(updated.isError, false);
+  assert.deepEqual([(updated.structuredContent.income as Income).amount, (updated.structuredContent.income as Income).semimonthlyDays, (updated.structuredContent.income as Income).weekendShift], [1200, [15, 31], true]);
+  const biweekly = await call("create_income", { source: "Shop", amount: 10, frequency: "weekly", startDate: "2026-01-02", interval: 2 });
+  assert.equal((biweekly.structuredContent.income as Income).interval, 2);
+  // A plain income has none of the new keys, and bad combinations are rejected.
+  const plain = await call("create_income", { source: "Gift", amount: 5, frequency: "monthly", startDate: "2026-01-02", interval: null, semimonthlyDays: null, weekendShift: null });
+  assert.equal(plain.isError, false);
+  assert.deepEqual(Object.keys(plain.structuredContent.income as Income).filter(key => ["interval", "semimonthlyDays", "weekendShift"].includes(key)), []);
+  assert.equal((await call("create_income", { source: "X", amount: 5, frequency: "monthly", startDate: "2026-01-02", interval: 2 })).isError, true);
+  assert.equal((await call("create_income", { source: "X", amount: 5, frequency: "semimonthly", startDate: "2026-01-02" })).isError, true);
+});
+
+test("MCP budget period tool, resource and plan period summary; list_plans keys are unchanged", async t => {
+  const { accessToken, mcpCall, financeStore } = await createTestFixture(t);
+  financeStore.planStore.now = () => new Date("2026-11-04T05:00:00Z");
+  async function call(name: string, args: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call", params: { name, arguments: args } }, accessToken);
+    return ((await res.json()) as { result: any }).result;
+  }
+  assert.equal((await call("update_settings", { timezone: "UTC" })).isError, false);
+  const defaults = await call("get_budget_period");
+  assert.deepEqual(defaults.structuredContent.budgetPeriod, { mode: "calendar", startDay: 1, paycheckIncomeId: null });
+  assert.equal(defaults.structuredContent.currentPeriod.mode, "calendar");
+
+  const pay = (await call("create_income", { source: "Salary", amount: 1000, frequency: "monthly", startDate: "2026-01-25" })).structuredContent.income as Income;
+  const [user] = [...financeStore.settings.keys()];
+  const saved = await financeStore.updateSettings(user, { budgetPeriod: { mode: "paycheck", paycheckIncomeId: pay.id } });
+  assert.notEqual(saved, "invalid-budget-period");
+  assert.equal((await call("create_plan", { amount: 400, description: "Rent", category: "Bills", startDate: "2026-11-01", time: "08:00", frequency: "monthly", sure: true })).isError, false);
+
+  const summary = (await call("get_plan_period_summary", { date: "2026-12-10" })).structuredContent.summary;
+  assert.deepEqual(summary.period, { start: "2026-11-25", end: "2026-12-24", nextStart: "2026-12-25", mode: "paycheck" });
+  assert.deepEqual([summary.income, summary.spent, summary.committed, summary.tentative, summary.left], [1000, 0, 400, 0, 600]);
+  assert.equal((await call("get_plan_period_summary", { date: "2026-13-40" })).isError, true);
+  assert.equal((await call("get_plan_period_summary")).isError, false);
+
+  const current = await call("get_budget_period");
+  assert.equal(current.structuredContent.budgetPeriod.paycheckIncomeId, pay.id);
+  assert.equal(current.structuredContent.currentPeriod.mode, "paycheck");
+
+  const listRes = await mcpCall({ jsonrpc: "2.0", id: 2, method: "resources/list" }, accessToken);
+  const resources = ((await listRes.json()) as { result: { resources: { uri: string }[] } }).result.resources;
+  assert.ok(resources.some(resource => resource.uri === "finance://budget-period"));
+  const readRes = await mcpCall({ jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri: "finance://budget-period" } }, accessToken);
+  const content = JSON.parse(((await readRes.json()) as { result: { contents: { text: string }[] } }).result.contents[0].text);
+  assert.equal(content.budgetPeriod.mode, "paycheck");
+  assert.deepEqual(Object.keys(content).sort(), ["budgetPeriod", "currentPeriod", "showBy", "summary", "today"]);
+
+  const plans = await call("list_plans");
+  for (const key of ["timezone", "today", "count", "plannedRestOfMonth", "plannedNextMonth", "plans"]) assert.ok(key in plans.structuredContent, key);
+});
+
+test("MCP pay cycle report follows the saved budget period and ignores the old override parameters", async t => {
+  const { accessToken, mcpCall, financeStore } = await createTestFixture(t);
+  async function call(name: string, args: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call", params: { name, arguments: args } }, accessToken);
+    return ((await res.json()) as { result: any }).result;
+  }
+  assert.equal((await call("update_settings", { timezone: "UTC" })).isError, false);
+  const [owner] = [...financeStore.settings.keys()];
+  assert.ok(owner, "the settings call created the user row");
+  for (const [date, amount] of [["2026-09-24", 1], ["2026-09-25", 10], ["2026-10-24", 100], ["2026-10-25", 1000]] as const) {
+    assert.equal((await call("create_spending", { amount, description: date, category: "Food", date, time: "08:00" })).isError, false);
+  }
+  assert.equal((await call("create_income", { source: "Salary", amount: 5000, frequency: "monthly", startDate: "2026-01-25" })).isError, false);
+
+  const calendarReport = (await call("get_salary_cycle_summary", { cycleMonth: "2026-10" })).structuredContent;
+  assert.deepEqual([calendarReport.dates.startDate, calendarReport.dates.endDate], ["2026-10-01", "2026-10-31"]);
+  assert.deepEqual(calendarReport.config.ignoredParameters, [], "no options means nothing ignored");
+  assert.equal(calendarReport.spending.total, 1100, "calendar October holds the 24th and the 25th");
+
+  const saved = await financeStore.updateSettings(owner, { budgetPeriod: { mode: "monthly_from_day", startDay: 25 } });
+  assert.notEqual(saved, "invalid-budget-period");
+  const report = (await call("get_salary_cycle_summary", { cycleMonth: "2026-10", salaryDay: 5, shiftWeekendToMonday: false, delayDays: 3 })).structuredContent;
+  assert.equal(report.cycleMonth, "2026-10");
+  assert.deepEqual([report.dates.startDate, report.dates.endDate, report.dates.nextPayday], ["2026-09-25", "2026-10-24", "2026-10-25"], "the period that contains 2026-10-01");
+  assert.deepEqual(report.config.ignoredParameters, ["salaryDay", "shiftWeekendToMonday", "delayDays"]);
+  assert.deepEqual([report.config.mode, report.config.startDay, report.config.paycheckIncomeId], ["monthly_from_day", 25, null]);
+  assert.equal(report.spending.total, 110, "the 24th of September and the 25th of October are outside");
+  assert.equal(report.income.total, 5000, "one payday in the period");
+  assert.equal(report.dates.totalDays, 30);
+
+  const boundary = (await call("get_salary_cycle_summary", { cycleMonth: "2026-11" })).structuredContent;
+  assert.deepEqual([boundary.dates.startDate, boundary.dates.endDate], ["2026-10-25", "2026-11-24"]);
+  assert.equal(boundary.spending.total, 1000);
+
+  const prompt = await mcpCall({ jsonrpc: "2.0", id: 1, method: "prompts/get", params: { name: "salary_cycle_checkup", arguments: { cycleMonth: "2026-10", salaryDay: 5 } } }, accessToken);
+  const text = ((await prompt.json()) as { result: { messages: { content: { text: string } }[] } }).result.messages[0].content.text;
+  assert.ok(text.includes("2026-09-25 to 2026-10-24"));
+  assert.ok(text.includes("ignoredParameters"));
+});
+
+test("MCP budget period output carries showBy and update_settings stores it", async t => {
+  const { accessToken, mcpCall, financeStore } = await createTestFixture(t);
+  async function call(name: string, args: Record<string, unknown> = {}) {
+    const res = await mcpCall({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call", params: { name, arguments: args } }, accessToken);
+    return ((await res.json()) as { result: any }).result;
+  }
+  assert.equal((await call("update_settings", { timezone: "UTC" })).isError, false);
+  assert.equal((await call("get_budget_period")).structuredContent.showBy, "calendar_month");
+  assert.equal((await call("update_settings", { showBy: "pay_cycle" })).isError, false);
+  assert.equal((await call("get_budget_period")).structuredContent.showBy, "pay_cycle");
+  assert.equal((await call("update_settings", { showBy: "weekly" })).isError, true);
+  assert.equal((await call("get_budget_period")).structuredContent.showBy, "pay_cycle", "a rejected value writes nothing");
+  assert.ok(financeStore.settings.size > 0);
+});
+
+test("MCP update_settings schema lists showBy with its two values", async t => {
+  const { accessToken, mcpCall } = await createTestFixture(t);
+  const res = await mcpCall({ jsonrpc: "2.0", id: 1, method: "tools/list" }, accessToken);
+  const tools = ((await res.json()) as { result: { tools: { name: string; inputSchema: { properties: Record<string, { enum?: string[] }> } }[] } }).result.tools;
+  const update = tools.find(tool => tool.name === "update_settings");
+  assert.deepEqual(update?.inputSchema.properties.showBy.enum, ["calendar_month", "pay_cycle"]);
 });

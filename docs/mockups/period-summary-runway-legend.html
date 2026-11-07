@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Runway bar legend options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: sticky controls, then one section per legend option for direction A, each a live stage in the app's colours.
+   Tokens mirror src/styles/globals.css (dark is the app default, light mirrors .light-mode). */
+:root {
+  --page: #050506; --bg: #09090b; --card: #18181b; --card-2: #1f1f23; --line: #3f3f46; --line-soft: #2a2a2f;
+  --fg: #f4f4f5; --muted: #a1a1aa; --faint: #71717a; --chip-on: #09090b;
+  --primary: #3b82f6; --primary-text: #60a5fa; --primary-soft: rgba(59,130,246,.15);
+  --income: #34d399; --danger: #f87171; --danger-soft: rgba(239,68,68,.16);
+  --seg-spent: #d4d4d8; --on-spent: #18181b; --seg-sure: #f59e0b; --on-sure: #18181b; --seg-est: #f59e0b;
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --line: #e2e8f0; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8; --chip-on: #ffffff;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1);
+  --seg-spent: #475569; --on-spent: #ffffff; --seg-sure: #d97706; --on-sure: #ffffff; --seg-est: #d97706;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font: 14px/1.5 var(--font); background: var(--page); color: var(--fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.m { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cur { font-size: .62em; opacity: .62; margin-left: .2em; font-weight: 500; }
+.c-income { color: var(--income); } .c-left { color: var(--primary-text); } .c-neg { color: var(--danger); } .c-muted { color: var(--muted); }
+.zero { opacity: .45; }
+.dim { opacity: .22 !important; }
+[data-seg] { transition: opacity .15s ease; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* page chrome */
+.bar-top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line-soft); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 21; background: var(--page); }
+.bar-top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding-block: 10px; }
+.ctl { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--card); border: 1px solid var(--line); }
+.seg button { padding: 3px 10px; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--primary); color: #fff; }
+.jump { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.jump a { font-size: 12px; color: var(--muted); text-decoration: none; padding: 3px 8px; border-radius: 6px; border: 1px solid transparent; }
+.jump a:hover { color: var(--fg); border-color: var(--line); }
+.intro { padding-block: 28px 8px; }
+.intro h1 { font-size: 26px; letter-spacing: -.02em; margin: 0 0 6px; text-wrap: balance; }
+.intro p { margin: 0 0 8px; color: var(--muted); max-width: 80ch; }
+.dir { padding-block: 34px 10px; border-bottom: 1px solid var(--line-soft); }
+.dir-head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 14px; }
+.dir-tag { font-size: 12px; font-weight: 700; color: var(--primary-text); background: var(--primary-soft); border-radius: 6px; padding: 2px 8px; }
+.dir-head h2 { font-size: 19px; margin: 0; letter-spacing: -.01em; }
+.dir-head p { margin: 0; color: var(--muted); flex: 1 1 320px; }
+.stage { background: var(--bg); border: 1px solid var(--line-soft); border-radius: 14px; padding: 22px; margin: 0 auto; container-type: inline-size; transition: max-width .25s ease; max-width: 100%; }
+body.phone .stage { max-width: 390px; padding: 12px; }
+.notes { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 24px; font-size: 13px; color: var(--muted); }
+.notes b { display: block; color: var(--fg); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
+@media (max-width: 760px) { .notes { grid-template-columns: 1fr; } .jump { margin-left: 0; } }
+.foot { padding-block: 26px 48px; color: var(--muted); font-size: 12.5px; }
+
+/* shared card pieces (direction A) */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; }
+@container (max-width: 520px) { .card { padding: 16px; border-radius: 14px; } }
+.eyebrow { font-size: 12.5px; color: var(--muted); }
+.eyebrow b { color: var(--fg); font-weight: 500; }
+.label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+.tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.plan-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 8px; background: var(--primary-soft); color: var(--primary-text); font-size: 12.5px; font-weight: 500; }
+.plan-btn svg { width: 14px; height: 14px; }
+.basis { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--card-2); border: 1px solid var(--line-soft); }
+.basis button { height: 26px; padding: 0 10px; border-radius: 7px; font-size: 12.5px; color: var(--muted); }
+.basis button[aria-pressed="true"] { background: var(--chip-on); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+@container (max-width: 520px) { .plan-btn .long { display: none; } }
+@container (min-width: 521px) { .plan-btn .short { display: none; } }
+.sw { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+.s-spent { background: var(--seg-spent); }
+.s-sure { background: var(--seg-sure); }
+.s-est { background: repeating-linear-gradient(135deg, var(--seg-est) 0 2px, transparent 2px 5px); box-shadow: inset 0 0 0 1px var(--seg-est); }
+.s-left { background: var(--primary); }
+.s-income { background: var(--income); }
+.s-neg { background: var(--danger); }
+
+.rw-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rw-hero { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px 24px; flex-wrap: wrap; margin: 14px 0 18px; }
+.rw-hero .big { font-size: 38px; font-weight: 700; letter-spacing: -.025em; line-height: 1.1; }
+.rw-hero .side { text-align: right; font-size: 13px; color: var(--muted); }
+.rw-hero .side b { color: var(--fg); font-weight: 600; font-size: 15px; }
+@container (max-width: 640px) { .rw-hero .big { font-size: 30px; } .rw-hero .side { text-align: left; } }
+.rw-barwrap { position: relative; padding-top: 18px; }
+.rw-bar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--line-soft); position: relative; }
+.rw-bar > span { height: 100%; position: relative; }
+.rw-bar > span + span { box-shadow: inset 2px 0 0 var(--card); }
+.rw-over { position: absolute; top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(135deg, var(--danger) 0 3px, transparent 3px 6px); opacity: .85; }
+.rw-mark { position: absolute; top: 12px; bottom: -6px; width: 0; border-left: 2px solid var(--fg); pointer-events: none; }
+.rw-mark span { position: absolute; bottom: calc(100% + 1px); left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.rw-mark.edge-l span { left: -2px; transform: none; } .rw-mark.edge-r span { left: auto; right: 0; transform: none; }
+.rw-mark.income { border-color: var(--danger); }
+.rw-foot { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--line); font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.rw-foot b { color: var(--fg); font-weight: 600; }
+
+/* A1. Labels under their segment */
+.lab-row { position: relative; margin-top: 10px; }
+.lab-row .lab { position: absolute; top: 0; padding-left: 9px; border-left: 2px solid var(--c); white-space: nowrap; cursor: default; }
+.lab .n { font-size: 12px; color: var(--muted); }
+.lab .n .p { color: var(--faint); margin-left: 4px; }
+.lab .v { font-size: 16px; font-weight: 600; line-height: 1.3; }
+.lab-row.stack { display: grid; gap: 6px; height: auto !important; }
+.lab-row.stack .lab { position: static; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.lab-row.stack .lab .v { font-size: 14px; }
+
+/* A2. One-line legend */
+.inl { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 28px; margin-top: 14px; }
+.inl .it { display: inline-flex; align-items: baseline; gap: 7px; cursor: default; }
+.inl .it .sw { align-self: center; }
+.inl .n { color: var(--muted); font-size: 13px; }
+.inl .v { font-weight: 600; font-size: 15px; }
+.inl .p { color: var(--faint); font-size: 12px; }
+.inl .inc { margin-left: auto; }
+@container (max-width: 640px) {
+  .inl { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .inl .it { justify-content: space-between; }
+  .inl .it .n { margin-right: auto; }
+  .inl .inc { margin-left: 0; border-top: 1px solid var(--line-soft); padding-top: 6px; }
+}
+
+/* A3. Breakdown beside the hero */
+.side-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: center; margin-top: 4px; }
+.side-grid .rw-hero { margin-top: 10px; }
+.tbl { display: grid; gap: 1px; padding-left: 24px; border-left: 1px solid var(--line-soft); }
+.tbl .r { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 38px; gap: 8px; align-items: center; padding: 5px 0; font-size: 13.5px; cursor: default; }
+.tbl .r .n { color: var(--muted); }
+.tbl .r .v { font-weight: 600; text-align: right; }
+.tbl .r .p { font-size: 11.5px; color: var(--faint); text-align: right; }
+.tbl .r.sum { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; }
+.tbl .r.sum .n { color: var(--fg); }
+@container (max-width: 760px) { .side-grid { grid-template-columns: 1fr; gap: 14px; } .tbl { padding-left: 0; border-left: 0; border-top: 1px solid var(--line-soft); padding-top: 8px; } }
+
+/* A4. Amounts inside a taller bar */
+.tall .rw-bar { height: 40px; border-radius: 10px; }
+.tall .rw-bar > span { display: flex; align-items: center; padding: 0 10px; overflow: hidden; }
+.tall .rw-mark { top: 10px; bottom: auto; height: 9px; }
+.inbar { font-size: 12.5px; white-space: nowrap; display: inline-flex; gap: 6px; align-items: baseline; }
+.inbar b { font-weight: 650; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.inbar .cmp, .nofit .inbar, .short-fit .inbar .full { display: none; }
+.short-fit .inbar .cmp { display: inline; }
+.on-spent { color: var(--on-spent); }
+.on-sure { color: var(--on-sure); }
+.on-left { color: #fff; }
+.on-est { background: var(--card); color: var(--fg); padding: 1px 7px; border-radius: 6px; }
+.outside { margin-top: 8px; }
+.outside .lab .v { font-size: 14px; }
+
+/* A5. Sentence */
+.sent { margin: 14px 0 0; font-size: 15px; line-height: 1.7; color: var(--muted); max-width: 72ch; }
+.sent b { color: var(--fg); font-weight: 600; white-space: nowrap; }
+.sent .sw { margin-right: 5px; vertical-align: -1px; }
+.sent span[data-seg] { cursor: default; }
+
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(20px); opacity: 0; background: var(--fg); color: var(--bg); padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 500; transition: .2s ease; pointer-events: none; z-index: 50; }
+.toast.on { opacity: 1; transform: translateX(-50%); }
+</style>
+</head>
+<body>
+
+<div class="bar-top">
+  <div class="wrap">
+    <div class="ctl">Numbers <div class="seg" id="ctl-scen" role="group" aria-label="Sample numbers"></div></div>
+    <div class="ctl">Width
+      <div class="seg" role="group" aria-label="Preview width">
+        <button type="button" data-action="device" data-v="desk" aria-pressed="true">Desktop</button>
+        <button type="button" data-action="device" data-v="phone" aria-pressed="false">Phone</button>
+      </div>
+    </div>
+    <div class="ctl">Theme
+      <div class="seg" role="group" aria-label="Theme">
+        <button type="button" data-action="theme" data-v="dark" aria-pressed="true">Dark</button>
+        <button type="button" data-action="theme" data-v="light" aria-pressed="false">Light</button>
+      </div>
+    </div>
+    <nav class="jump" aria-label="Options">
+      <a href="#a1">A1 Under segments</a><a href="#a2">A2 One line</a><a href="#a3">A3 Side table</a><a href="#a4">A4 In the bar</a><a href="#a5">A5 Sentence</a>
+    </nav>
+  </div>
+</div>
+
+<header class="wrap intro">
+  <h1>Runway bar: legend options</h1>
+  <p>Direction A with the four equal legend cards replaced. The cards wasted space because each held a short number in a quarter of the width. They also repeated “Left”, which is already the headline. Every option below drops the repeated Left amount and ties the blue swatch to the headline instead.</p>
+  <p>“This cycle” uses your real numbers. The other buttons are made-up edge cases. Hover any amount to highlight its part of the bar.</p>
+</header>
+
+<main class="wrap">
+  <section class="dir" id="a1">
+    <div class="dir-head"><span class="dir-tag">A1</span><h2>Labels under their segment</h2><p>Each amount sits directly under the part of the bar it describes, so the legend is the bar’s own caption.</p></div>
+    <div class="stage"><div class="mock" data-v="a1"></div></div>
+    <ul class="notes">
+      <li><b>Why</b>No swatches to match up. Position tells you which amount is which, and the empty space disappears.</li>
+      <li><b>Trade-off</b>Small segments push their labels sideways. When labels can’t fit in one row, they stack into a list.</li>
+      <li><b>Try</b>Switch to Phone width to see the stacked fallback.</li>
+    </ul>
+  </section>
+
+  <section class="dir" id="a2">
+    <div class="dir-head"><span class="dir-tag">A2</span><h2>One-line legend</h2><p>Swatch, name, amount and percentage in a single row, with income pinned to the right.</p></div>
+    <div class="stage"><div class="mock" data-v="a2"></div></div>
+    <ul class="notes">
+      <li><b>Why</b>The simplest change: about 40px of height instead of 90, and every item is only as wide as its text.</li>
+      <li><b>Trade-off</b>Amounts are smaller than the card version, so the headline carries the weight.</li>
+      <li><b>Try</b>Phone width turns the row into a right-aligned list.</li>
+    </ul>
+  </section>
+
+  <section class="dir" id="a3">
+    <div class="dir-head"><span class="dir-tag">A3</span><h2>Breakdown beside the hero</h2><p>The headline and bar on the left, a compact table on the right that fills the space the headline leaves empty.</p></div>
+    <div class="stage"><div class="mock" data-v="a3"></div></div>
+    <ul class="notes">
+      <li><b>Why</b>Uses the wide card’s right side. The table adds up to a total (Going out), which the cards never showed.</li>
+      <li><b>Trade-off</b>The bar is shorter, so thin segments get thinner.</li>
+      <li><b>Try</b>Hover a row. Below 760px the table moves under the bar.</li>
+    </ul>
+  </section>
+
+  <section class="dir" id="a4">
+    <div class="dir-head"><span class="dir-tag">A4</span><h2>Amounts in the bar</h2><p>A taller bar with each amount printed inside its segment. Segments too narrow for text get a label underneath.</p></div>
+    <div class="stage"><div class="mock" data-v="a4"></div></div>
+    <ul class="notes">
+      <li><b>Why</b>The most compact: no legend row at all when every segment is wide enough.</li>
+      <li><b>Trade-off</b>Text inside coloured fills needs care for contrast. Amounts shorten to “8,2M” when space is tight.</li>
+      <li><b>Try</b>Phone width: amounts shorten, then move under the bar.</li>
+    </ul>
+  </section>
+
+  <section class="dir" id="a5">
+    <div class="dir-head"><span class="dir-tag">A5</span><h2>Plain sentence</h2><p>The breakdown as one sentence under the bar, with swatches inline.</p></div>
+    <div class="stage"><div class="mock" data-v="a5"></div></div>
+    <ul class="notes">
+      <li><b>Why</b>Reads naturally and leaves zero values out (“nothing committed yet”) instead of showing a greyed 0 ₫.</li>
+      <li><b>Trade-off</b>Harder to scan for a single number, and the wording has to cover every case.</li>
+      <li><b>Try</b>Switch scenarios to see how the wording changes.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="wrap foot">Mockup only. Colours and font come from src/styles/globals.css. The full set of directions is in period-summary-directions.html.</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const SCEN = {
+    now:  { label: 'This cycle',    income: 13552583, recurring: 11415900, oneTime: 2136683, spent: 8197000,  committed: 0,       estimates: 1320000, today: '2026-11-07' },
+    late: { label: 'Late in cycle', income: 13552583, recurring: 11415900, oneTime: 2136683, spent: 11640000, committed: 0,       estimates: 480000,  today: '2026-12-01' },
+    sure: { label: 'With committed', income: 13552583, recurring: 11415900, oneTime: 2136683, spent: 6200000, committed: 2400000, estimates: 1320000, today: '2026-11-12' },
+    over: { label: 'Over plan',     income: 13552583, recurring: 11415900, oneTime: 2136683, spent: 10950000, committed: 1650000, estimates: 1320000, today: '2026-11-20' },
+    none: { label: 'No income set', income: 0,        recurring: 0,        oneTime: 0,       spent: 8197000,  committed: 0,       estimates: 1320000, today: '2026-11-07' },
+  };
+  const state = { scen: 'now', basis: 'cycle' };
+
+  const fmt = n => Math.round(Math.abs(n)).toLocaleString('vi-VN');
+  const money = (n, cls = '') => `<span class="m ${cls}">${n < 0 ? '−' : ''}${fmt(n)}<span class="cur">₫</span></span>`;
+  const compact = n => {
+    const a = Math.abs(n), s = n < 0 ? '−' : '';
+    if (a >= 1e6) return s + (a / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 2 }) + 'M';
+    if (a >= 1e3) return s + Math.round(a / 1e3).toLocaleString('vi-VN') + 'k';
+    return s + fmt(a);
+  };
+  const pctOf = (v, base) => base > 0 ? Math.round(v / base * 100) + '%' : '';
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const D = s => new Date(s + 'T00:00:00Z');
+  const diff = (a, b) => Math.round((b - a) / 864e5);
+  const dl = d => `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`;
+  const z = v => v === 0 ? ' zero' : '';
+  const SPARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4M22 5h-4"/></svg>';
+
+  function compute() {
+    const s = SCEN[state.scen], today = D(s.today);
+    let start, end;
+    if (state.basis === 'cycle') { start = D('2026-11-05'); end = D('2026-12-04'); }
+    else { start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)); end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0)); }
+    const totalDays = diff(start, end) + 1, day = diff(start, today) + 1, daysLeft = totalDays - day + 1;
+    const planned = s.committed + s.estimates, out = s.spent + planned;
+    const d = { ...s, start, end, totalDays, day, daysLeft, planned, out, left: s.income - out, pace: day / totalDays,
+      range: state.basis === 'cycle' ? `${dl(start)} – ${dl(end)}` : MONL[start.getUTCMonth()] + ' ' + start.getUTCFullYear(),
+      basisLabel: state.basis === 'cycle' ? 'Pay cycle' : 'Month', denom: Math.max(s.income, out) || 1 };
+    d.perDay = d.left > 0 ? d.left / daysLeft : 0;
+    d.P = v => Math.max(0, v) / d.denom * 100;
+    // Bar segments in order, with where each starts (percent of bar).
+    let at = 0;
+    d.segs = [
+      { k: 'spent', c: 's-spent', col: 'var(--seg-spent)', on: 'on-spent', name: 'Spent so far', short: 'Spent', v: s.spent },
+      { k: 'sure',  c: 's-sure',  col: 'var(--seg-sure)',  on: 'on-sure',  name: 'Committed',    short: 'Committed', v: s.committed },
+      { k: 'est',   c: 's-est',   col: 'var(--seg-est)',   on: 'on-est',   name: 'Estimates',    short: 'Estimates', v: s.estimates },
+      { k: 'left',  c: 's-left',  col: 'var(--primary)',   on: 'on-left',  name: 'Left',         short: 'Left', v: Math.max(0, d.left) },
+    ].map(g => { const w = d.P(g.v); const r = { ...g, start: at, w }; at += w; return r; });
+    return d;
+  }
+  function leftView(d) {
+    if (d.income <= 0) return { label: 'Left this period', value: '<span class="c-muted">Income not set</span>', sw: 's-spent', sub: 'Add your pay in Profile to see what’s left.' };
+    if (d.left < 0) return { label: 'Plans go over income by', value: money(-d.left, 'c-neg'), sw: 's-neg', sub: `Cut <b>${money(-d.left)}</b> from plans to break even.` };
+    return { label: 'Left after plans', value: money(d.left, 'c-left'), sw: 's-left', sub: `<b>${money(d.perDay)}</b> a day for ${d.daysLeft} day${d.daysLeft === 1 ? '' : 's'}` };
+  }
+
+  /* shared pieces */
+  const tools = () => `<div class="tools">
+      <button type="button" class="plan-btn" data-action="plan">${SPARK}<span class="long">Plan this period</span><span class="short">Plan</span></button>
+      <div class="basis" role="group" aria-label="Totals calculated for">
+        <button type="button" data-action="basis" data-v="month" aria-pressed="${state.basis === 'month'}">Month</button>
+        <button type="button" data-action="basis" data-v="cycle" aria-pressed="${state.basis === 'cycle'}">Pay cycle</button>
+      </div></div>`;
+  const top = d => `<div class="rw-top"><div class="eyebrow"><b>${d.basisLabel}</b> · ${d.range} · Day ${d.day} of ${d.totalDays}</div>${tools()}</div>`;
+  const hero = (d, side = true) => { const lv = leftView(d); return `<div class="rw-hero">
+      <div><div class="label"><i class="sw ${lv.sw}"></i>${lv.label}</div><div class="big" data-seg="left">${lv.value}</div></div>
+      ${side ? `<div class="side">${lv.sub}</div>` : ''}</div>`; };
+  const bar = (d, inner = () => '') => {
+    const segs = d.segs.filter(g => g.v > 0).map(g => `<span data-seg="${g.k}" class="${g.c}" style="width:${g.w}%">${inner(g)}</span>`).join('');
+    const overflow = d.out > d.income && d.income > 0 ? `<div class="rw-over" style="left:${d.P(d.income)}%"></div>` : '';
+    const paceX = d.P(d.income * d.pace), edge = x => x < 8 ? ' edge-l' : x > 92 ? ' edge-r' : '';
+    const mark = d.income > 0
+      ? (d.out > d.income
+          ? `<div class="rw-mark income${edge(d.P(d.income))}" style="left:${d.P(d.income)}%"><span>Income</span></div>`
+          : `<div class="rw-mark${edge(paceX)}" style="left:${paceX}%"><span>Even pace today</span></div>`) : '';
+    return `<div class="rw-barwrap"><div class="rw-bar">${segs}${overflow}</div>${mark}</div>`;
+  };
+  const incomeFoot = (d, extra = '') => `<div class="rw-foot"><span>Income <b class="c-income">${money(d.income)}</b></span><span>Recurring ${money(d.recurring)}</span><span>One-time ${money(d.oneTime)}</span>${extra}</div>`;
+  const zeroNote = d => d.segs.filter(g => g.k !== 'left' && g.v === 0).map(g => `<span>No ${g.name.toLowerCase()} spending yet</span>`).join('');
+  const labs = (d, segs) => segs.map(g => `<div class="lab" data-seg="${g.k}" data-start="${g.start}" style="--c:${g.col}">
+      <div class="n">${g.name}<span class="p">${pctOf(g.v, d.income)}</span></div><div class="v">${money(g.v, g.k === 'left' ? 'c-left' : '')}</div></div>`).join('');
+
+  /* A1 */
+  const a1 = d => `<div class="card">${top(d)}${hero(d)}${bar(d)}
+      <div class="lab-row" data-lab>${labs(d, d.segs.filter(g => g.v > 0 && g.k !== 'left'))}</div>
+      ${incomeFoot(d, zeroNote(d))}</div>`;
+
+  /* A2 */
+  const a2 = d => {
+    const items = d.segs.filter(g => g.k !== 'left').map(g => `<span class="it${z(g.v)}" data-seg="${g.k}"><i class="sw ${g.c}"></i><span class="n">${g.name}</span><span class="v">${money(g.v)}</span><span class="p">${pctOf(g.v, d.income)}</span></span>`).join('');
+    return `<div class="card">${top(d)}${hero(d)}${bar(d)}
+      <div class="inl">${items}<span class="it inc" title="Recurring ${fmt(d.recurring)} ₫ · One-time ${fmt(d.oneTime)} ₫"><i class="sw s-income"></i><span class="n">Income</span><span class="v c-income">${money(d.income)}</span></span></div></div>`;
+  };
+
+  /* A3 */
+  const a3 = d => {
+    const lv = leftView(d);
+    const rows = d.segs.filter(g => g.k !== 'left').map(g => `<div class="r${z(g.v)}" data-seg="${g.k}"><i class="sw ${g.c}"></i><span class="n">${g.name}</span><span class="v">${money(g.v)}</span><span class="p">${pctOf(g.v, d.income)}</span></div>`).join('');
+    return `<div class="card">${top(d)}
+      <div class="side-grid">
+        <div>${hero(d, false)}${bar(d)}<div class="rw-foot" style="border:0;padding-top:0;margin-top:14px"><span>${lv.sub}</span></div></div>
+        <div class="tbl">
+          ${rows}
+          <div class="r sum"><span></span><span class="n">Going out</span><span class="v">${money(d.out)}</span><span class="p">${pctOf(d.out, d.income)}</span></div>
+          <div class="r" title="Recurring ${fmt(d.recurring)} ₫ · One-time ${fmt(d.oneTime)} ₫"><i class="sw s-income"></i><span class="n">Income</span><span class="v c-income">${money(d.income)}</span><span class="p"></span></div>
+        </div>
+      </div></div>`;
+  };
+
+  /* A4 */
+  const a4 = d => {
+    const inner = g => `<span class="inbar ${g.on}"><span>${g.short}</span><b class="full">${fmt(g.v)} ₫</b><b class="cmp">${compact(g.v)}</b></span>`;
+    return `<div class="card tall">${top(d)}${hero(d)}${bar(d, inner)}
+      <div class="lab-row outside" data-lab data-outside>${labs(d, d.segs.filter(g => g.v > 0))}</div>
+      ${incomeFoot(d, zeroNote(d))}</div>`;
+  };
+
+  /* A5 */
+  const a5 = d => {
+    const sw = c => `<i class="sw ${c}"></i>`;
+    const plannedBits = [];
+    if (d.committed) plannedBits.push(`<span data-seg="sure">${sw('s-sure')}<b>${money(d.committed)}</b> committed</span>`);
+    if (d.estimates) plannedBits.push(`<span data-seg="est">${sw('s-est')}<b>${money(d.estimates)}</b> in estimates</span>`);
+    const planned = plannedBits.length ? `You still plan ${plannedBits.join(' and ')}` : 'Nothing else is planned';
+    const noSure = !d.committed && d.estimates ? ', nothing committed yet' : '';
+    let s;
+    if (d.income <= 0) s = `You’ve spent <span data-seg="spent">${sw('s-spent')}<b>${money(d.spent)}</b></span> this period. ${planned}${noSure}. Add your income to see what’s left.`;
+    else s = `You’ve spent <span data-seg="spent">${sw('s-spent')}<b>${money(d.spent)}</b></span>, ${pctOf(d.spent, d.income)} of <b class="c-income">${money(d.income)}</b> income. ${planned}${noSure}.`
+      + (d.left < 0 ? ` That’s <b class="c-neg">${money(-d.left)}</b> more than you earn.` : '');
+    return `<div class="card">${top(d)}${hero(d)}${bar(d)}<p class="sent">${s}</p></div>`;
+  };
+
+  /* Place labels at their segment's start; nudge to avoid overlap; stack when they can't share a row. */
+  function layoutLabels(row) {
+    const all = [...row.querySelectorAll('.lab')];
+    let items = all;
+    if (row.hasAttribute('data-outside')) {
+      const bar = row.parentElement.querySelector('.rw-bar');
+      all.forEach(l => {
+        const seg = bar.querySelector(`[data-seg="${l.dataset.seg}"]`), ib = seg && seg.querySelector('.inbar');
+        seg.classList.remove('nofit', 'short-fit');
+        const room = seg.clientWidth - 16;
+        if (ib.scrollWidth > room) { seg.classList.add('short-fit'); if (ib.scrollWidth > room) { seg.classList.remove('short-fit'); seg.classList.add('nofit'); } }
+        l.hidden = !seg.classList.contains('nofit');
+      });
+      items = all.filter(l => !l.hidden);
+      if (!items.length) { row.style.height = '0px'; row.classList.remove('stack'); return; }
+    }
+    row.classList.remove('stack');
+    items.forEach(l => { l.style.left = '0px'; });
+    const W = row.clientWidth, gap = 18, w = items.map(l => l.offsetWidth);
+    if (w.reduce((a, b) => a + b, 0) + gap * (items.length - 1) > W) { row.classList.add('stack'); row.style.height = ''; return; }
+    const x = items.map(l => parseFloat(l.dataset.start) / 100 * W);
+    for (let i = 1; i < x.length; i++) x[i] = Math.max(x[i], x[i - 1] + w[i - 1] + gap);
+    for (let i = x.length - 1; i >= 0; i--) x[i] = Math.min(x[i], (i === x.length - 1 ? W : x[i + 1] - gap) - w[i]);
+    items.forEach((l, i) => { l.style.left = Math.max(0, x[i]) + 'px'; });
+    row.style.height = Math.max(...items.map(l => l.offsetHeight)) + 'px';
+  }
+
+  const V = { a1, a2, a3, a4, a5 };
+  function layout() { document.querySelectorAll('[data-lab]').forEach(layoutLabels); }
+  function render() {
+    const d = compute();
+    document.querySelectorAll('.mock').forEach(m => { m.innerHTML = V[m.dataset.v](d); });
+    document.getElementById('ctl-scen').innerHTML = Object.entries(SCEN).map(([k, s]) => `<button type="button" data-action="scen" data-v="${k}" aria-pressed="${state.scen === k}">${s.label}</button>`).join('');
+    layout();
+  }
+
+  let toastT;
+  const toast = msg => { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1600); };
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-action]'); if (!b) return;
+    const a = b.dataset.action, v = b.dataset.v;
+    if (a === 'scen') state.scen = v;
+    else if (a === 'basis') state.basis = v;
+    else if (a === 'plan') { toast('This would open the period planner'); return; }
+    else if (a === 'theme' || a === 'device') {
+      b.parentElement.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      if (a === 'theme') { document.documentElement.dataset.theme = v; return; }
+      document.body.classList.toggle('phone', v === 'phone'); setTimeout(layout, 280); return;
+    }
+    render();
+  });
+  const highlight = e => {
+    const mock = e.target.closest && e.target.closest('.mock');
+    document.querySelectorAll('.dim').forEach(el => { if (!mock || !mock.contains(el)) el.classList.remove('dim'); });
+    if (!mock) return;
+    const key = e.target.closest('[data-seg]')?.dataset.seg;
+    mock.querySelectorAll('[data-seg]').forEach(el => el.classList.toggle('dim', !!key && el.dataset.seg !== key));
+  };
+  document.addEventListener('mouseover', highlight);
+  document.addEventListener('focusin', highlight);
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(layout, 120); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  render();
+})();
+</script>
+</body>
+</html>
