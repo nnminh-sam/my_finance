@@ -17,13 +17,18 @@ import {
   PRELOAD_MONTHS,
   PRELOAD_WEEKS_BUFFER,
   VISIBLE_WEEKS,
+  WEEKS_PER_MONTH,
+  buildCalendarMonths,
   buildCalendarWeeks,
+  buildMonthWeeks,
   createInitialMonthRange,
   detectScrollDirection,
   expandMonthRange,
+  formatWeekOfYear,
   getMonthFirstWeekKey,
   getNextWeeksToFetch,
   getWeekKeysInRange,
+  getWeekOfYear,
 } from '../src/lib/calendarWindow';
 
 const rootDir = new URL('..', import.meta.url);
@@ -31,6 +36,7 @@ const rootDir = new URL('..', import.meta.url);
 test('initial calendar window preloads 2 months before and 2 months after the current month', () => {
   assert.equal(PRELOAD_MONTHS, 2);
   assert.equal(VISIBLE_WEEKS, 5);
+  assert.equal(WEEKS_PER_MONTH, 5);
 
   const currentDate = new Date(2026, 9, 17); // October 17, 2026
   const initialRange = createInitialMonthRange(currentDate);
@@ -54,21 +60,47 @@ test('initial calendar window preloads 2 months before and 2 months after the cu
   }
 });
 
-test('scrolling up or down dynamically expands the loaded month range while keeping a 2-month buffer', () => {
+test('buildMonthWeeks and buildCalendarMonths build 5 weeks per month with year week counts', () => {
+  const oct2026 = new Date(2026, 9, 17);
+  const { weeks, days } = buildMonthWeeks(oct2026);
+  assert.equal(weeks.length, 5, 'Each month has 5 weeks');
+  assert.equal(days.length, 35, 'Each month page has 35 days');
+  assert.equal(format(weeks[0][0], 'yyyy-MM-dd'), '2026-09-28');
+  assert.equal(format(weeks[4][6], 'yyyy-MM-dd'), '2026-11-01');
+
+  // Year week count (ISO week numbers for Oct 2026: 40..44)
+  assert.equal(getWeekOfYear(weeks[0][0]), 40);
+  assert.equal(formatWeekOfYear(weeks[0][0]), '40');
+  assert.equal(formatWeekOfYear(weeks[4][0]), '44');
+
+  const initialRange = createInitialMonthRange(oct2026);
+  const { months } = buildCalendarMonths(initialRange.startMonth, initialRange.endMonth);
+  assert.equal(months.length, 5);
+  assert.deepEqual(
+    months.map((m) => m.monthKey),
+    ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12'],
+  );
+  for (const monthPage of months) {
+    assert.equal(monthPage.weeks.length, 5, `Month ${monthPage.monthKey} has 5 weeks`);
+    assert.equal(monthPage.days.length, 35);
+  }
+});
+
+test('scrolling left or right dynamically expands the loaded month range while keeping a 2-month buffer', () => {
   const oct2026 = new Date(2026, 9, 17);
   const range0 = createInitialMonthRange(oct2026);
   assert.equal(format(range0.startMonth, 'yyyy-MM'), '2026-08');
   assert.equal(format(range0.endMonth, 'yyyy-MM'), '2026-12');
 
-  // Scrolling up to September 2026 preloads July 2026 (2 months before September)
-  const rangeUp = expandMonthRange(range0, subMonths(startOfMonth(oct2026), 1));
-  assert.equal(format(rangeUp.startMonth, 'yyyy-MM'), '2026-07');
-  assert.equal(format(rangeUp.endMonth, 'yyyy-MM'), '2026-12');
+  // Scrolling left to September 2026 preloads July 2026 (2 months before September)
+  const rangeLeft = expandMonthRange(range0, subMonths(startOfMonth(oct2026), 1));
+  assert.equal(format(rangeLeft.startMonth, 'yyyy-MM'), '2026-07');
+  assert.equal(format(rangeLeft.endMonth, 'yyyy-MM'), '2026-12');
 
-  // Scrolling down to November 2026 preloads January 2027 (2 months after November)
-  const rangeDown = expandMonthRange(rangeUp, addMonths(startOfMonth(oct2026), 1));
-  assert.equal(format(rangeDown.startMonth, 'yyyy-MM'), '2026-07');
-  assert.equal(format(rangeDown.endMonth, 'yyyy-MM'), '2027-01');
+  // Scrolling right to November 2026 preloads January 2027 (2 months after November)
+  const rangeRight = expandMonthRange(rangeLeft, addMonths(startOfMonth(oct2026), 1));
+  assert.equal(format(rangeRight.startMonth, 'yyyy-MM'), '2026-07');
+  assert.equal(format(rangeRight.endMonth, 'yyyy-MM'), '2027-01');
 });
 
 test('getMonthFirstWeekKey aligns the 5-week viewport to the first week of the month on load', () => {
@@ -101,7 +133,7 @@ test('detectScrollDirection and getNextWeeksToFetch fetch week batches based on 
 
   // Visible window well within fetched buffer: no fetch needed
   const noFetch = getNextWeeksToFetch({
-    direction: 'down',
+    direction: 'right',
     visibleStartWeek: baseMonday,
     visibleEndWeek: addWeeks(baseMonday, 2),
     fetchedBounds,
@@ -110,37 +142,37 @@ test('detectScrollDirection and getNextWeeksToFetch fetch week batches based on 
   });
   assert.equal(noFetch, null);
 
-  // User scrolls up so top visible week is within buffer of fetchedBounds.startWeek
-  const upVisibleStart = subWeeks(baseMonday, 2); // 2 weeks from fetchedBounds.startWeek (<= buffer 4)
-  const upBatch = getNextWeeksToFetch({
-    direction: 'up',
-    visibleStartWeek: upVisibleStart,
-    visibleEndWeek: addWeeks(upVisibleStart, 4),
+  // User scrolls left so visible week is within buffer of fetchedBounds.startWeek
+  const leftVisibleStart = subWeeks(baseMonday, 2); // 2 weeks from fetchedBounds.startWeek (<= buffer 4)
+  const leftBatch = getNextWeeksToFetch({
+    direction: 'left',
+    visibleStartWeek: leftVisibleStart,
+    visibleEndWeek: addWeeks(leftVisibleStart, 4),
     fetchedBounds,
     bufferWeeks: 4,
     fetchStepWeeks: 3,
   });
-  assert.ok(upBatch, 'Should request earlier week batch when scrolling up near fetched boundary');
-  assert.equal(upBatch.startDate, '2026-08-10');
-  assert.equal(upBatch.endDate, '2026-08-30');
-  assert.equal(upBatch.weekKeys.length, 3);
-  assert.deepEqual(upBatch.weekKeys, ['2026-08-10', '2026-08-17', '2026-08-24']);
+  assert.ok(leftBatch, 'Should request earlier week batch when scrolling left near fetched boundary');
+  assert.equal(leftBatch.startDate, '2026-08-10');
+  assert.equal(leftBatch.endDate, '2026-08-30');
+  assert.equal(leftBatch.weekKeys.length, 3);
+  assert.deepEqual(leftBatch.weekKeys, ['2026-08-10', '2026-08-17', '2026-08-24']);
 
-  // User scrolls down so bottom visible week is within buffer of fetchedBounds.endWeek
-  const downVisibleEnd = addWeeks(baseMonday, 6); // 2 weeks from fetchedBounds.endWeek (<= buffer 4)
-  const downBatch = getNextWeeksToFetch({
-    direction: 'down',
-    visibleStartWeek: subWeeks(downVisibleEnd, 4),
-    visibleEndWeek: downVisibleEnd,
-    fetchedBounds: upBatch.nextBounds,
+  // User scrolls right so visible week is within buffer of fetchedBounds.endWeek
+  const rightVisibleEnd = addWeeks(baseMonday, 6); // 2 weeks from fetchedBounds.endWeek (<= buffer 4)
+  const rightBatch = getNextWeeksToFetch({
+    direction: 'right',
+    visibleStartWeek: subWeeks(rightVisibleEnd, 4),
+    visibleEndWeek: rightVisibleEnd,
+    fetchedBounds: leftBatch.nextBounds,
     bufferWeeks: 4,
     fetchStepWeeks: 3,
   });
-  assert.ok(downBatch, 'Should request later week batch when scrolling down near fetched boundary');
-  assert.equal(downBatch.startDate, '2026-11-30');
-  assert.equal(downBatch.endDate, '2026-12-20');
-  assert.equal(downBatch.weekKeys.length, 3);
-  assert.deepEqual(downBatch.weekKeys, getWeekKeysInRange(new Date(2026, 10, 30), new Date(2026, 11, 14)));
+  assert.ok(rightBatch, 'Should request later week batch when scrolling right near fetched boundary');
+  assert.equal(rightBatch.startDate, '2026-11-30');
+  assert.equal(rightBatch.endDate, '2026-12-20');
+  assert.equal(rightBatch.weekKeys.length, 3);
+  assert.deepEqual(rightBatch.weekKeys, getWeekKeysInRange(new Date(2026, 10, 30), new Date(2026, 11, 14)));
 });
 
 test('week dominant month correctly maps week rows across month boundaries using Thursday (week[3])', () => {
@@ -165,8 +197,15 @@ test('week dominant month correctly maps week rows across month boundaries using
   assert.equal(format(nextWeekDays[3], 'yyyy-MM'), '2026-11');
 });
 
-test('CalendarView CSS sizes week rows to display 5 weeks at a time in the scrollable grid', () => {
+test('CalendarView CSS and component use horizontal month side-scrolling, 5 weeks per month, year week count, and no detailed spending icons', () => {
   const css = readFileSync(new URL('src/styles/CalendarView.css', rootDir), 'utf8');
-  assert.match(css, /calc\(\(100%\s*-\s*32px\)\s*\/\s*5\)/, 'Desktop week rows take 1/5 of container height');
-  assert.match(css, /calc\(\(100%\s*-\s*16px\)\s*\/\s*5\)/, 'Mobile week rows take 1/5 of container height');
+  assert.match(css, /calc\(\(100% - \(var\(--weeks, 5\) - 1\) \* 8px\) \/ var\(--weeks, 5\)\)/, 'Desktop week rows share the page height by its week count');
+  assert.match(css, /calc\(\(100% - \(var\(--weeks, 5\) - 1\) \* 4px\) \/ var\(--weeks, 5\)\)/, 'Narrow week rows share the page height by its week count');
+  assert.match(css, /scroll-snap-type:\s*x\s+mandatory/, 'Calendar grid scrolls horizontally by month');
+  assert.match(css, /overflow-y:\s*hidden/, 'Vertical scrolling is disabled on calendar grid');
+
+  const tsx = readFileSync(new URL('src/components/CalendarView.tsx', rootDir), 'utf8');
+  assert.ok(!tsx.includes('calendar-spending-icon'), 'Detailed spendings do not render category icons');
+  assert.ok(tsx.includes('calendar-week-number'), 'Each week row renders the year week count');
+  assert.ok(tsx.includes('calendar-month-page'), 'Months render as side-scrollable pages');
 });

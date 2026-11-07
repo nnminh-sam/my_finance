@@ -1,0 +1,81 @@
+/* Period summary beside the calendar (wide screens) or as a slim strip above it (narrower screens).
+   Shares the bar, swatches and money styles in PeriodRunway.css. */
+
+.runway-bar-wrap-bare { padding-top: 0; }
+.runway-bar-wrap-bare .runway-mark { top: -4px; bottom: -4px; }
+
+/* Side panel */
+.period-side { width: 100%; gap: 14px; padding: 16px; overflow-y: auto; min-height: 0; border-radius: var(--radius-lg); }
+.period-side-headline { display: flex; flex-direction: column; gap: 2px; }
+.period-side-value { font-size: 1.85rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
+.period-side-sub { font-size: 0.8rem; color: var(--text-muted); }
+.period-side-sub b { color: var(--text-main); font-weight: 600; }
+.period-side-sub a { color: var(--primary); font-weight: 600; }
+
+.period-side-rows { display: grid; gap: 2px; margin: 0; }
+.period-side-rows > div { display: grid; grid-template-columns: minmax(0, 1fr) auto 2.5rem; gap: 8px; align-items: center; padding: 4px 0; font-size: 0.82rem; }
+.period-side-rows dt { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--text-muted); }
+.period-side-rows dd { margin: 0; text-align: right; font-weight: 600; }
+.period-side-rows .period-side-pct { font-size: 0.7rem; font-weight: 400; color: var(--text-muted); opacity: 0.8; }
+.period-side-zero { opacity: 0.5; }
+.period-side-total { margin-top: 4px; padding-top: 8px !important; border-top: 1px solid var(--border-color); }
+.period-side-total dt { color: var(--text-main); }
+.period-side-sub-row { padding: 0 !important; font-size: 0.75rem !important; }
+.period-side-sub-row dt { padding-left: 18px; }
+.period-side-sub-row dd { font-weight: 400 !important; color: var(--text-muted); }
+.period-side-income { background: var(--success); }
+
+.period-side-section h3 { margin: 0 0 6px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.period-side-section p { margin: 0; font-size: 0.8rem; line-height: 1.5; color: var(--text-muted); }
+.period-side-section p b { color: var(--text-main); font-weight: 600; }
+.period-side .calendar-overview-tools { flex-wrap: wrap; }
+.period-side .calendar-pay-cycle-hint { margin: 0; padding: 0; }
+
+/* Slim strip */
+.period-strip { width: 100%; gap: 10px; padding: 10px 14px; border-radius: var(--radius-lg); }
+.period-strip-row { display: flex; align-items: center; gap: 10px 20px; }
+.period-strip-headline { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.period-strip-value { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.015em; }
+.period-strip-per { font-size: 0.78rem; color: var(--text-muted); }
+.period-strip-per b { color: var(--text-main); font-weight: 600; }
+.period-strip-bar { flex: 1; min-width: 120px; }
+.period-strip-bar .runway-bar { height: 8px; }
+.period-strip-legend { display: flex; gap: 14px; font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+.period-strip-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.period-strip-legend b { color: var(--text-main); font-weight: 600; }
+.period-strip-legend .runway-swatch { width: 9px; height: 9px; }
+.period-strip-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.period-strip-tools button, .period-side .calendar-overview-tools button { white-space: nowrap; }
+.period-strip-details { min-height: 30px; padding: 3px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+.period-strip-details:hover { color: var(--text-main); }
+.period-strip-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0; padding-top: 10px; border-top: 1px dashed var(--border-color); }
+.period-strip-grid dt { font-size: 0.75rem; color: var(--text-muted); }
+.period-strip-grid dd { margin: 0; font-size: 0.75rem; color: var(--text-muted); }
+.period-strip-grid dd:first-of-type { font-size: 0.95rem; font-weight: 600; color: var(--text-main); }
+.period-strip-grid dd b { color: var(--text-main); }
+.period-strip .calendar-pay-cycle-hint { margin: 0; padding: 0; }
+
+@container (max-width: 1000px) {
+  .period-strip-legend { display: none; }
+}
+@container (max-width: 620px) {
+  .period-strip-row { flex-wrap: wrap; gap: 8px 10px; }
+  .period-strip-headline { flex: 1; }
+  .period-strip-value { font-size: 1.1rem; }
+  .period-strip-bar { order: 5; flex-basis: 100%; }
+  .period-strip-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* Hovering an amount fades the other parts of the bar, as in the runway card. */
+.period-side [data-seg], .period-strip [data-seg] { transition: opacity 0.15s ease; }
+
+/* Mini calendar of the other period kind */
+.period-mini-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.period-mini-head { text-align: center; font-size: 0.65rem; color: var(--text-muted); padding-bottom: 2px; }
+.period-mini-day { position: relative; height: 28px; border-radius: 6px; font-size: 0.75rem; font-variant-numeric: tabular-nums; color: var(--text-main); }
+.period-mini-day:hover { background: color-mix(in srgb, var(--text-muted) 16%, transparent); }
+.period-mini-muted { color: var(--text-muted); opacity: 0.55; }
+.period-mini-today { box-shadow: inset 0 0 0 1.5px var(--calendar-today-border, var(--primary)); font-weight: 700; }
+.period-mini-spent::after, .period-mini-planned::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; }
+.period-mini-spent::after { background: var(--primary); }
+.period-mini-planned::after { border: 1px solid var(--primary); width: 2px; height: 2px; }

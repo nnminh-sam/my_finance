@@ -19,6 +19,7 @@ const docs = [
   { src: "05-project-structure.md", out: "05-project-structure.html", label: "Structure" },
   { src: "06-use-case-diagrams.md", out: "06-use-case-diagrams.html", label: "Use Cases" },
   { src: "07-sequence-diagrams.md", out: "07-sequence-diagrams.html", label: "Sequences" },
+  { src: "08-mobile-port-analysis.md", out: "08-mobile-port-analysis.html", label: "Mobile Port" },
 ];
 
 const escapeHtml = (s) =>

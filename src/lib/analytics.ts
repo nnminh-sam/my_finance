@@ -3,14 +3,15 @@ import {
   endOfMonth,
   format,
   getDay,
-  isAfter,
-  isSameMonth,
+  parseISO,
   startOfDay,
   startOfMonth,
   subMonths,
 } from 'date-fns';
 import type { Income, Spending, UserSettings } from '../types';
-import { getMonthIncome, incomeMonth } from './income';
+import { getRangeIncome } from './income';
+import { adjacentPeriod, viewPeriodOf, type BudgetPeriodSetting, type PeriodIncome, type ShowBy } from './periods';
+import { addDays } from './plans';
 
 /* ------------------------------------------------------------------ */
 /* Statistical helpers                                                 */
@@ -134,7 +135,10 @@ export interface Insight {
 
 export interface MonthlyAnalytics {
   monthStart: Date;
-  daysInMonth: number;
+  /** The first and last day analysed (YYYY-MM-DD): the calendar month, or the period passed in. */
+  periodStart: string;
+  periodEnd: string;
+  daysInMonth: number; // the length of the period in days
   elapsedDays: number;
   isCurrentMonth: boolean;
   isFutureMonth: boolean;
@@ -211,24 +215,35 @@ const weekdayIndex = (d: Date) => (getDay(d) + 6) % 7; // Monday = 0
 /* Main computation                                                    */
 /* ------------------------------------------------------------------ */
 
+/** A pay period to analyse instead of the calendar month. `previous` is the period before it, for the comparison. */
+export interface AnalysisPeriod {
+  start: string; // YYYY-MM-DD, inclusive
+  end: string; // YYYY-MM-DD, inclusive
+  previous?: { start: string; end: string };
+}
+
+const inRange = (spendings: Spending[], start: string, end: string) => spendings.filter((s) => s.date >= start && s.date <= end);
+
 export const computeMonthlyAnalytics = (
   monthDate: Date,
   settings: Pick<UserSettings, 'categories'>,
   allSpendings: Spending[],
   incomes: readonly Income[] = [],
+  period?: AnalysisPeriod,
 ): MonthlyAnalytics => {
   const today = startOfDay(new Date());
   const monthStart = startOfMonth(monthDate);
-  const days = eachDayOfInterval({ start: monthStart, end: endOfMonth(monthStart) });
+  const periodStart = period?.start ?? format(monthStart, 'yyyy-MM-dd');
+  const periodEnd = period?.end ?? format(endOfMonth(monthStart), 'yyyy-MM-dd');
+  const days = eachDayOfInterval({ start: parseISO(periodStart), end: parseISO(periodEnd) });
   const daysInMonth = days.length;
-  const isCurrentMonth = isSameMonth(monthStart, today);
-  const isFutureMonth = isAfter(monthStart, today);
-  const elapsedDays = isFutureMonth ? 0 : isCurrentMonth ? today.getDate() : daysInMonth;
-  const { recurringIncome, oneTimeIncome, totalIncome: income } = getMonthIncome(
-    incomeMonth(monthStart), incomes,
-  );
+  const todayKey = format(today, 'yyyy-MM-dd');
+  const isCurrentMonth = todayKey >= periodStart && todayKey <= periodEnd;
+  const isFutureMonth = todayKey < periodStart;
+  const elapsedDays = isFutureMonth ? 0 : isCurrentMonth ? days.findIndex((day) => format(day, 'yyyy-MM-dd') === todayKey) + 1 : daysInMonth;
+  const { recurringIncome, oneTimeIncome, totalIncome: income } = getRangeIncome(periodStart, periodEnd, incomes);
 
-  const spendings = getSpendingsForMonth(monthStart, undefined, allSpendings);
+  const spendings = inRange(allSpendings, periodStart, periodEnd);
   const total = sum(spendings.map((s) => s.amount));
 
   // ---- Daily series ----------------------------------------------------
@@ -326,9 +341,14 @@ export const computeMonthlyAnalytics = (
 
   // ---- Month-over-month (same period, so partial months compare fairly) --
   const prevMonth = subMonths(monthStart, 1);
-  const prevSame = getSpendingsForMonth(prevMonth, elapsedDays || daysInMonth, allSpendings);
+  const prevRange = period
+    ? period.previous ?? { start: format(subMonths(parseISO(periodStart), 1), 'yyyy-MM-dd'), end: addDays(periodStart, -1) }
+    : null;
+  const prevSame = prevRange
+    ? inRange(allSpendings, prevRange.start, addDays(prevRange.start, (elapsedDays || daysInMonth) - 1) < prevRange.end ? addDays(prevRange.start, (elapsedDays || daysInMonth) - 1) : prevRange.end)
+    : getSpendingsForMonth(prevMonth, elapsedDays || daysInMonth, allSpendings);
   const prevSamePeriodTotal = sum(prevSame.map((s) => s.amount));
-  const prevFullTotal = sum(getSpendingsForMonth(prevMonth, undefined, allSpendings).map((s) => s.amount));
+  const prevFullTotal = sum((prevRange ? inRange(allSpendings, prevRange.start, prevRange.end) : getSpendingsForMonth(prevMonth, undefined, allSpendings)).map((s) => s.amount));
   const momChange = prevSamePeriodTotal > 0 ? total / prevSamePeriodTotal - 1 : null;
 
   // ---- Categories --------------------------------------------------------
@@ -411,6 +431,8 @@ export const computeMonthlyAnalytics = (
 
   const result: MonthlyAnalytics = {
     monthStart,
+    periodStart,
+    periodEnd,
     daysInMonth,
     elapsedDays,
     isCurrentMonth,
@@ -570,4 +592,34 @@ const buildInsights = (
   }
 
   return out;
+};
+
+/**
+ * The pay period to analyse for a date, or undefined when the view is the calendar month
+ * (Show by "Calendar month", or a budget period that is the calendar month), which keeps the month path.
+ */
+export const analysisPeriodFor = (
+  budgetPeriod: BudgetPeriodSetting,
+  showBy: ShowBy,
+  incomes: readonly PeriodIncome[],
+  date: string,
+): AnalysisPeriod | undefined => {
+  const resolve = (day: string) => viewPeriodOf(budgetPeriod, showBy, incomes, day);
+  const period = resolve(date);
+  if (period.mode === 'calendar') return undefined;
+  const previous = adjacentPeriod(resolve, period, 'previous');
+  return { start: period.start, end: period.end, previous: { start: previous.start, end: previous.end } };
+};
+
+/** The start date of the period before or after the one containing `date`, or null for a calendar month (step by month instead). */
+export const stepAnalysisDate = (
+  budgetPeriod: BudgetPeriodSetting,
+  showBy: ShowBy,
+  incomes: readonly PeriodIncome[],
+  date: string,
+  direction: 'previous' | 'next',
+): string | null => {
+  const resolve = (day: string) => viewPeriodOf(budgetPeriod, showBy, incomes, day);
+  const period = resolve(date);
+  return period.mode === 'calendar' ? null : adjacentPeriod(resolve, period, direction).start;
 };

@@ -1,0 +1,293 @@
+{
+  "title": "MyFinance — Application Architecture",
+  "description": "Unified Next.js 15 app: browser and MCP clients, React client tier, /api route handlers dispatching to auth, finance and MCP domains, backed by Neon PostgreSQL.",
+  "lang": "en",
+  "lanes": [
+    {
+      "id": "clients",
+      "label": "Clients and hosting",
+      "context": "Clients"
+    },
+    {
+      "id": "ui",
+      "label": "Client tier · React 19 · App Router",
+      "context": "Client tier"
+    },
+    {
+      "id": "server",
+      "label": "Server tier · Route Handlers · src/server",
+      "context": "Server tier",
+      "rows": 2
+    },
+    {
+      "id": "data",
+      "label": "Data · Neon PostgreSQL",
+      "context": "Data"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "browser",
+      "lane": "clients",
+      "col": 0,
+      "kind": "frontend",
+      "label": "Web browser",
+      "sublabel": "Desktop + mobile UI",
+      "detail": "User's browser; mobile layouts in src/components/mobile/* chosen by useIsMobile"
+    },
+    {
+      "id": "vercel",
+      "lane": "clients",
+      "col": 1,
+      "kind": "cloud",
+      "label": "Vercel",
+      "sublabel": "Next.js runtime",
+      "detail": "vercel.json framework: nextjs; env DATABASE_URL, APP_ORIGIN. Dev: next dev -p 5173"
+    },
+    {
+      "id": "mcp_client",
+      "lane": "clients",
+      "col": 5,
+      "kind": "external",
+      "label": "MCP client",
+      "sublabel": "AI agent · API key",
+      "detail": "External MCP client calling /api/mcp (or /api/v1/mcp) with Authorization: Bearer <key> or X-API-Key; keys managed on Profile (McpAccessSection)"
+    },
+    {
+      "id": "pages",
+      "lane": "ui",
+      "col": 0,
+      "kind": "frontend",
+      "label": "App Router",
+      "sublabel": "(auth) · (finance)",
+      "detail": "src/app/layout.tsx + providers.tsx (ThemeProvider, AuthProvider); (auth) login/signup with guest redirect; (finance) persistent shell: calendar, week, day, plans, analytics, profile + QuickEntryDialog, MonthlyIncomeModal"
+    },
+    {
+      "id": "contexts",
+      "lane": "ui",
+      "col": 1,
+      "kind": "frontend",
+      "label": "React contexts",
+      "sublabel": "Auth · Finance · Settings",
+      "detail": "src/contexts: ThemeContext, AuthContext (useSyncExternalStore), FinanceShellContext, FinanceContext (serialized request queue + date-range cache), SettingsContext"
+    },
+    {
+      "id": "api_client",
+      "lane": "ui",
+      "col": 2,
+      "kind": "backend",
+      "label": "API clients",
+      "sublabel": "services/auth · finance",
+      "detail": "src/services/auth.ts (session restore, refresh, Web Locks + BroadcastChannel, api-keys); src/services/finance.ts (createFinanceApi: cursor pagination, CRUD)"
+    },
+    {
+      "id": "lib",
+      "lane": "ui",
+      "col": 3,
+      "kind": "backend",
+      "label": "Shared lib",
+      "sublabel": "plans · analytics · cycle",
+      "detail": "src/lib: analytics, salaryCycle, plans, income, repeatRules, calendarWindow, expenseDraft, navigation, pages… also imported by src/server (finance/store, mcp/data, mcp/tools)"
+    },
+    {
+      "id": "local_store",
+      "lane": "ui",
+      "col": 4,
+      "kind": "database",
+      "label": "localStorage",
+      "sublabel": "theme · auth · cycle",
+      "detail": "tracker_theme, mf-auth-coordination, tracker_salary_cycle_v1_* (per docs/01-system-architecture.md)"
+    },
+    {
+      "id": "handlers",
+      "lane": "server",
+      "col": 2,
+      "row": 0,
+      "kind": "backend",
+      "label": "Route handlers",
+      "sublabel": "app/api/** → app.fetch",
+      "detail": "src/app/api/route.ts, api/[...slug]/route.ts, api/mcp/route.ts — every method delegates to app.fetch (src/server/app.ts getApp() singleton)"
+    },
+    {
+      "id": "engine",
+      "lane": "server",
+      "col": 3,
+      "row": 0,
+      "kind": "security",
+      "label": "App engine",
+      "sublabel": "CORS · CSRF · limits",
+      "detail": "createApplication in src/server/application.ts: Origin check on non-GET (except MCP), JSON body limit 16 KB (128 KB finance/MCP), path dispatch, serviceErrorDiagnostic → safe 503"
+    },
+    {
+      "id": "auth",
+      "lane": "server",
+      "col": 2,
+      "row": 1,
+      "kind": "security",
+      "label": "Auth domain",
+      "sublabel": "register · login · keys",
+      "detail": "src/server/auth: http.ts (/register, /login, /refresh, /logout, /me, /account, /api-keys; authenticateRequest[WithScope]), crypto.ts (scrypt, SHA-256 token hashes), store.ts (Neon)"
+    },
+    {
+      "id": "mcp",
+      "lane": "server",
+      "col": 3,
+      "row": 1,
+      "kind": "backend",
+      "label": "MCP server",
+      "sublabel": "JSON-RPC · tools",
+      "detail": "src/server/mcp: http.ts (JSON-RPC dispatch, Mcp-Session-Id), protocol, tools (spendings, incomes, plans, categories, analytics, forecasts), resources, prompts, data"
+    },
+    {
+      "id": "finance",
+      "lane": "server",
+      "col": 4,
+      "row": 1,
+      "kind": "backend",
+      "label": "Finance domain",
+      "sublabel": "validate · store",
+      "detail": "src/server/finance: http.ts (/settings, /spendings, /incomes, /repeat-rules, /repeat-rules/sync, /plans), validation.ts, store.ts (Neon), recurrence.ts, model.ts"
+    },
+    {
+      "id": "auth_db",
+      "lane": "data",
+      "col": 2,
+      "kind": "database",
+      "label": "Auth tables",
+      "sublabel": "users · sessions · keys",
+      "detail": "auth_users, auth_sessions, auth_refresh_tokens, auth_login_limits (001), auth_api_tokens (006)"
+    },
+    {
+      "id": "finance_db",
+      "lane": "data",
+      "col": 4,
+      "kind": "database",
+      "label": "Finance tables",
+      "sublabel": "spendings · incomes · plans",
+      "detail": "finance_settings, finance_spendings (002), finance_income_entries (003, legacy), finance_repeat_rules (004), finance_incomes, finance_income_migrations (005), finance_plans, finance_plan_exceptions (007/008)"
+    }
+  ],
+  "edges": [
+    {
+      "from": "browser",
+      "to": "vercel",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "from": "vercel",
+      "to": "pages",
+      "label": "serves pages",
+      "variant": "emphasis"
+    },
+    {
+      "from": "pages",
+      "to": "contexts",
+      "label": "hooks",
+      "variant": "emphasis"
+    },
+    {
+      "from": "contexts",
+      "to": "api_client",
+      "label": "CRUD",
+      "variant": "emphasis"
+    },
+    {
+      "from": "contexts",
+      "to": "lib",
+      "label": "compute",
+      "route": "over"
+    },
+    {
+      "from": "lib",
+      "to": "local_store",
+      "label": "persist"
+    },
+    {
+      "from": "api_client",
+      "to": "handlers",
+      "label": "/api/v1/* · Bearer",
+      "variant": "emphasis"
+    },
+    {
+      "from": "mcp_client",
+      "to": "handlers",
+      "label": "/api/mcp · API key"
+    },
+    {
+      "from": "handlers",
+      "to": "engine",
+      "variant": "emphasis"
+    },
+    {
+      "from": "engine",
+      "to": "auth",
+      "label": "/auth/*"
+    },
+    {
+      "from": "engine",
+      "to": "mcp",
+      "label": "/mcp"
+    },
+    {
+      "from": "engine",
+      "to": "finance",
+      "label": "/finance/*",
+      "variant": "emphasis"
+    },
+    {
+      "from": "mcp",
+      "to": "finance"
+    },
+    {
+      "from": "auth",
+      "to": "auth_db",
+      "label": "SQL"
+    },
+    {
+      "from": "finance",
+      "to": "finance_db",
+      "label": "tx · row locks",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Clients and hosting",
+      "items": [
+        "Web browser — one origin for pages and /api/v1/* (port 5173 in dev, Vercel in prod)",
+        "MCP client — external AI agent; authenticates with a per-user API key (read or write scope)",
+        "Vercel — runs the Next.js app; needs DATABASE_URL and APP_ORIGIN"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Client tier",
+      "items": [
+        "App Router — (finance) layout keeps FinanceProvider, SettingsProvider, nav and modals mounted across page changes",
+        "React contexts — FinanceContext serializes requests and caches spendings by date range",
+        "API clients — services/auth.ts coordinates token refresh across tabs (Web Locks + BroadcastChannel)",
+        "Shared lib — pure logic (plans, analytics, salary cycle, income) reused by the server"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Server tier",
+      "items": [
+        "Route handlers — thin: GET/POST/PUT/DELETE/OPTIONS all call app.fetch",
+        "App engine — CSRF Origin check (skipped for MCP), body size limits, routes by path prefix, sanitized 503 on unexpected errors",
+        "Finance domain — every request authenticated via auth/http authenticateRequest",
+        "MCP server — authenticateRequestWithScope, then reads/writes through FinanceStore"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Data",
+      "items": [
+        "Auth tables — scrypt password hashes, SHA-256 hashed access/refresh tokens and API keys",
+        "Finance tables — all rows scoped by user_id; schema from migrations/001–008 (npm run db:migrate)"
+      ]
+    }
+  ]
+}

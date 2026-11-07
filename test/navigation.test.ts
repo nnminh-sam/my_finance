@@ -10,6 +10,7 @@ const financePaths: Record<FinancePage, string> = {
   week: '/week',
   day: '/day',
   analytics: '/analytics',
+  plans: '/plans',
   profile: '/profile',
 };
 
@@ -18,7 +19,7 @@ test('finance links use separate documents and local dates, except profile', () 
   const timestamp = date.getTime();
   for (const page of Object.keys(financePaths) as FinancePage[]) {
     assert.equal(pageHref(page), financePaths[page]);
-    assert.equal(pageHref(page, date), `${financePaths[page]}${page === 'profile' ? '' : '?date=2024-02-29'}`);
+    assert.equal(pageHref(page, date), `${financePaths[page]}${page === 'profile' || page === 'plans' ? '' : '?date=2024-02-29'}`);
   }
   assert.equal(date.getTime(), timestamp);
 });
@@ -142,18 +143,22 @@ test('auth links encode sanitized return paths exactly once for login and signup
   }
 });
 
-test('mobile navigation splits top header and bottom tab bar at <= 768px', () => {
+test('mobile navigation uses direction F: own screen titles and a Month · Week · + · Analytics · Profile tab bar at <= 768px', () => {
   const rootDir = new URL('..', import.meta.url);
   const layoutSource = readFileSync(new URL('src/app/(finance)/layout.tsx', rootDir), 'utf8');
   const navCss = readFileSync(new URL('src/styles/navigation.css', rootDir), 'utf8');
+  const views = readFileSync(new URL('src/components/FinancePageViews.tsx', rootDir), 'utf8');
 
   assert.match(layoutSource, /aria-label="Mobile bottom navigation"/);
-  assert.match(layoutSource, /className="document-mobile-period"/);
-  assert.match(layoutSource, /className="document-action document-profile-btn"/);
-  assert.match(layoutSource, /className="document-bottom-add"/);
+  assert.match(layoutSource, /page: 'calendar', label: 'Month'/);
+  assert.match(layoutSource, /className="document-bottom-add"[\s\S]*?onClick=\{openQuickAdd\}/);
 
   assert.match(navCss, /@media \(max-width: 768px\)/);
   assert.match(navCss, /\.document-bottom-nav\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/);
-  assert.match(navCss, /\.document-profile-btn\s*\{[\s\S]*?display:\s*inline-flex/);
+  assert.match(navCss, /\.finance-document > \.document-header\s*\{\s*display:\s*none/);
+
+  for (const screen of ['MobileMonth', 'MobileWeek', 'MobileAnalytics']) {
+    assert.ok(views.includes(`if (useIsMobile()) return <${screen} />`), `${screen} is used on phones`);
+  }
 });
 

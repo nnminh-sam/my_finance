@@ -158,7 +158,7 @@ To prevent race conditions between category edits and expense creation, all expe
 sequenceDiagram
     autonumber
     actor User as User
-    participant Modal as ExpenseModal.tsx
+    participant Modal as quickEntry/QuickEntryDialog.tsx
     participant FinCtx as FinanceContext (Serialized Queue)
     participant API as Next.js Finance Route Handler (/api/v1/finance)
     participant Store as FinanceStore (src/server/finance/store.ts)

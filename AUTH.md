@@ -28,6 +28,7 @@ All endpoints are under `/api/v1/auth`. JSON bodies and responses use `Content-T
 | `POST /refresh`  | empty body or `{}`, refresh cookie                        | 200, auth response       |
 | `POST /logout`   | empty body or `{}`, refresh cookie and/or optional bearer | 204, clears cookie       |
 | `GET /me`        | `Authorization: Bearer <accessToken>`                     | 200, `{user}`            |
+| `DELETE /account` | `{password}` + `Authorization: Bearer <accessToken>`    | 204, clears cookie       |
 
 Auth response (register/login/refresh):
 
@@ -45,6 +46,8 @@ Auth response (register/login/refresh):
 ```
 
 Usernames are trimmed, 1–100 characters, without control characters. Emails are trimmed, lowercased, and validated (maximum 254 characters). Passwords are not trimmed; they require 12–128 JavaScript string characters and at most 512 UTF-8 bytes. Existing weak-password accounts are not supported by these rules. Duplicate registrations return a generic 400 error. Bad login credentials receive the same 401 error for unknown accounts and incorrect passwords. Errors use `{error: "safe message"}`; rate limits return 429 with `Retry-After: 900`; service failures return a generic 503. Logout returns 503, not a misleading 204, if database revocation fails, but still clears the browser cookie. A denied origin does not execute logout or clear the cookie.
+
+`DELETE /account` permanently deletes the signed-in account. It requires the access token **and** the current password (a stolen access token alone cannot delete the account); wrong, missing or malformed passwords return 401 and delete nothing. Password checks share the per-email rate limit with login/registration. On success one `DELETE FROM auth_users` cascades to sessions, refresh history, API tokens and all finance data; every session on every device stops working. Web callers get the refresh cookie cleared; mobile callers (`X-MF-Client: mobile`) get no cookie. This satisfies App Store guideline 5.1.1(v).
 
 `GET /api/v1/health` remains public; it is not a database readiness probe. No endpoint contract deviations; registration uses HTTP 201, and errors/validation are specified above.
 
@@ -92,7 +95,7 @@ On startup reload, refresh once to restore the in-memory token. **Serialize refr
 - All user-supplied SQL values are parameters. Unexpected errors omit driver details, SQL, tokens, and database URLs from responses and logs. Auth responses use `Cache-Control: no-store`. The application does not log credentials.
 - Future APIs can call `authenticateRequest(request, store)` from `src/server/auth/http.ts` to obtain the authenticated user. Route them inside `handleFetch` in `src/server/application.ts` **before** the final 404 response. Authorization/data isolation must additionally constrain queries by the authenticated user ID; do not trust user IDs supplied by the client.
 
-There is no email verification, password reset/change, MFA, account deletion, global device logout, in the authentication scope. Use HTTPS in production. Treat XSS as able to issue authenticated requests even though it cannot read the refresh cookie.
+There is no email verification, password reset/change, MFA, global device logout (other than account deletion), in the authentication scope. Use HTTPS in production. Treat XSS as able to issue authenticated requests even though it cannot read the refresh cookie.
 
 ### Operational cleanup
 

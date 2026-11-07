@@ -43,6 +43,20 @@ function sendJson(status: number, body: unknown, headers: Headers, headOnly = fa
   return new Response(headOnly ? null : JSON.stringify(body), { status, headers });
 }
 
+/**
+ * CSRF guard for state-changing requests. Browsers always send `Origin` on
+ * cross-origin and same-origin POST/PUT/DELETE, so a foreign or opaque
+ * ("null") origin is rejected. Native clients (the mobile app) send no
+ * `Origin`; that is only safe when the request also carries no cookie, because
+ * then the only credential is an explicit bearer token, which is not ambient.
+ */
+export function originAllowed(request: Request, appOrigin: string): boolean {
+  const origin = request.headers.get("origin");
+  if (origin === appOrigin) return true;
+  if (origin !== null) return false;
+  return !request.headers.has("cookie");
+}
+
 export function createApplication(config: Config, store: AuthStore, financeStore?: FinanceStore): Application {
   async function handleFetch(request: Request): Promise<Response> {
     const method = request.method.toUpperCase();
@@ -64,11 +78,11 @@ export function createApplication(config: Config, store: AuthStore, financeStore
 
     if (method === "OPTIONS" && !isMcpRoute) {
       responseHeaders.set("Access-Control-Allow-Methods", "GET,HEAD,POST,PUT,DELETE,OPTIONS");
-      responseHeaders.set("Access-Control-Allow-Headers", "Content-Type,Authorization");
+      responseHeaders.set("Access-Control-Allow-Headers", "Content-Type,Authorization,X-MF-Client");
       return new Response(null, { status: 204, headers: responseHeaders });
     }
 
-    if (!isMcpRoute && !["GET", "HEAD", "OPTIONS"].includes(method) && request.headers.get("origin") !== config.appOrigin) {
+    if (!isMcpRoute && !["GET", "HEAD", "OPTIONS"].includes(method) && !originAllowed(request, config.appOrigin)) {
       return sendJson(403, { error: "Origin not allowed" }, responseHeaders, headOnly);
     }
 

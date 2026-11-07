@@ -5,14 +5,21 @@ import { WeekView } from './WeekView';
 import { DayDetails } from './DayDetails';
 import { AnalyticsView } from './AnalyticsView';
 import { UserProfile } from './UserProfile';
+import { PlansPage } from './PlansPage';
+import { MobileMonth } from './mobile/MobileMonth';
+import { MobileWeek } from './mobile/MobileWeek';
+import { MobileAnalytics } from './mobile/MobileAnalytics';
 import { useFinanceShell } from '../contexts/FinanceShellContext';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { incomeMonth } from '../lib/income';
 
 import { useRouter } from 'next/navigation';
 import { pageHref } from '../lib/navigation';
 
+// Phones get direction F (Ledger Month): a plain Month, a Week ledger with a keypad, segmented Analytics.
 export function CalendarPageView() {
   const { currentDate, onActiveDateChange, openDate, openIncomeModal } = useFinanceShell();
+  if (useIsMobile()) return <MobileMonth />;
   return (
     <CalendarView
       currentDate={currentDate}
@@ -26,6 +33,7 @@ export function CalendarPageView() {
 export function WeekPageView() {
   const { currentDate, openDate, openIncomeModal } = useFinanceShell();
   const router = useRouter();
+  if (useIsMobile()) return <MobileWeek />;
   return (
     <WeekView
       currentDate={currentDate}
@@ -50,7 +58,12 @@ export function DayPageView() {
 
 export function AnalyticsPageView() {
   const { currentDate } = useFinanceShell();
+  if (useIsMobile()) return <MobileAnalytics />;
   return <AnalyticsView currentDate={currentDate} />;
+}
+
+export function PlansPageView() {
+  return <PlansPage />;
 }
 
 export function ProfilePageView() {

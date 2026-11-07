@@ -6,11 +6,12 @@ export const pages = {
   week: { path: '/week', html: 'week.html', title: 'Week · MyFinance', protected: true },
   day: { path: '/day', html: 'day.html', title: 'Day details · MyFinance', protected: true },
   analytics: { path: '/analytics', html: 'analytics.html', title: 'Analytics · MyFinance', protected: true },
+  plans: { path: '/plans', html: 'plans.html', title: 'Plans · MyFinance', protected: true },
   profile: { path: '/profile', html: 'profile.html', title: 'Profile · MyFinance', protected: true },
 } as const;
 
 export type Page = keyof typeof pages;
-export type FinancePage = 'calendar' | 'week' | 'day' | 'analytics' | 'profile';
+export type FinancePage = 'calendar' | 'week' | 'day' | 'analytics' | 'plans' | 'profile';
 
 export function isPage(value: string | undefined): value is Page {
   return value !== undefined && Object.hasOwn(pages, value);

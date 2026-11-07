@@ -4,21 +4,27 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { format, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
-import { ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
-import { ExpenseModal } from '../../components/ExpenseModal';
+import { format, addMonths, subMonths, addWeeks, subWeeks, parseISO } from 'date-fns';
+import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
+import { PlanPeriodGuide } from '../../components/PlanPeriodGuide';
+import { QuickEntryDialog } from '../../components/quickEntry/QuickEntryDialog';
+import type { SaveResult } from '../../components/quickEntry/useQuickEntry';
 import { MonthlyIncomeModal } from '../../components/MonthlyIncomeModal';
 import type { Spending } from '../../types';
-import { SettingsProvider } from '../../contexts/SettingsContext';
+import { SettingsProvider, useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { FinanceProvider, useFinance } from '../../contexts/FinanceContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FinanceShellContext } from '../../contexts/FinanceShellContext';
+import type { CalendarBasis, ExpenseDefaults } from '../../contexts/FinanceShellContext';
 import { errorMessage } from '../../services/auth';
 import { pages } from '../../lib/pages';
 import type { FinancePage } from '../../lib/pages';
 import { authHref, pageHref, readPageDate } from '../../lib/navigation';
+import { adjacentPeriod, calendarPeriod, DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, periodOf, periodRangeLabel, periodTitle, viewPeriodOf } from '../../lib/periods';
+import { addDays } from '../../lib/plans';
 import '../../styles/AuthScreen.css';
+import '../../styles/Plans.css';
 
 function resolveFinancePage(pathname: string): FinancePage {
   const clean = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
@@ -26,6 +32,7 @@ function resolveFinancePage(pathname: string): FinancePage {
   if (clean === '/day') return 'day';
   if (clean === '/analytics') return 'analytics';
   if (clean === '/profile') return 'profile';
+  if (clean === '/plans') return 'plans';
   return 'calendar';
 }
 
@@ -120,20 +127,30 @@ function FinanceDocument({
   children: ReactNode;
 }) {
   const { theme, setTheme } = useTheme();
-  const { error, reload, fetchWeeksSpendings } = useFinance();
+  const { error, reload, fetchWeeksSpendings, incomes } = useFinance();
+  const { settings } = useSettings();
   const router = useRouter();
 
-  const [expenseDialog, setExpenseDialog] = useState<{ expense?: Spending } | null>(null);
-  const [expenseNotice, setExpenseNotice] = useState('');
+  const [expenseDialog, setExpenseDialog] = useState<{ expense?: Spending; defaults?: ExpenseDefaults } | null>(null);
+  const [keypadOpen, setKeypadOpen] = useState(true);
+  const [keypadPulse, setKeypadPulse] = useState(0);
+  const [expenseNotice, setExpenseNotice] = useState<SaveResult | null>(null);
   const [incomeDialogMonth, setIncomeDialogMonth] = useState<string | null>(null);
 
-  const openExpense = useCallback((expense?: Spending) => {
-    setExpenseNotice('');
-    setExpenseDialog({ expense });
+  const openExpense = useCallback((expense?: Spending, defaults?: ExpenseDefaults) => {
+    setExpenseNotice(null);
+    setExpenseDialog({ expense, defaults });
   }, []);
 
   const openIncomeModal = useCallback((month: string) => {
     setIncomeDialogMonth(month);
+  }, []);
+
+  // "Plan this period" screen, opened from the calendar, the Plans page and the phone Month screen.
+  // The value is a date inside the wanted period (the screen resolves the period from it).
+  const [planPeriodDate, setPlanPeriodDate] = useState<string | null>(null);
+  const openPlanPeriod = useCallback((date?: string) => {
+    setPlanPeriodDate(date ?? format(new Date(), 'yyyy-MM-dd'));
   }, []);
 
   const urlDate = useMemo(() => readPageDate(fullSearch), [fullSearch]);
@@ -167,8 +184,32 @@ function FinanceDocument({
     }
   }, [page]);
 
-  const previousDate = page === 'week' ? subWeeks(activeDate, 1) : subMonths(activeDate, 1);
-  const nextDate = page === 'week' ? addWeeks(activeDate, 1) : addMonths(activeDate, 1);
+  // With Show by "Pay cycle", Calendar and Analytics move and are titled by period; the other pages keep their step.
+  const showBy = settings.showBy ?? DEFAULT_SHOW_BY;
+  const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
+  const activePeriod = useMemo(() => {
+    if (showBy !== 'pay_cycle' || (page !== 'calendar' && page !== 'analytics')) return null;
+    return viewPeriodOf(budgetPeriod, showBy, incomes, format(activeDate, 'yyyy-MM-dd'));
+  }, [showBy, budgetPeriod, incomes, page, activeDate]);
+  const stepPeriod = (direction: 'previous' | 'next') => {
+    if (!activePeriod) return null;
+    const resolve = (date: string) => viewPeriodOf(budgetPeriod, showBy, incomes, date);
+    return parseISO(adjacentPeriod(resolve, activePeriod, direction).start);
+  };
+  // Desktop Calendar pages are whole months or whole pay cycles, picked in the top bar; Show by sets the start.
+  const [calendarBasis, setCalendarBasis] = useState<CalendarBasis>(showBy === 'pay_cycle' ? 'cycle' : 'month');
+  useEffect(() => {
+    setCalendarBasis(showBy === 'pay_cycle' ? 'cycle' : 'month');
+  }, [showBy]);
+  const calendarView = useMemo(() => {
+    if (page !== 'calendar') return null;
+    const day = format(activeDate, 'yyyy-MM-dd');
+    return calendarBasis === 'cycle' ? periodOf(budgetPeriod, incomes, day) : calendarPeriod(day);
+  }, [page, calendarBasis, budgetPeriod, incomes, activeDate]);
+  const previousDate = calendarView ? parseISO(addDays(calendarView.start, -1))
+    : page === 'week' ? subWeeks(activeDate, 1) : stepPeriod('previous') ?? subMonths(activeDate, 1);
+  const nextDate = calendarView ? parseISO(calendarView.nextStart)
+    : page === 'week' ? addWeeks(activeDate, 1) : stepPeriod('next') ?? addMonths(activeDate, 1);
   const dateNavigation = page === 'calendar' || page === 'week' || page === 'analytics';
 
   const openDate = useCallback((date: Date) => {
@@ -179,6 +220,13 @@ function FinanceDocument({
     router.push(pages.calendar.path);
   }, [router]);
 
+  // Mobile + tab: open Week with the keypad docked (for the day already selected there, or today).
+  const openQuickAdd = useCallback(() => {
+    setKeypadOpen(true);
+    setKeypadPulse(count => count + 1);
+    if (page !== 'week') router.push(pageHref('week', new Date()));
+  }, [page, router]);
+
   const shellValue = useMemo(() => ({
     currentDate,
     activeDate,
@@ -187,17 +235,24 @@ function FinanceDocument({
     openBackToCalendar,
     openExpense,
     openIncomeModal,
-  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal]);
+    openPlanPeriod,
+    keypadOpen,
+    setKeypadOpen,
+    keypadPulse,
+    calendarBasis,
+    setCalendarBasis,
+  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, openPlanPeriod, keypadOpen, keypadPulse, calendarBasis]);
 
   const navigation = [
     { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
     { page: 'week', label: 'Week', Icon: List },
+    { page: 'plans', label: 'Plans', Icon: CalendarRange },
     { page: 'analytics', label: 'Analytics', Icon: ChartColumn },
     { page: 'profile', label: 'Profile', Icon: User },
   ] as const;
 
   const bottomTabsLeft = [
-    { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
+    { page: 'calendar', label: 'Month', Icon: CalendarDays },
     { page: 'week', label: 'Week', Icon: List },
   ] as const;
 
@@ -214,8 +269,15 @@ function FinanceDocument({
     }
   }, [page]);
 
-  const periodLabel = page === 'profile' ? 'User Profile' : format(activeDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy');
-  const mobilePeriodLabel = page === 'profile' ? 'User Profile' : format(activeDate, page === 'day' ? 'MMM d, yyyy' : 'MMMM yyyy');
+  const rangeLabel = activePeriod && activePeriod.mode !== 'calendar'
+    ? periodRangeLabel(activePeriod, true)
+    : null;
+  const periodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : rangeLabel ?? format(activeDate, page === 'day' ? 'MMMM d, yyyy' : 'MMMM yyyy');
+  // The Calendar's page, named in full in the top bar: "5 Oct – 4 Nov 2026" or "November 2026", plus the day count today.
+  const calendarViewName = calendarView ? periodTitle(calendarView, format(new Date(), 'yyyy-MM-dd')) : null;
+  const calendarViewLabel = calendarViewName?.title ?? null;
+  const calendarViewDay = calendarViewName?.day ?? null;
+  const mobilePeriodLabel = page === 'profile' ? 'User Profile' : page === 'plans' ? 'Plans' : rangeLabel ?? format(activeDate, page === 'day' ? 'MMM d, yyyy' : 'MMMM yyyy');
 
   const renderPrevAction = (extraClass = '') => {
     const className = `document-action${extraClass ? ` ${extraClass}` : ''}`;
@@ -282,7 +344,7 @@ function FinanceDocument({
             <span className="document-brand-icon"><img src="/favicon.svg" width={40} height={40} alt="" /></span>
             <span className="document-brand-text">
               <span className="document-title">MyFinance</span>
-              <span className="document-subtitle">{periodLabel}</span>
+              <span className={page === 'calendar' ? 'document-subtitle document-subtitle-mobile' : 'document-subtitle'}>{periodLabel}</span>
             </span>
           </Link>
 
@@ -309,8 +371,25 @@ function FinanceDocument({
           </nav>
 
           <div className="document-actions">
-            {renderPrevAction('document-desktop-only')}
-            {renderNextAction('document-desktop-only')}
+            {calendarView && calendarViewLabel ? (
+              <div className="document-period document-desktop-only">
+                <div className="document-basis-toggle" role="group" aria-label="Calendar pages">
+                  <button type="button" aria-pressed={calendarBasis === 'month'} onClick={() => setCalendarBasis('month')}>Month</button>
+                  <button type="button" aria-pressed={calendarBasis === 'cycle'} onClick={() => setCalendarBasis('cycle')}>Pay cycle</button>
+                </div>
+                {renderPrevAction()}
+                <div className="document-period-label" aria-live="polite">
+                  <b>{calendarViewLabel}</b>
+                  {calendarViewDay && <span>{calendarViewDay}</span>}
+                </div>
+                {renderNextAction()}
+              </div>
+            ) : (
+              <>
+                {renderPrevAction('document-desktop-only')}
+                {renderNextAction('document-desktop-only')}
+              </>
+            )}
             <button type="button" className="document-action document-add document-desktop-only" title="Add expense" aria-label="Add expense" onClick={() => openExpense()}><Plus size={20} /></button>
             <button className="document-action document-desktop-only" title="Refresh records" aria-label="Refresh records" onClick={() => { void reload().catch(() => {}); }}><RefreshCw size={20} /></button>
             <button className="document-action document-desktop-only" title="Toggle theme" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}</button>
@@ -323,8 +402,12 @@ function FinanceDocument({
           </div>
         )}
         {expenseNotice && (
-          <p role="status" className="expense-notice" style={{ padding: '12px 24px', backgroundColor: 'var(--bg-card)' }}>
-            {expenseNotice}
+          <p role="status" className="expense-notice" style={{ padding: '12px 24px', backgroundColor: 'var(--bg-card)', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span style={{ flex: 1 }}>{expenseNotice.message}</span>
+            {expenseNotice.undo && (
+              <button type="button" style={{ color: 'var(--primary)', fontWeight: 700 }} onClick={() => { const undo = expenseNotice.undo!; setExpenseNotice(null); void undo().catch(cause => setExpenseNotice({ message: `Could not undo: ${errorMessage(cause)}` })); }}>Undo</button>
+            )}
+            <button type="button" aria-label="Dismiss" onClick={() => setExpenseNotice(null)}>×</button>
           </p>
         )}
         <main className="document-content">
@@ -347,9 +430,9 @@ function FinanceDocument({
           <button
             type="button"
             className="document-bottom-add"
-            title="Add transaction"
-            aria-label="Add transaction"
-            onClick={() => openExpense()}
+            title="Add expense"
+            aria-label="Add expense"
+            onClick={openQuickAdd}
           >
             <span className="document-bottom-add-circle">
               <Plus size={24} aria-hidden="true" />
@@ -370,12 +453,13 @@ function FinanceDocument({
         </nav>
 
         {incomeDialogMonth && <MonthlyIncomeModal month={incomeDialogMonth} onClose={() => setIncomeDialogMonth(null)} />}
+        {planPeriodDate && <PlanPeriodGuide date={planPeriodDate} onClose={() => setPlanPeriodDate(null)} onDone={setExpenseNotice} />}
         {expenseDialog && (
-          <ExpenseModal
+          <QuickEntryDialog
             expense={expenseDialog.expense}
+            defaults={expenseDialog.defaults}
             onClose={() => setExpenseDialog(null)}
-            onSaved={(input, count) => setExpenseNotice(count > 1 ? `${count} expenses added.` : `Expense ${expenseDialog.expense ? 'updated' : 'added'} for ${input.date} at ${input.time}.`)}
-            onIncomeSaved={(input) => setExpenseNotice(`Income “${input.source}${input.name ? ` · ${input.name}` : ''}” added.`)}
+            onSaved={setExpenseNotice}
           />
         )}
       </div>

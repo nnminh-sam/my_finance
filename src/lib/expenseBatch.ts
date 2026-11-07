@@ -51,7 +51,7 @@ export function prepareExpenseBatch(
 
 export async function saveExpenseBatch(
   entries: readonly PreparedExpense[],
-  save: (input: SpendingInput) => Promise<void>,
+  save: (input: SpendingInput) => Promise<unknown>,
 ): Promise<{ saved: PreparedExpense[]; remaining: PreparedExpense[]; error?: unknown }> {
   const saved: PreparedExpense[] = [];
   for (const [index, entry] of entries.entries()) {

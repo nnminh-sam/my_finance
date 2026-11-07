@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { PlanOccurrence } from "../lib/plans";
 import {
   format,
   eachDayOfInterval,
@@ -15,61 +16,51 @@ import {
   subWeeks,
   parseISO,
 } from "date-fns";
-import {
-  Utensils,
-  Car,
-  Film,
-  ShoppingBag,
-  Receipt,
-  CircleDollarSign,
-  Coffee,
-  Home,
-  Heart,
-  Briefcase,
-  Gift,
-  Phone,
-} from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { getTotalForDate, getTopSpendingsForDate, formatCompactSpending } from "../lib/spendings";
 import {
   FETCH_WEEKS_STEP,
   PRELOAD_MONTHS,
-  VISIBLE_WEEKS,
-  buildCalendarWeeks,
+  buildPeriodPages,
   createInitialMonthRange,
-  detectScrollDirection,
   expandMonthRange,
-  getMonthFirstWeekKey,
+  formatWeekOfYear,
   getNextWeeksToFetch,
   getWeekKeysInRange,
+  getWeekOfYear,
 } from "../lib/calendarWindow";
-import type { FetchedWeekBounds, MonthRange, WeekRenderStage } from "../lib/calendarWindow";
+import type { FetchedWeekBounds, MonthRange, ScrollDirection, WeekRenderStage } from "../lib/calendarWindow";
 import { useFinance } from "../contexts/FinanceContext";
+import { useFinanceShell } from "../contexts/FinanceShellContext";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useSettings } from "../contexts/SettingsContext";
 import { getHeatmapColor } from "../lib/heatmap";
-import { getMonthIncome, incomeMonth } from "../lib/income";
-import { defaultSalaryCycleConfig, getSalaryCycleForMonth, loadSalaryCycleConfig } from "../lib/salaryCycle";
-import type { SalaryCycleConfig } from "../lib/salaryCycle";
+import Link from "next/link";
+import { getRangeIncome } from "../lib/income";
+import { dismissPayCycleHint, shouldShowPayCycleHint } from "../lib/legacyPayday";
+import { DEFAULT_BUDGET_PERIOD, periodOf, periodRangeLabel, periodsBetween, type BudgetPeriod, type BudgetPeriodSetting } from "../lib/periods";
+import { addDays } from "../lib/plans";
 import { useAuth } from "../contexts/AuthContext";
+import { PeriodSidePanel, PeriodStrip, type MiniCalendarSpec } from "./PeriodSummary";
 import "../styles/CalendarView.css";
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
 }
 
-const ICONS = { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone };
-
-const CategoryIcon = ({
-  iconName,
-  size = 12,
-}: {
-  iconName: string;
-  size?: number;
-}) => {
-  const IconComp = ICONS[iconName as keyof typeof ICONS] || CircleDollarSign;
-  return <IconComp size={size} />;
+const CALENDAR_MONTHS: BudgetPeriodSetting = { mode: "calendar", startDay: 1, paycheckIncomeId: null };
+const todayString = () => format(new Date(), "yyyy-MM-dd");
+const overlapDays = (a: Pick<BudgetPeriod, "start" | "end">, b: Pick<BudgetPeriod, "start" | "end">) => {
+  const start = a.start > b.start ? a.start : b.start, end = a.end < b.end ? a.end : b.end;
+  return end < start ? 0 : Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1;
 };
+/** Of `candidates`, the period sharing the most days with `page` (the first one on a tie). */
+const mostOverlapping = (candidates: BudgetPeriod[], page: Pick<BudgetPeriod, "start" | "end">) =>
+  candidates.reduce((best, next) => (overlapDays(next, page) > overlapDays(best, page) ? next : best));
+/** The day a page stands for: today on the current page, otherwise the page's first day. */
+const pageAnchor = (page: Pick<BudgetPeriod, "start" | "end">, today: string) =>
+  today >= page.start && today <= page.end ? today : page.start;
 
 interface CalendarViewProps {
   currentDate: Date;
@@ -84,42 +75,45 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onDateClick,
 }) => {
   const { settings } = useSettings();
-  const { spendings, incomes, fetchWeeksSpendings } = useFinance();
+  const { spendings, incomes, hasLoaded, fetchWeeksSpendings, projectedBetween } = useFinance();
+  const { openPlanPeriod, activeDate: shellActiveDate, calendarBasis: basis } = useFinanceShell();
   const { user } = useAuth();
-  const [cycleConfig, setCycleConfig] = useState<SalaryCycleConfig>(() => defaultSalaryCycleConfig());
-
-  // Pay cycle preferences are edited in Profile; load them for the signed-in user.
-  useEffect(() => {
-    setCycleConfig(loadSalaryCycleConfig(user?.id));
-  }, [user?.id]);
-
-  // A day is a cycle boundary when it is the first or last day of a cycle anchored nearby.
-  const cycleBoundary = useCallback((day: Date) => {
-    const key = format(day, "yyyy-MM-dd");
-    let isStart = false;
-    let isEnd = false;
-    for (const offset of [-1, 0, 1]) {
-      const cycle = getSalaryCycleForMonth(new Date(day.getFullYear(), day.getMonth() + offset, 1), cycleConfig);
-      if (format(cycle.startDate, "yyyy-MM-dd") === key) isStart = true;
-      if (format(cycle.endDate, "yyyy-MM-dd") === key) isEnd = true;
-    }
-    return { isStart, isEnd };
-  }, [cycleConfig]);
+  const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
+  // Pages and totals follow the calendar month or the budget period, as picked in the top bar.
+  // Each page is one whole period, so a pay cycle is never split across two pages. Keyed by value, so a
+  // settings object recreated with the same content does not rebuild the pages.
+  const pageSettingKey = JSON.stringify(basis === "cycle" ? budgetPeriod : CALENDAR_MONTHS);
+  const pageSetting = useMemo<BudgetPeriodSetting>(() => JSON.parse(pageSettingKey), [pageSettingKey]);
+  const resolvePage = useCallback((date: string) => periodOf(pageSetting, incomes, date), [pageSetting, incomes]);
+  const resolvePageRef = useRef(resolvePage);
+  resolvePageRef.current = resolvePage;
+  const [hintDismissed, setHintDismissed] = useState(false);
+  // The hint only exists for a device that still holds the old pay cycle and an account on defaults.
+  const showPayCycleHint = hasLoaded && !hintDismissed && typeof window !== "undefined"
+    && shouldShowPayCycleHint(settings, user?.id, window.localStorage);
+  const dismissHint = () => {
+    dismissPayCycleHint(window.localStorage, user?.id);
+    setHintDismissed(true);
+  };
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const ignoreMonthSyncUntilRef = useRef<number>(0);
   const hasInitialScrolledRef = useRef(false);
-  const lastScrollTopRef = useRef(0);
-  const lastExternalMonthRef = useRef<string>(format(currentDate, 'yyyy-MM'));
+  const lastScrollLeftRef = useRef(0);
+  const lastExternalDateRef = useRef<string>(format(currentDate, 'yyyy-MM-dd'));
+  // A page to bring into view after the next render, once any earlier pages have been added on the left
+  // (scrolling before that would be undone by the prepend anchor below).
+  const pendingScrollRef = useRef<{ key: string; behavior: ScrollBehavior } | null>(null);
+  const [, setScrollTick] = useState(0);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const prependAnchorRef = useRef<{
-    weekKey: string;
-    relativeTop: number;
+    pageKey: string;
+    relativeLeft: number;
   } | null>(null);
 
-  const [activeMonthStr, setActiveMonthStr] = useState<string>(() => format(currentDate, 'yyyy-MM'));
+  const [activePageKey, setActivePageKey] = useState<string>(() => resolvePage(format(currentDate, 'yyyy-MM-dd')).start);
 
-  // Preload 2 months before and 2 months after the initial month, expanding dynamically on scroll
+  // Preload 2 months before and 2 months after the initial month, expanding dynamically on side scroll
   const [monthRange, setMonthRange] = useState<MonthRange>(() =>
     createInitialMonthRange(currentDate, PRELOAD_MONTHS),
   );
@@ -135,10 +129,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   // Track which week boundaries have been fetched
   const fetchedBoundsRef = useRef<FetchedWeekBounds>((() => {
-    const firstVisible = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
+    const initial = resolvePage(format(currentDate, 'yyyy-MM-dd'));
     return {
-      startWeek: firstVisible,
-      endWeek: addWeeks(firstVisible, VISIBLE_WEEKS - 1),
+      startWeek: startOfWeek(parseISO(initial.start), { weekStartsOn: 1 }),
+      endWeek: startOfWeek(parseISO(initial.end), { weekStartsOn: 1 }),
     };
   })());
 
@@ -250,17 +244,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       });
   }, [enqueueVisibleFetchedDays, fetchWeeksSpendings]);
 
-  const capturePrependAnchor = useCallback((anchorRow?: HTMLElement | null) => {
+  const capturePrependAnchor = useCallback((anchorPage?: HTMLElement | null) => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    const row = anchorRow || container.querySelector<HTMLElement>('.calendar-week-row');
-    if (row && row.dataset.week) {
+    const pageEl =
+      anchorPage ||
+      container.querySelector<HTMLElement>(`.calendar-month-page[data-page="${activePageKey}"]`) ||
+      container.querySelector<HTMLElement>('.calendar-month-page');
+    if (pageEl && pageEl.dataset.page) {
       prependAnchorRef.current = {
-        weekKey: row.dataset.week,
-        relativeTop: row.offsetTop - container.scrollTop,
+        pageKey: pageEl.dataset.page,
+        relativeLeft: pageEl.offsetLeft - container.scrollLeft,
       };
     }
-  }, []);
+  }, [activePageKey]);
 
   const ensureMonthsLoadedFor = useCallback((targetDate: Date, preloadMonths = PRELOAD_MONTHS) => {
     setMonthRange((prev) => {
@@ -273,13 +270,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     });
   }, [capturePrependAnchor]);
 
-  // Generate continuous client-side weeks for the currently loaded month range
-  const { weeks, allDays } = useMemo(
-    () => buildCalendarWeeks(monthRange.startMonth, monthRange.endMonth),
-    [monthRange.startMonth, monthRange.endMonth],
+  // One page per period (month or pay cycle) across the loaded month range, each 4 to 6 weeks tall
+  const { pages, allDays } = useMemo(
+    () => buildPeriodPages(periodsBetween(
+      pageSetting,
+      incomes,
+      format(startOfMonth(monthRange.startMonth), 'yyyy-MM-dd'),
+      format(endOfMonth(monthRange.endMonth), 'yyyy-MM-dd'),
+    )),
+    [pageSetting, incomes, monthRange.startMonth, monthRange.endMonth],
   );
 
-  // Preserve exact scroll position when earlier weeks are prepended at the top
+  // Preserve exact horizontal scroll position when earlier months are prepended on the left
   useLayoutEffect(() => {
     const anchor = prependAnchorRef.current;
     if (!anchor) return;
@@ -288,13 +290,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const anchorEl = container.querySelector<HTMLElement>(`[data-week="${anchor.weekKey}"]`);
+    const anchorEl = container.querySelector<HTMLElement>(`.calendar-month-page[data-page="${anchor.pageKey}"]`);
     if (anchorEl) {
-      const targetScrollTop = anchorEl.offsetTop - anchor.relativeTop;
-      if (Math.abs(container.scrollTop - targetScrollTop) > 1) {
+      const targetScrollLeft = anchorEl.offsetLeft - anchor.relativeLeft;
+      if (Math.abs(container.scrollLeft - targetScrollLeft) > 1) {
         ignoreMonthSyncUntilRef.current = Date.now() + 120;
-        container.scrollTop = targetScrollTop;
-        lastScrollTopRef.current = targetScrollTop;
+        container.scrollLeft = targetScrollLeft;
+        lastScrollLeftRef.current = targetScrollLeft;
       }
     }
   }, [monthRange.startMonth]);
@@ -302,8 +304,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   // Initial load: dates render immediately on client side; fetch visible 5 weeks first,
   // then preload 2 months before/after in week batches.
   useEffect(() => {
-    const visibleStart = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
-    const visibleEnd = addWeeks(visibleStart, VISIBLE_WEEKS - 1);
+    const initial = resolvePage(format(currentDate, 'yyyy-MM-dd'));
+    const visibleStart = startOfWeek(parseISO(initial.start), { weekStartsOn: 1 });
+    const visibleEnd = startOfWeek(parseISO(initial.end), { weekStartsOn: 1 });
     visibleWeekKeysRef.current = getWeekKeysInRange(visibleStart, visibleEnd);
 
     const preloadStart = startOfWeek(startOfMonth(subMonths(currentDate, PRELOAD_MONTHS)), { weekStartsOn: 1 });
@@ -314,7 +317,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       endWeek: preloadEnd,
     };
 
-    // Priority 1: Fetch the 5 visible weeks of the current month
+    // Priority 1: Fetch the visible weeks of the current page
     fetchWeekBatch(visibleStart, visibleEnd);
 
     // Priority 2: Preload weeks for the 2 months before and 2 months after in week-sized chunks
@@ -354,193 +357,184 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     return peaks;
   }, [allDays, spendings]);
 
-  // Active month date for overview metrics
-  const activeDate = useMemo(() => {
-    try {
-      return parseISO(`${activeMonthStr}-01`);
-    } catch {
-      return currentDate;
-    }
-  }, [activeMonthStr, currentDate]);
+  // Planned (not yet real) occurrences across every rendered day, grouped by date.
+  const plannedByDate = useMemo(() => {
+    const byDate = new Map<string, PlanOccurrence[]>();
+    if (!allDays.length) return byDate;
+    const items = projectedBetween(format(allDays[0], 'yyyy-MM-dd'), format(allDays[allDays.length - 1], 'yyyy-MM-dd'));
+    for (const item of items) byDate.set(item.date, [...(byDate.get(item.date) ?? []), item]);
+    return byDate;
+  }, [allDays, projectedBetween]);
 
-  // Totals can follow the calendar month or the pay cycle that starts in the active month.
-  const [basis, setBasis] = useState<"month" | "cycle">("month");
-  const cycle = useMemo(() => getSalaryCycleForMonth(activeDate, cycleConfig), [activeDate, cycleConfig]);
+  // The page in view is the period the overview sums. Resolving its key (the page's first day) keeps this
+  // right for one render while pages are rebuilt for another basis.
+  const todayKey = todayString();
+  const period = useMemo(() => resolvePage(activePageKey), [resolvePage, activePageKey]);
+  // The active day: the day the header navigated to when it is on this page, else today or the page's first day.
+  const shellDay = shellActiveDate ? format(shellActiveDate, "yyyy-MM-dd") : null;
+  const activeDay = shellDay && shellDay >= period.start && shellDay <= period.end ? shellDay : pageAnchor(period, todayKey);
+  const activeDayRef = useRef(activeDay);
+  activeDayRef.current = activeDay;
   const periodDays = useMemo(
-    () => (basis === "cycle" ? cycle.days : eachDayOfInterval({ start: startOfMonth(activeDate), end: endOfMonth(activeDate) })),
-    [basis, cycle, activeDate],
+    () => eachDayOfInterval({ start: parseISO(period.start), end: parseISO(period.end) }),
+    [period],
   );
 
-  const { recurringIncome, oneTimeIncome, totalIncome } = getMonthIncome(
-    basis === "cycle" ? cycle.cycleMonth : incomeMonth(activeDate), incomes,
-  );
+  const { recurringIncome, oneTimeIncome, totalIncome } = getRangeIncome(period.start, period.end, incomes);
 
   const totalSpending = periodDays.reduce((sum, day) => sum + getTotalForDate(day, spendings), 0);
-  const leftOver = totalIncome - totalSpending;
+  // Planned occurrences in this period are projected by date range, so a period
+  // outside the rendered calendar still gets its full forecast. Sure ones are committed, the rest are estimates.
+  const periodProjected = projectedBetween(period.start, period.end);
+  const periodCommitted = periodProjected.filter(item => item.sure).reduce((sum, item) => sum + item.amount, 0);
+  const periodEstimates = periodProjected.filter(item => !item.sure).reduce((sum, item) => sum + item.amount, 0);
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  const findMonthStartElement = useCallback((container: HTMLElement, targetMonth: Date) => {
-    const firstWeekKey = getMonthFirstWeekKey(targetMonth);
-    const targetMonthStr = format(targetMonth, 'yyyy-MM');
-    return (
-      container.querySelector<HTMLElement>(`[data-week="${firstWeekKey}"]`) ||
-      container.querySelector<HTMLElement>(`[data-month="${targetMonthStr}"]`)
-    );
+  const findPageElement = useCallback((container: HTMLElement, pageKey: string) => {
+    return container.querySelector<HTMLElement>(`.calendar-month-page[data-page="${pageKey}"]`);
   }, []);
 
-  // Programmatic scroll helper to jump to a specific month
-  const scrollToMonth = useCallback((targetMonth: Date) => {
-    const targetMonthStr = format(targetMonth, 'yyyy-MM');
-    ensureMonthsLoadedFor(targetMonth, PRELOAD_MONTHS + 1);
+  // Jump to the page holding `date`: load its weeks first, then scroll it into view (now, or once it renders).
+  const scrollToPageOf = useCallback((date: string, behavior: ScrollBehavior = 'smooth') => {
+    const target = resolvePageRef.current(date);
+    ensureMonthsLoadedFor(parseISO(target.start), PRELOAD_MONTHS + 1);
 
-    const visibleStart = startOfWeek(startOfMonth(targetMonth), { weekStartsOn: 1 });
-    const visibleEnd = addWeeks(visibleStart, VISIBLE_WEEKS - 1);
+    const visibleStart = startOfWeek(parseISO(target.start), { weekStartsOn: 1 });
+    const visibleEnd = startOfWeek(parseISO(target.end), { weekStartsOn: 1 });
     visibleWeekKeysRef.current = getWeekKeysInRange(visibleStart, visibleEnd);
     fetchWeekBatch(visibleStart, visibleEnd);
 
-    const container = scrollContainerRef.current;
-    if (!container) return;
+    pendingScrollRef.current = { key: target.start, behavior };
+    setActivePageKey(target.start);
+    setScrollTick(tick => tick + 1); // render even when the key is unchanged, so the pending scroll runs
+    onActiveMonthChange?.(parseISO(pageAnchor(target, todayString())));
+  }, [ensureMonthsLoadedFor, fetchWeekBatch, onActiveMonthChange]);
 
-    const targetWeek = findMonthStartElement(container, targetMonth);
-    if (targetWeek) {
-      ignoreMonthSyncUntilRef.current = Date.now() + 450;
-      targetWeek.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setActiveMonthStr(targetMonthStr);
-      onActiveMonthChange?.(targetMonth);
-    }
-  }, [ensureMonthsLoadedFor, fetchWeekBatch, findMonthStartElement, onActiveMonthChange]);
+  const scrollToNextPage = useCallback(() => {
+    scrollToPageOf(resolvePageRef.current(activePageKey).nextStart);
+  }, [activePageKey, scrollToPageOf]);
 
-  const scrollToNextMonth = useCallback(() => {
-    const current = parseISO(`${activeMonthStr}-01`);
-    scrollToMonth(addMonths(current, 1));
-  }, [activeMonthStr, scrollToMonth]);
+  const scrollToPrevPage = useCallback(() => {
+    scrollToPageOf(addDays(activePageKey, -1));
+  }, [activePageKey, scrollToPageOf]);
 
-  const scrollToPrevMonth = useCallback(() => {
-    const current = parseISO(`${activeMonthStr}-01`);
-    scrollToMonth(subMonths(current, 1));
-  }, [activeMonthStr, scrollToMonth]);
-
-  // Initial scroll into view on mount: align the first week of the current month at the top so 5 weeks of the month are visible
+  // Bring a pending page into view once it exists (the first render jumps there without animation).
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-
-    if (!hasInitialScrolledRef.current) {
-      const targetWeek = findMonthStartElement(container, currentDate);
-      if (targetWeek) {
-        ignoreMonthSyncUntilRef.current = Date.now() + 250;
-        container.scrollTop = targetWeek.offsetTop;
-        lastScrollTopRef.current = targetWeek.offsetTop;
-        hasInitialScrolledRef.current = true;
-      }
+    if (!hasInitialScrolledRef.current) pendingScrollRef.current = { key: activePageKey, behavior: 'auto' };
+    const pending = pendingScrollRef.current;
+    if (!pending) return;
+    const targetPage = findPageElement(container, pending.key);
+    if (!targetPage) return;
+    pendingScrollRef.current = null;
+    hasInitialScrolledRef.current = true;
+    if (pending.behavior === 'smooth' && Math.abs(container.scrollLeft - targetPage.offsetLeft) > 1) {
+      ignoreMonthSyncUntilRef.current = Date.now() + 700;
+      container.scrollTo({ left: targetPage.offsetLeft, behavior: 'smooth' });
+    } else {
+      ignoreMonthSyncUntilRef.current = Date.now() + 250;
+      container.scrollLeft = targetPage.offsetLeft;
     }
-  }, [currentDate, findMonthStartElement]);
+    lastScrollLeftRef.current = targetPage.offsetLeft;
+  });
 
-  // Rows are sized as a share of the container, so a height change (for example the overview card
-  // wrapping) would otherwise leave the old pixel scrollTop pointing at the wrong week.
-  const activeMonthRef = useRef(activeMonthStr);
+  // Switching Month / Pay cycle, a pay cycle setting change, or incomes loading (a paycheck cycle needs
+  // them) rebuilds the pages: keep the day the top bar shows in view on the new page. Resolving the old
+  // page key with the new rules instead would land on the wrong period (1 Nov is in 5 Oct – 4 Nov).
+  const shellDayRef = useRef(shellActiveDate);
+  shellDayRef.current = shellActiveDate;
+  const lastResolveRef = useRef(resolvePage);
+  useLayoutEffect(() => {
+    if (lastResolveRef.current === resolvePage) return;
+    lastResolveRef.current = resolvePage;
+    const day = shellDayRef.current ? format(shellDayRef.current, 'yyyy-MM-dd') : activeDayRef.current;
+    const key = resolvePage(day).start;
+    pendingScrollRef.current = { key, behavior: 'auto' };
+    setActivePageKey(key);
+    setScrollTick(tick => tick + 1);
+  }, [resolvePage]);
+
+  // Pages are sized to 100% of the container width, so a width change would otherwise
+  // leave the old pixel scrollLeft pointing between pages.
+  const activePageRef = useRef(activePageKey);
   useEffect(() => {
-    activeMonthRef.current = activeMonthStr;
-  }, [activeMonthStr]);
+    activePageRef.current = activePageKey;
+  }, [activePageKey]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') return;
-    let lastHeight = container.clientHeight;
+    let lastWidth = container.clientWidth;
     const observer = new ResizeObserver(() => {
-      if (container.clientHeight === lastHeight) return;
-      lastHeight = container.clientHeight;
-      const targetWeek = findMonthStartElement(container, parseISO(`${activeMonthRef.current}-01`));
-      if (!targetWeek) return;
+      if (container.clientWidth === lastWidth) return;
+      lastWidth = container.clientWidth;
+      const targetPage = findPageElement(container, activePageRef.current);
+      if (!targetPage) return;
       ignoreMonthSyncUntilRef.current = Date.now() + 250;
-      container.scrollTop = targetWeek.offsetTop;
-      lastScrollTopRef.current = targetWeek.offsetTop;
+      container.scrollLeft = targetPage.offsetLeft;
+      lastScrollLeftRef.current = targetPage.offsetLeft;
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, [findMonthStartElement]);
+  }, [findPageElement]);
 
-  // Smoothly scroll ONLY when the external currentDate prop itself changes to a new month
+  // Scroll ONLY when the external currentDate prop itself changes (the header's arrows or "today")
   useEffect(() => {
     if (!hasInitialScrolledRef.current) return;
-    const targetMonthStr = format(currentDate, 'yyyy-MM');
-    if (targetMonthStr === lastExternalMonthRef.current) return;
-    lastExternalMonthRef.current = targetMonthStr;
+    const targetDate = format(currentDate, 'yyyy-MM-dd');
+    if (targetDate === lastExternalDateRef.current) return;
+    lastExternalDateRef.current = targetDate;
+    if (resolvePageRef.current(targetDate).start === activePageRef.current) return;
+    scrollToPageOf(targetDate);
+  }, [currentDate, scrollToPageOf]);
 
-    if (targetMonthStr === activeMonthStr) return;
-
-    ensureMonthsLoadedFor(currentDate, PRELOAD_MONTHS + 1);
-    const visibleStart = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
-    const visibleEnd = addWeeks(visibleStart, VISIBLE_WEEKS - 1);
-    visibleWeekKeysRef.current = getWeekKeysInRange(visibleStart, visibleEnd);
-    fetchWeekBatch(visibleStart, visibleEnd);
-
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const targetWeek = findMonthStartElement(container, currentDate);
-    if (targetWeek) {
-      ignoreMonthSyncUntilRef.current = Date.now() + 450;
-      targetWeek.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setActiveMonthStr(targetMonthStr);
-    }
-  }, [currentDate, activeMonthStr, ensureMonthsLoadedFor, fetchWeekBatch, findMonthStartElement]);
-
-  // Scroll listener:
-  // 1. Always expands client-side calendar dates well before reaching top or bottom boundary (never stuck at Jan 3rd!)
-  // 2. Detects scroll direction ('up' / 'down') and compares current visible week against fetched weeks
-  // 3. Queues visible fetched days to fill in from left to right, top to bottom
+  // Horizontal scroll listener:
+  // 1. Expands client-side calendar months before reaching left or right boundary
+  // 2. Detects horizontal scroll direction ('left' / 'right') and fetches needed week batches
+  // 3. Queues visible fetched days in the active month to fill in from left to right, top to bottom
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const containerTop = container.scrollTop;
-    const direction = detectScrollDirection(containerTop, lastScrollTopRef.current);
-    lastScrollTopRef.current = containerTop;
+    const containerLeft = container.scrollLeft;
+    const direction: ScrollDirection =
+      containerLeft < lastScrollLeftRef.current
+        ? 'left'
+        : containerLeft > lastScrollLeftRef.current
+          ? 'right'
+          : 'idle';
+    lastScrollLeftRef.current = containerLeft;
 
-    const clientHeight = container.clientHeight || 500;
-    const viewportCenter = containerTop + clientHeight / 2;
-    const viewportBottom = containerTop + clientHeight - 8;
-    const weekRows = container.querySelectorAll<HTMLElement>('.calendar-week-row');
-    if (weekRows.length === 0) return;
+    const clientWidth = container.clientWidth || 800;
+    const viewportCenter = containerLeft + clientWidth / 2;
+    const pageEls = container.querySelectorAll<HTMLElement>('.calendar-month-page');
+    if (pageEls.length === 0) return;
 
-    let topVisibleIdx = 0;
-    let foundTop = false;
-    let centerWeekRow: HTMLElement | null = null;
-    let bottomVisibleIdx = weekRows.length - 1;
-
-    for (let i = 0; i < weekRows.length; i++) {
-      const row = weekRows[i];
-      const rowBottom = row.offsetTop + row.offsetHeight;
-      if (!foundTop && rowBottom > containerTop + 4) {
-        topVisibleIdx = i;
-        foundTop = true;
-      }
-      if (!centerWeekRow && rowBottom >= viewportCenter) {
-        centerWeekRow = row;
-      }
-      if (row.offsetTop <= viewportBottom) {
-        bottomVisibleIdx = i;
-      } else if (foundTop) {
+    let centerIdx = 0;
+    for (let i = 0; i < pageEls.length; i++) {
+      const page = pageEls[i];
+      const pageRight = page.offsetLeft + page.offsetWidth;
+      if (pageRight >= viewportCenter) {
+        centerIdx = i;
         break;
       }
     }
 
-    const topVisibleRow = weekRows[topVisibleIdx];
-    const bottomVisibleRow = weekRows[bottomVisibleIdx];
+    const centerPage = pageEls[centerIdx];
 
-    // 1. Expand client-side calendar dates when scrolling toward top or bottom boundary
-    if (direction === 'up' && (topVisibleIdx <= 4 || containerTop < clientHeight)) {
-      capturePrependAnchor(topVisibleRow);
+    // 1. Expand client-side calendar months when scrolling toward left or right boundary
+    if (direction === 'left' && (centerIdx <= 1 || containerLeft < clientWidth)) {
+      capturePrependAnchor(centerPage);
       setMonthRange((prev) => ({
         startMonth: startOfMonth(subMonths(prev.startMonth, 3)),
         endMonth: prev.endMonth,
       }));
     }
     if (
-      direction !== 'up' &&
-      (weekRows.length - 1 - bottomVisibleIdx <= 4 ||
-        container.scrollHeight - (containerTop + clientHeight) < clientHeight)
+      direction !== 'left' &&
+      (pageEls.length - 1 - centerIdx <= 1 ||
+        container.scrollWidth - (containerLeft + clientWidth) < clientWidth)
     ) {
       setMonthRange((prev) => ({
         startMonth: prev.startMonth,
@@ -548,10 +542,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       }));
     }
 
-    // 2. Track currently visible weeks and trigger left-to-right, top-to-bottom day reveal
-    if (topVisibleRow?.dataset.week && bottomVisibleRow?.dataset.week) {
-      const visibleStartWeek = parseISO(topVisibleRow.dataset.week);
-      const visibleEndWeek = parseISO(bottomVisibleRow.dataset.week);
+    // 2. Track the visible page's weeks and trigger left-to-right, top-to-bottom day reveal
+    const centerKey = centerPage?.dataset.page;
+    if (centerKey && centerPage.dataset.firstWeek && centerPage.dataset.lastWeek) {
+      const visibleStartWeek = parseISO(centerPage.dataset.firstWeek);
+      const visibleEndWeek = parseISO(centerPage.dataset.lastWeek);
       visibleWeekKeysRef.current = getWeekKeysInRange(visibleStartWeek, visibleEndWeek);
       enqueueVisibleFetchedDays();
 
@@ -563,8 +558,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         fetchWeekBatch(visibleStartWeek, visibleEndWeek);
       }
 
-      // 3. Compare current visible week with fetched week bounds in the detected scroll direction
-      const effectiveDirection = direction === 'idle' ? 'down' : direction;
+      // 3. Compare current visible weeks with fetched week bounds in the detected scroll direction
+      const effectiveDirection: ScrollDirection = direction === 'idle' ? 'right' : direction;
       const batch = getNextWeeksToFetch({
         direction: effectiveDirection,
         visibleStartWeek,
@@ -579,23 +574,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           parseISO(batch.weekKeys[batch.weekKeys.length - 1]),
         );
       }
-    }
 
-    // 4. Update active month header & overview when not in the middle of a programmatic jump
-    if (Date.now() >= ignoreMonthSyncUntilRef.current && centerWeekRow?.dataset.month) {
-      const newMonth = centerWeekRow.dataset.month;
-      if (newMonth !== activeMonthStr) {
-        setActiveMonthStr(newMonth);
-        try {
-          const newDate = parseISO(`${newMonth}-01`);
-          ensureMonthsLoadedFor(newDate);
-          onActiveMonthChange?.(newDate);
-        } catch {
-          // ignore
-        }
+      // 4. Update the header & overview to the page in view when not in the middle of a programmatic jump
+      if (Date.now() >= ignoreMonthSyncUntilRef.current && centerKey !== activePageKey) {
+        setActivePageKey(centerKey);
+        ensureMonthsLoadedFor(parseISO(centerKey));
+        onActiveMonthChange?.(parseISO(pageAnchor(resolvePageRef.current(centerKey), todayString())));
       }
     }
-  }, [activeMonthStr, capturePrependAnchor, enqueueVisibleFetchedDays, ensureMonthsLoadedFor, fetchWeekBatch, onActiveMonthChange]);
+  }, [activePageKey, capturePrependAnchor, enqueueVisibleFetchedDays, ensureMonthsLoadedFor, fetchWeekBatch, onActiveMonthChange]);
 
   // Touch handlers for horizontal swipe (left to next month, right to prev month)
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -615,43 +602,85 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
     if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY) * 1.4 && elapsed < 450) {
       if (diffX < 0) {
-        scrollToNextMonth();
+        scrollToNextPage();
       } else {
-        scrollToPrevMonth();
+        scrollToPrevPage();
       }
     }
   };
 
-  // Forward outer wheel events to the scrollable grid
+  // Forward horizontal wheel events outside the grid to the horizontally scrollable month track
   const handleOuterWheel = (e: React.WheelEvent) => {
     const container = scrollContainerRef.current;
     if (!container) return;
     if (!container.contains(e.target as Node)) {
-      container.scrollTop += e.deltaY;
+      const delta = Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      container.scrollLeft += delta;
     }
   };
 
-  // Keyboard navigation for week-by-week scrolling
+  // Keyboard navigation for month-by-month side scrolling
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const weekEl = container.querySelector<HTMLElement>('.calendar-week-row');
-    const weekHeight = weekEl ? weekEl.offsetHeight + 8 : 100;
-
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') {
       e.preventDefault();
-      container.scrollBy({ top: weekHeight, behavior: 'smooth' });
-    } else if (e.key === 'ArrowUp') {
+      scrollToNextPage();
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
       e.preventDefault();
-      container.scrollBy({ top: -weekHeight, behavior: 'smooth' });
-    } else if (e.key === 'PageDown') {
-      e.preventDefault();
-      container.scrollBy({ top: weekHeight * 5, behavior: 'smooth' });
-    } else if (e.key === 'PageUp') {
-      e.preventDefault();
-      container.scrollBy({ top: -weekHeight * 5, behavior: 'smooth' });
+      scrollToPrevPage();
     }
   };
+
+  // The period summary sits beside the calendar on wide screens and above it, as a slim strip, on narrower ones.
+  const summaryProps = {
+    income: totalIncome,
+    recurringIncome,
+    oneTimeIncome,
+    spent: totalSpending,
+    committed: periodCommitted,
+    estimates: periodEstimates,
+    start: period.start,
+    end: period.end,
+    today: todayKey,
+    // The period itself is named in the top bar, beside the Month / Pay cycle switch.
+    tools: (
+      <span className="calendar-overview-tools">
+        <button type="button" className="calendar-plan-btn" onClick={() => openPlanPeriod()}>
+          <Sparkles size={14} aria-hidden="true" /><span className="hide-mobile">Plan this period</span><span className="show-mobile">Plan</span>
+        </button>
+      </span>
+    ),
+  };
+  // A small calendar of the other period kind: the pay cycle in Month view, the month in Pay cycle view.
+  // Without a pay cycle set up, the cycle is the month itself, so Month view shows none.
+  // It shows the period holding today when today is on the page, else the one that overlaps the page most.
+  const miniSetting = basis === "cycle" ? CALENDAR_MONTHS : budgetPeriod;
+  const miniPeriod = todayKey >= period.start && todayKey <= period.end
+    ? periodOf(miniSetting, incomes, todayKey)
+    : mostOverlapping(periodsBetween(miniSetting, incomes, period.start, period.end), period);
+  const miniCalendar: MiniCalendarSpec | null = basis === "month" && miniPeriod.mode === "calendar" ? null : {
+    title: basis === "cycle" ? format(parseISO(miniPeriod.start), "MMMM yyyy") : <>Pay cycle · {periodRangeLabel(miniPeriod)}</>,
+    start: miniPeriod.start,
+    end: miniPeriod.end,
+    focusStart: period.start,
+    focusEnd: period.end,
+    marks: (() => {
+      const marks: MiniCalendarSpec["marks"] = {};
+      for (const item of projectedBetween(miniPeriod.start, miniPeriod.end)) marks[item.date] = "planned";
+      for (let date = miniPeriod.start; date <= miniPeriod.end; date = addDays(date, 1)) {
+        if (getTotalForDate(parseISO(date), spendings) > 0) marks[date] = "spent";
+      }
+      return marks;
+    })(),
+    onPick: date => onDateClick(parseISO(date)),
+  };
+
+  const payCycleHint = showPayCycleHint && (
+    <p className="calendar-pay-cycle-hint" role="note">
+      <span>Your payday is only saved on this device. </span>
+      <Link href="/profile#paycycle">Set up your pay cycle</Link>
+      <button type="button" onClick={dismissHint}>Dismiss</button>
+    </p>
+  );
 
   return (
     <div
@@ -660,73 +689,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       onTouchEnd={handleTouchEnd}
       onWheel={handleOuterWheel}
     >
-      <div className="calendar-overview-grid">
-        {/* Card 1: Overview */}
-        <div className="glass animate-fade-in calendar-overview-card">
-          <div className="calendar-overview-stat calendar-overview-income">
-            <div className="overview-income-heading">
-              <span className="calendar-stat-label">
-                <span className="hide-mobile">{basis === "cycle" ? "Cycle" : "Monthly"} </span>Income
-              </span>
-            </div>
-            <span className="calendar-stat-value calendar-stat-income-value">
-              <span className="hide-mobile">{totalIncome.toLocaleString("vi-VN")} ₫</span>
-              <span className="show-mobile">{formatCompactSpending(totalIncome)}</span>
-            </span>
-          </div>
-
-          <div className="calendar-overview-stat calendar-overview-spending">
-            <span className="calendar-stat-label">
-              <span className="hide-mobile">Total </span>Spending
-            </span>
-            <span className="calendar-stat-value calendar-stat-spending-value">
-              <span className="hide-mobile">{totalSpending.toLocaleString("vi-VN")} ₫</span>
-              <span className="show-mobile">{formatCompactSpending(totalSpending)}</span>
-            </span>
-          </div>
-
-          <div className="calendar-overview-stat calendar-overview-leftover">
-            <span className="calendar-stat-label">
-              Left Over
-            </span>
-            <span
-              className="calendar-stat-value"
-              style={{
-                color: totalIncome > 0 ? (leftOver >= 0 ? "var(--primary)" : "var(--danger)") : "var(--text-muted)",
-              }}
-            >
-              {totalIncome > 0 ? (
-                <>
-                  <span className="hide-mobile">{leftOver.toLocaleString("vi-VN")} ₫</span>
-                  <span className="show-mobile">{formatCompactSpending(leftOver)}</span>
-                </>
-              ) : (
-                <><span className="hide-mobile">Income </span>Not set</>
-              )}
-            </span>
-          </div>
-
-          <div className="calendar-stat-subtext calendar-stat-subtext-row">
-            <span>
-            <span className="hide-mobile">
-              Recurring {recurringIncome.toLocaleString("vi-VN")} ₫ · One-time {oneTimeIncome.toLocaleString("vi-VN")} ₫
-            </span>
-            <span className="show-mobile">
-              Recur. {formatCompactSpending(recurringIncome)} · Once {formatCompactSpending(oneTimeIncome)}
-            </span>
-            <span className="calendar-basis-range">
-              {" · "}{basis === "cycle" ? `${format(cycle.startDate, "MMM d")} – ${format(cycle.endDate, "MMM d")}` : format(activeDate, "MMMM")}
-            </span>
-            </span>
-            <div className="calendar-basis-toggle" role="group" aria-label="Totals calculated for">
-              <button type="button" aria-pressed={basis === "month"} onClick={() => setBasis("month")}>Month</button>
-              <button type="button" aria-pressed={basis === "cycle"} onClick={() => setBasis("cycle")}>Pay cycle</button>
-            </div>
-          </div>
-        </div>
+      <div className="calendar-overview-grid calendar-summary-narrow">
+        <PeriodStrip className="glass animate-fade-in" {...summaryProps}>{payCycleHint}</PeriodStrip>
       </div>
 
       <div className="calendar-weekdays-grid">
+        <div className="calendar-weekday-label calendar-weeknum-header" aria-hidden="true" />
         {weekDays.map((day) => (
           <div key={day} className="calendar-weekday-label">
             {day}
@@ -737,137 +705,185 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       <div
         className="calendar-days-grid hide-scrollbar"
         ref={scrollContainerRef}
+        data-active-page={activePageKey}
         onScroll={handleScroll}
         tabIndex={0}
         onKeyDown={handleKeyDown}
         role="region"
-        aria-label="Calendar weeks"
+        aria-label={basis === "cycle" ? "Calendar pay cycles" : "Calendar months"}
       >
-        {weeks.map((weekDaysList) => {
-          const weekStartStr = format(weekDaysList[0], 'yyyy-MM-dd');
-          const dominantMonthStr = format(weekDaysList[3], 'yyyy-MM');
+        {pages.map((page) => (
+          <div
+            key={page.key}
+            className="calendar-month-page"
+            data-page={page.key}
+            data-first-week={format(page.weeks[0][0], 'yyyy-MM-dd')}
+            data-last-week={format(page.weeks[page.weeks.length - 1][0], 'yyyy-MM-dd')}
+            style={{ '--weeks': page.weeks.length } as React.CSSProperties}
+          >
+            {page.weeks.map((weekDaysList) => {
+              const weekStartStr = format(weekDaysList[0], 'yyyy-MM-dd');
+              const weekNumber = getWeekOfYear(weekDaysList[0]);
+              const weekLabel = formatWeekOfYear(weekDaysList[0]);
 
-          return (
-            <div
-              key={weekStartStr}
-              className="calendar-week-row"
-              data-week={weekStartStr}
-              data-month={dominantMonthStr}
-            >
-              {weekDaysList.map((day) => {
-                const dayKey = format(day, 'yyyy-MM-dd');
-                const dayMonthStr = format(day, 'yyyy-MM');
-                const isCurrentDay = isToday(day);
-                const isFirstOfMonth = day.getDate() === 1;
-                const isDifferentMonth = dayMonthStr !== activeMonthStr;
-                const { isStart: isCycleStart, isEnd: isCycleEnd } = cycleBoundary(day);
-
-                // Stage per individual day: 'dates' (immediate) -> 'totals' (left-to-right, top-to-bottom) -> 'details'
-                const dayStage: WeekRenderStage = dayStages[dayKey] || 'dates';
-                const showTotals = dayStage === 'totals' || dayStage === 'details';
-                const showDetails = dayStage === 'details';
-
-                const total = showTotals ? getTotalForDate(day, spendings) : 0;
-                const heatmapBg = showTotals
-                  ? getHeatmapColor(total, monthlyPeaks[dayMonthStr] || 0, settings.theme)
-                  : undefined;
-
-                const topSpendings = showDetails ? getTopSpendingsForDate(day, 5, spendings) : [];
-
-                return (
+              return (
+                <div
+                  key={`${page.key}-${weekStartStr}`}
+                  className="calendar-week-row"
+                  data-week={weekStartStr}
+                  data-week-of-year={weekNumber}
+                >
                   <div
-                    key={dayKey}
-                    onClick={() => onDateClick(day)}
-                    data-day-stage={dayStage}
-                    className={cn(
-                      "glass calendar-day-cell",
-                      isCurrentDay && "calendar-day-today",
-                      isFirstOfMonth && "calendar-day-first-of-month",
-                      isDifferentMonth && "calendar-day-other-month",
-                       isCycleStart && "calendar-day-cycle-start",
-                       isCycleEnd && "calendar-day-cycle-end",
-                    )}
-                    aria-current={isCurrentDay ? "date" : undefined}
-                    title={isCycleStart ? "Pay cycle starts" : isCycleEnd ? "Pay cycle ends" : isCurrentDay ? "Today" : undefined}
-                    style={{
-                      backgroundColor: heatmapBg || undefined,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                      e.currentTarget.style.filter = "brightness(1.2)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.filter = "none";
-                    }}
+                    className="calendar-week-number"
+                    title={`Week ${weekNumber} of ${format(weekDaysList[3], 'yyyy')}`}
+                    aria-label={`Week ${weekNumber}`}
                   >
-                    {/* Stage 1: Date value always renders immediately on the client side */}
-                    <div className="calendar-day-header">
-                      <span
-                        className={cn(
-                          "calendar-day-number",
-                          isCurrentDay && "calendar-day-number-today",
-                          isFirstOfMonth && "calendar-day-number-first",
-                        )}
-                      >
-                        {isFirstOfMonth ? (
-                          <>
-                            <span className="calendar-day-first-badge">{format(day, "MMM")}</span>
-                            <span>{format(day, "d")}</span>
-                          </>
-                        ) : (
-                          format(day, "d")
-                        )}
-                      </span>
-                      {showTotals && total > 0 && (
-                        <span className="calendar-day-total-desktop">
-                          {total.toLocaleString("vi-VN")} ₫
-                        </span>
-                      )}
-                    </div>
-
-                    {showTotals && total > 0 && (
-                      <div className="calendar-day-total-mobile">
-                        {formatCompactSpending(total)}
-                      </div>
-                    )}
-
-                    {/* Stage 3: Detailed spendings fill in after the day's total */}
-                    {showDetails && (
-                      <div className="calendar-spending-list">
-                        {topSpendings.length === 0 && (
-                          <span className="calendar-no-expenses">
-                            No expenses
-                          </span>
-                        )}
-                        {topSpendings.map((s, rowIdx) => (
-                          <div
-                            key={s.id}
-                            className="calendar-spending-row"
-                            style={{ '--row-idx': rowIdx } as React.CSSProperties}
-                          >
-                            <span className="calendar-spending-label" title={s.description}>
-                              <span className="calendar-spending-icon">
-                                <CategoryIcon iconName={settings.categories.find(c => c.id === s.category)?.icon || "CircleDollarSign"} size={12} />
-                              </span>
-                              <span className="calendar-spending-description">
-                                {s.description}
-                              </span>
-                            </span>
-                            <span className="calendar-spending-amount">
-                              {s.amount.toLocaleString("vi-VN")} ₫
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {weekLabel}
                   </div>
-                );
-              })}
-            </div>
-          );
-        })}
+                  {weekDaysList.map((day) => {
+                    const dayKey = format(day, 'yyyy-MM-dd');
+                    const dayMonthStr = format(day, 'yyyy-MM');
+                    const isCurrentDay = isToday(day);
+                    const isFirstOfMonth = day.getDate() === 1;
+                    // Days of the neighbouring periods only fill the first and last week: faded, without amounts.
+                    const isOutside = dayKey < page.start || dayKey > page.end;
+
+                    // Stage per individual day: 'dates' (immediate) -> 'totals' (left-to-right, top-to-bottom) -> 'details'
+                    const dayStage: WeekRenderStage = dayStages[dayKey] || 'dates';
+                    const showTotals = !isOutside && (dayStage === 'totals' || dayStage === 'details');
+                    const showDetails = !isOutside && dayStage === 'details';
+
+                    const total = showTotals ? getTotalForDate(day, spendings) : 0;
+                    const heatmapBg = showTotals
+                      ? getHeatmapColor(total, monthlyPeaks[dayMonthStr] || 0, settings.theme)
+                      : undefined;
+
+                    const topSpendings = showDetails ? getTopSpendingsForDate(day, 5, spendings) : [];
+                    const plannedItems = showTotals ? plannedByDate.get(dayKey) ?? [] : [];
+                    const plannedTotal = plannedItems.reduce((sum, item) => sum + item.amount, 0);
+
+                    return (
+                      <div
+                        key={`${page.key}-${dayKey}`}
+                        onClick={() => onDateClick(day)}
+                        data-day-stage={dayStage}
+                        className={cn(
+                          "glass calendar-day-cell",
+                          isCurrentDay && "calendar-day-today",
+                          isFirstOfMonth && "calendar-day-first-of-month",
+                          isOutside && "calendar-day-outside",
+                        )}
+                        aria-current={isCurrentDay ? "date" : undefined}
+                        title={isCurrentDay ? "Today" : undefined}
+                        style={{
+                          backgroundColor: heatmapBg || undefined,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.filter = "brightness(1.2)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.filter = "none";
+                        }}
+                      >
+                        {/* Stage 1: Date value always renders immediately on the client side */}
+                        <div className="calendar-day-header">
+                          <span
+                            className={cn(
+                              "calendar-day-number",
+                              isCurrentDay && "calendar-day-number-today",
+                              isFirstOfMonth && "calendar-day-number-first",
+                            )}
+                          >
+                            {isFirstOfMonth ? (
+                              <>
+                                <span className="calendar-day-first-badge">{format(day, "MMM")}</span>
+                                <span>{format(day, "d")}</span>
+                              </>
+                            ) : (
+                              format(day, "d")
+                            )}
+                          </span>
+                          {showTotals && total > 0 && (
+                            <span className="calendar-day-total-desktop">
+                              {total.toLocaleString("vi-VN")} ₫
+                            </span>
+                          )}
+                          {showTotals && total === 0 && plannedTotal > 0 && (
+                            <span className="calendar-day-total-desktop calendar-day-planned-total" title="Planned, not spent yet">
+                              ~{plannedTotal.toLocaleString("vi-VN")} ₫
+                            </span>
+                          )}
+                        </div>
+
+                        {showTotals && total > 0 && (
+                          <div className="calendar-day-total-mobile">
+                            {formatCompactSpending(total)}
+                          </div>
+                        )}
+                        {showTotals && total === 0 && plannedTotal > 0 && (
+                          <div className="calendar-day-total-mobile calendar-day-planned-total">
+                            ~{formatCompactSpending(plannedTotal)}
+                          </div>
+                        )}
+
+                        {/* Stage 3: Detailed spendings fill in after the day's total */}
+                        {showDetails && (
+                          <div className="calendar-spending-list">
+                            {topSpendings.length === 0 && plannedItems.length === 0 && (
+                              <span className="calendar-no-expenses">
+                                No expenses
+                              </span>
+                            )}
+                            {topSpendings.map((s, rowIdx) => (
+                              <div
+                                key={s.id}
+                                className="calendar-spending-row"
+                                style={{ '--row-idx': rowIdx } as React.CSSProperties}
+                              >
+                                <span className="calendar-spending-label" title={s.description}>
+                                  <span className="calendar-spending-description">
+                                    {s.description}
+                                  </span>
+                                </span>
+                                <span className="calendar-spending-amount">
+                                  {s.amount.toLocaleString("vi-VN")} ₫
+                                </span>
+                              </div>
+                            ))}
+                            {plannedItems.slice(0, Math.max(0, 5 - topSpendings.length)).map((p, plannedIdx) => (
+                              <div
+                                key={`plan-${p.planId}`}
+                                className={cn("calendar-spending-row calendar-spending-row-planned", p.sure && "is-sure")}
+                                style={{ '--row-idx': topSpendings.length + plannedIdx } as React.CSSProperties}
+                                title={`Planned: ${p.description}`}
+                              >
+                                <span className="calendar-spending-label">
+                                  <span className="calendar-spending-description">
+                                    {p.description}
+                                  </span>
+                                </span>
+                                <span className="calendar-spending-amount">
+                                  ~{p.amount.toLocaleString("vi-VN")} ₫
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
+
+      <PeriodSidePanel className="glass animate-fade-in calendar-summary-side" mini={miniCalendar} {...summaryProps}>
+        {payCycleHint}
+      </PeriodSidePanel>
     </div>
   );
 };

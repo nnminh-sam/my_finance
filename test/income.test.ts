@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { countIncomeOccurrences, describeIncomeSchedule, getMonthIncome, incomeMonth, monthRange } from '../src/lib/income';
+import { countIncomeOccurrences, describeIncomeSchedule, getMonthIncome, getRangeIncome, incomeMonth, monthRange } from '../src/lib/income';
+import { summarizePlanPeriod } from '../src/lib/periodSummary';
+import { addDays } from '../src/lib/plans';
 import type { Income, IncomeFrequency } from '../src/types';
 
 function income(id: string, frequency: IncomeFrequency, amount: number, startDate: string, endDate: string | null = null): Income {
@@ -111,4 +113,47 @@ test('describeIncomeSchedule summarizes frequency and period', () => {
   assert.equal(describeIncomeSchedule(income('a', 'once', 1, '2026-10-01')), 'One time on 2026-10-01');
   assert.equal(describeIncomeSchedule(income('b', 'weekly', 1, '2026-10-05')), 'Weekly · from 2026-10-05');
   assert.equal(describeIncomeSchedule(income('c', 'monthly', 1, '2026-01-05', '2026-12-31')), 'Monthly · 2026-01-05 to 2026-12-31');
+});
+
+const withSchedule = (value: Income, extra: Partial<Income>): Income => ({ ...value, ...extra });
+const scheduleCases: Income[] = [
+  income('once', 'once', 500, '2026-03-12'),
+  income('daily', 'daily', 10, '2026-01-20', '2026-04-10'),
+  income('weekly', 'weekly', 100, '2026-01-02'),
+  withSchedule(income('biweekly', 'weekly', 100, '2026-01-02'), { interval: 2 }),
+  withSchedule(income('fourweekly', 'weekly', 100, '2026-01-01'), { interval: 4 }),
+  withSchedule(income('twice', 'monthly', 100, '2026-01-01'), { frequency: 'semimonthly', semimonthlyDays: [1, 16] }),
+  income('monthly31', 'monthly', 1000, '2026-01-31'),
+  income('yearly', 'yearly', 2000, '2024-02-29'),
+  withSchedule(income('monthlyShift', 'monthly', 1000, '2026-01-01'), { weekendShift: true }),
+  withSchedule(income('weeklyShift', 'weekly', 100, '2026-01-03'), { weekendShift: true }),
+  withSchedule(income('twiceShift', 'monthly', 100, '2026-01-01'), { frequency: 'semimonthly', semimonthlyDays: [1, 2], weekendShift: true }),
+];
+
+test('getRangeIncome over a calendar month equals getMonthIncome for every frequency, with and without a weekend shift', () => {
+  for (const month of ['2025-12', '2026-02', '2026-03', '2026-07', '2026-08', '2027-02', '2028-02']) {
+    const { start, end } = monthRange(month);
+    for (const value of scheduleCases) {
+      assert.deepEqual(getRangeIncome(start, end, [value]), getMonthIncome(month, [value]), `${value.id} ${month}`);
+    }
+    assert.deepEqual(getRangeIncome(start, end, scheduleCases), getMonthIncome(month, scheduleCases), month);
+  }
+});
+
+test('getRangeIncome counts both ends of the range and agrees with the plan summary for the same range', () => {
+  const salary = income('s', 'monthly', 1000, '2026-01-25');
+  assert.equal(getRangeIncome('2026-03-25', '2026-04-24', [salary]).totalIncome, 1000, 'a payday on the start counts');
+  assert.equal(getRangeIncome('2026-03-26', '2026-04-25', [salary]).totalIncome, 1000, 'a payday on the end counts');
+  assert.equal(getRangeIncome('2026-03-26', '2026-04-24', [salary]).totalIncome, 0, 'the day after and the day before do not');
+  const shifted = withSchedule(income('f', 'monthly', 1000, '2026-08-01'), { weekendShift: true });
+  assert.equal(getRangeIncome('2026-07-31', '2026-07-31', [shifted]).totalIncome, 1000, 'a Saturday payday counts on its Friday');
+  assert.equal(getRangeIncome('2026-08-01', '2026-08-31', [shifted]).totalIncome, 0);
+  for (const [start, end] of [['2026-03-01', '2026-03-31'], ['2026-03-25', '2026-04-24'], ['2026-07-28', '2026-08-04'], ['2026-02-10', '2026-02-10']]) {
+    const summary = summarizePlanPeriod({
+      period: { start, end, nextStart: addDays(end, 1), mode: 'calendar' }, today: start, plans: [], spendings: [],
+      incomes: scheduleCases.map(value => ({ ...value })),
+    });
+    assert.equal(getRangeIncome(start, end, scheduleCases).totalIncome, summary.income, `${start}..${end}`);
+  }
+  assert.equal(getRangeIncome('2026-04-30', '2026-04-01', scheduleCases).totalIncome, 0, 'an inverted range is empty');
 });

@@ -1,5 +1,7 @@
 import { HttpError } from "../auth/http";
-import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category, type FinanceSettings, type IncomeFrequency, type IncomeInput, type SpendingInput } from "./model";
+import { BUDGET_PERIOD_MODES, SHOW_BY, type BudgetPeriodMode, type ShowBy } from "../../lib/periods";
+import { isValidTimeZone, PLAN_FREQUENCIES, type PlanFrequency } from "../../lib/plans";
+import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category, type IncomeFrequency, type IncomeInput, type PlanExceptionInput, type PlanInput, type SettingsPatch, type SpendingInput } from "./model";
 
 function invalid(field: string): never { throw new HttpError(400, `Invalid ${field}`); }
 function object(value: unknown, allowed: readonly string[]): Record<string, unknown> {
@@ -32,9 +34,24 @@ function categories(value: unknown): Category[] {
     return { id, name, color: item.color, icon: item.icon };
   });
 }
-export function settingsPatch(value: unknown): Partial<FinanceSettings> {
-  const body = object(value, ["avatar", "categories"]);
-  const patch: Partial<FinanceSettings> = {};
+function budgetPeriodPatch(value: unknown): NonNullable<SettingsPatch["budgetPeriod"]> {
+  const body = object(value, ["mode", "startDay", "paycheckIncomeId"]);
+  const patch: NonNullable<SettingsPatch["budgetPeriod"]> = {};
+  if (Object.hasOwn(body, "mode")) {
+    if (typeof body.mode !== "string" || !(BUDGET_PERIOD_MODES as readonly string[]).includes(body.mode)) return invalid("budgetPeriod mode");
+    patch.mode = body.mode as BudgetPeriodMode;
+  }
+  if (Object.hasOwn(body, "startDay")) {
+    if (typeof body.startDay !== "number" || !Number.isInteger(body.startDay) || body.startDay < 1 || body.startDay > 28) return invalid("budgetPeriod startDay (1–28)");
+    patch.startDay = body.startDay;
+  }
+  if (Object.hasOwn(body, "paycheckIncomeId")) patch.paycheckIncomeId = body.paycheckIncomeId === null ? null : uuid(body.paycheckIncomeId);
+  if (patch.mode === "paycheck" && patch.paycheckIncomeId === null) return invalid("budgetPeriod (paycheck mode needs an income)");
+  return patch;
+}
+export function settingsPatch(value: unknown): SettingsPatch {
+  const body = object(value, ["avatar", "categories", "timezone", "budgetPeriod", "showBy"]);
+  const patch: SettingsPatch = {};
   if (Object.hasOwn(body, "avatar")) {
     const avatar = text(body.avatar, "avatar", 2048, true);
     if (avatar !== "") {
@@ -46,6 +63,17 @@ export function settingsPatch(value: unknown): Partial<FinanceSettings> {
     patch.avatar = avatar;
   }
   if (Object.hasOwn(body, "categories")) patch.categories = categories(body.categories);
+  if (Object.hasOwn(body, "timezone")) {
+    const timezone = text(body.timezone, "timezone", 64);
+    if (!isValidTimeZone(timezone)) return invalid("timezone");
+    patch.timezone = timezone;
+  }
+  if (Object.hasOwn(body, "budgetPeriod")) patch.budgetPeriod = budgetPeriodPatch(body.budgetPeriod);
+  if (Object.hasOwn(body, "showBy")) {
+    const showBy = body.showBy;
+    if (typeof showBy !== "string" || !(SHOW_BY as readonly string[]).includes(showBy)) return invalid("showBy");
+    patch.showBy = showBy as ShowBy;
+  }
   return patch;
 }
 function validDate(value: unknown, field: string): string {
@@ -129,8 +157,59 @@ export function repeatRuleInput(value: unknown): import("./model").RepeatRuleInp
     frequency, interval, daysOfWeek, endType, totalOccurrences, endDate,
   };
 }
+function clockTime(value: unknown): string {
+  const time = text(value, "time", 5);
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return invalid("time");
+  return time;
+}
+export function planInput(value: unknown): PlanInput {
+  const body = object(value, ["amount", "description", "category", "time", "startDate", "frequency", "interval", "daysOfWeek", "endDate", "sure"]);
+  const amount = money(body.amount, "amount", true);
+  const description = text(body.description ?? "", "description", 1000, true);
+  const category = text(body.category, "category", 100);
+  const time = clockTime(body.time);
+  const startDate = validDate(body.startDate, "startDate");
+  if (typeof body.frequency !== "string" || !(PLAN_FREQUENCIES as readonly string[]).includes(body.frequency)) return invalid("frequency");
+  const frequency = body.frequency as PlanFrequency;
+  let interval = 1;
+  if (body.interval !== undefined && body.interval !== null) {
+    if (typeof body.interval !== "number" || !Number.isInteger(body.interval) || body.interval < 1 || body.interval > 365) return invalid("interval (1–365)");
+    if (frequency === "daily" || frequency === "weekly" || frequency === "monthly") interval = body.interval;
+  }
+  let daysOfWeek: number[] = [];
+  if (body.daysOfWeek !== undefined && body.daysOfWeek !== null) {
+    if (!Array.isArray(body.daysOfWeek) || body.daysOfWeek.length > 7 ||
+        body.daysOfWeek.some(day => typeof day !== "number" || !Number.isInteger(day) || day < 0 || day > 6)) return invalid("daysOfWeek");
+    if (frequency === "weekly") daysOfWeek = [...new Set(body.daysOfWeek as number[])].sort((a, b) => a - b);
+  }
+  let endDate: string | null = null;
+  if (body.endDate !== undefined && body.endDate !== null) {
+    if (frequency === "once") return invalid("endDate (not allowed for a one-time plan)");
+    endDate = validDate(body.endDate, "endDate");
+    if (endDate < startDate) return invalid("endDate cannot be before startDate");
+  }
+  if (body.sure !== undefined && typeof body.sure !== "boolean") return invalid("sure");
+  const sure = body.sure === true;
+  return { amount, description, category, time, startDate, frequency, interval, daysOfWeek, endDate, sure };
+}
+export function planExceptionInput(value: unknown): PlanExceptionInput {
+  const body = object(value, ["kind", "amount", "description"]);
+  if (body.kind === "skip") {
+    if (body.amount !== undefined && body.amount !== null) return invalid("amount (not allowed when skipping)");
+    if (body.description !== undefined && body.description !== null) return invalid("description (not allowed when skipping)");
+    return { kind: "skip", amount: null, description: null };
+  }
+  if (body.kind !== "override") return invalid("kind");
+  const amount = money(body.amount, "amount", true);
+  const description = body.description === undefined || body.description === null
+    ? null : text(body.description, "description", 1000, true);
+  return { kind: "override", amount, description };
+}
+export function planDate(value: unknown): string {
+  return validDate(value, "date");
+}
 export function incomeInput(value: unknown): IncomeInput {
-  const body = object(value, ["source", "name", "amount", "frequency", "startDate", "endDate"]);
+  const body = object(value, ["source", "name", "amount", "frequency", "startDate", "endDate", "interval", "semimonthlyDays", "weekendShift"]);
   if (typeof body.source !== "string") return invalid("source");
   const source = text(body.source.trim(), "source", 100);
   if (body.name !== undefined && typeof body.name !== "string") return invalid("name");
@@ -145,7 +224,35 @@ export function incomeInput(value: unknown): IncomeInput {
     endDate = validDate(body.endDate, "endDate");
     if (endDate < startDate) return invalid("endDate cannot be before startDate");
   }
-  return { source, name, amount, frequency, startDate, endDate };
+  const result: IncomeInput = { source, name, amount, frequency, startDate, endDate };
+  // Options that equal their default are normalized away, so a round trip is stable.
+  if (body.interval !== undefined) {
+    if (body.interval !== 1 && body.interval !== 2 && body.interval !== 4) return invalid("interval (1, 2 or 4)");
+    if (body.interval !== 1) {
+      if (frequency !== "weekly") return invalid("interval (only for weekly income)");
+      result.interval = body.interval;
+    }
+  }
+  if (frequency === "semimonthly") {
+    const days = body.semimonthlyDays;
+    if (!Array.isArray(days) || days.length !== 2 || days.some(day => typeof day !== "number" || !Number.isInteger(day) || day < 1 || day > 31) || days[0] >= days[1]) {
+      return invalid("semimonthlyDays (two days 1–31, first before second)");
+    }
+    result.semimonthlyDays = [days[0], days[1]];
+  } else if (body.semimonthlyDays !== undefined && body.semimonthlyDays !== null) {
+    return invalid("semimonthlyDays (only for twice-a-month income)");
+  }
+  if (body.weekendShift !== undefined) {
+    if (typeof body.weekendShift !== "boolean") return invalid("weekendShift");
+    if (body.weekendShift) {
+      if (!["weekly", "semimonthly", "monthly", "yearly"].includes(frequency)) return invalid("weekendShift (not allowed for one-time or daily income)");
+      result.weekendShift = true;
+    }
+  }
+  return result;
+}
+export function planSummaryDate(query: Record<string, unknown>): string | undefined {
+  return query.date === undefined ? undefined : validDate(query.date, "date");
 }
 export function uuid(value: unknown): string {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return invalid("UUID");

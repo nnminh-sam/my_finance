@@ -16,6 +16,13 @@ import {
 
 export const REFRESH_COOKIE = "mf_refresh";
 const COOKIE_PATH = "/api/v1/auth";
+/** Native clients opt into body-carried refresh tokens with this header. It routes, it does not authenticate. */
+export const CLIENT_HEADER = "x-mf-client";
+export const MOBILE_CLIENT = "mobile";
+
+export function isMobileClient(request: Request): boolean {
+  return request.headers.get(CLIENT_HEADER)?.trim().toLowerCase() === MOBILE_CLIENT;
+}
 
 export class HttpError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -108,14 +115,38 @@ export async function handleAuthRequest(
 ): Promise<Response> {
   responseHeaders.set("Cache-Control", "no-store");
   const method = request.method.toUpperCase();
+  const mobile = isMobileClient(request);
 
+  // Web: refresh token only in the HttpOnly cookie. Mobile: only in the body, never a cookie.
   function issue(user: User, accessToken: string, refreshToken: string, status = 200): Response {
-    responseHeaders.set("Set-Cookie", formatRefreshCookie(refreshToken, config.production, false));
+    if (!mobile) responseHeaders.set("Set-Cookie", formatRefreshCookie(refreshToken, config.production, false));
     responseHeaders.set("Content-Type", "application/json; charset=utf-8");
-    return new Response(JSON.stringify({ user, accessToken, expiresIn: ACCESS_SECONDS }), {
-      status,
-      headers: responseHeaders,
-    });
+    const payload = mobile
+      ? { user, accessToken, refreshToken, expiresIn: ACCESS_SECONDS }
+      : { user, accessToken, expiresIn: ACCESS_SECONDS };
+    return new Response(JSON.stringify(payload), { status, headers: responseHeaders });
+  }
+
+  function clearRefreshCookie(): void {
+    if (!mobile) responseHeaders.set("Set-Cookie", formatRefreshCookie("", config.production, true));
+  }
+
+  /**
+   * The refresh tokens this request presents: cookies for web, `refreshToken` in the body for mobile.
+   * A request must use exactly one transport; mixing them, or a body token without the mobile header, is rejected.
+   */
+  function presentedRefreshTokens(): string[] {
+    const cookieHeader = request.headers.get("cookie");
+    const cookies = refreshCookiesFromHeader(cookieHeader);
+    const hasRefreshCookie = (cookieHeader ?? "").split(";").some(part => part.split("=")[0].trim() === REFRESH_COOKIE);
+    const bodyToken = recordBody?.refreshToken;
+    if (bodyToken === undefined) {
+      if (mobile && hasRefreshCookie) throw new HttpError(400, "Mobile clients must send the refresh token in the request body");
+      return mobile ? [] : cookies;
+    }
+    if (!mobile) throw new HttpError(400, "A refresh token in the request body requires the X-MF-Client: mobile header");
+    if (hasRefreshCookie) throw new HttpError(400, "Send the refresh token in the cookie or the body, not both");
+    return typeof bodyToken === "string" && validToken(bodyToken) ? [bodyToken] : [];
   }
 
   async function limit(email: string): Promise<void> {
@@ -167,19 +198,19 @@ export async function handleAuthRequest(
   }
 
   if (method === "POST" && subpath === "/refresh") {
-    const cookies = refreshCookiesFromHeader(request.headers.get("cookie"));
-    if (cookies.length !== 1) {
-      responseHeaders.set("Set-Cookie", formatRefreshCookie("", config.production, true));
+    const presented = presentedRefreshTokens();
+    if (presented.length !== 1) {
+      clearRefreshCookie();
       throw new HttpError(401, "Authentication required");
     }
     const accessToken = newToken();
     const refreshToken = newToken();
-    const user = await store.rotate(hashToken(cookies[0]), {
+    const user = await store.rotate(hashToken(presented[0]), {
       accessHash: hashToken(accessToken),
       refreshHash: hashToken(refreshToken),
     });
     if (!user) {
-      responseHeaders.set("Set-Cookie", formatRefreshCookie("", config.production, true));
+      clearRefreshCookie();
       throw new HttpError(401, "Authentication required");
     }
     return issue(user, accessToken, refreshToken, 200);
@@ -187,14 +218,14 @@ export async function handleAuthRequest(
 
   if (method === "POST" && subpath === "/logout") {
     // Clear even if the database is unavailable; report a failure, never a false 204.
-    responseHeaders.set("Set-Cookie", formatRefreshCookie("", config.production, true));
-    const cookies = refreshCookiesFromHeader(request.headers.get("cookie"));
+    clearRefreshCookie();
+    const presented = presentedRefreshTokens();
     const accessToken = bearerTokenFromHeader(request.headers.get("authorization"));
-    if (cookies.length === 0) {
+    if (presented.length === 0) {
       if (accessToken) await store.revoke(undefined, hashToken(accessToken));
     } else {
-      for (const cookie of new Set(cookies)) {
-        await store.revoke(hashToken(cookie), accessToken ? hashToken(accessToken) : undefined);
+      for (const token of new Set(presented)) {
+        await store.revoke(hashToken(token), accessToken ? hashToken(accessToken) : undefined);
       }
     }
     return new Response(null, { status: 204, headers: responseHeaders });
@@ -207,6 +238,21 @@ export async function handleAuthRequest(
       status: 200,
       headers: responseHeaders,
     });
+  }
+
+  if (method === "DELETE" && subpath === "/account") {
+    // Re-authenticate: a stolen access token alone must not be able to destroy the account.
+    const user = await authenticateRequest(request, store);
+    await limit(user.email);
+    const password = recordBody?.password;
+    if (!validPassword(password)) throw new HttpError(401, "Invalid password");
+    const account = await store.findAccount(user.email);
+    const valid = await verifyPassword(password, account?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!account || account.id !== user.id || !valid) throw new HttpError(401, "Invalid password");
+    // One DELETE; sessions, refresh history, API tokens and finance data cascade.
+    if (!await store.deleteAccount(user.id)) throw new HttpError(401, "Authentication required");
+    clearRefreshCookie();
+    return new Response(null, { status: 204, headers: responseHeaders });
   }
 
   if (subpath === "/api-keys") {

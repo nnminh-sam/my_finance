@@ -1,0 +1,188 @@
+/* Quick entry (direction A): shared by the phone dock and the web dialog. Uses the app's theme tokens. */
+
+.qe-dock, .qe-dialog {
+  --qe-card2: color-mix(in srgb, var(--text-main) 7%, var(--bg-card));
+  --qe-soft: color-mix(in srgb, var(--primary) 14%, transparent);
+  --qe-income: var(--success);
+  color: var(--text-main);
+  font-size: 14px;
+  line-height: 1.35;
+  -webkit-tap-highlight-color: transparent;
+}
+.qe-dock button, .qe-dialog button { min-width: 0; }
+.qe-dock :focus-visible, .qe-dialog :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.qe-dock input, .qe-dock select, .qe-dialog input, .qe-dialog select {
+  width: 100%; min-height: 40px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border-color);
+  background: var(--bg-card); color: var(--text-main); font: inherit; outline: none; color-scheme: inherit;
+}
+.qe-dock input:focus, .qe-dialog input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--qe-soft); }
+
+.qe-stack { display: flex; flex-direction: column; gap: 8px; }
+.qe-field { display: flex; flex-direction: column; gap: 4px; }
+.qe-field > span, .qe-sec > h3 { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin: 0; }
+.qe-hint { color: var(--text-muted); font-size: 0.8rem; }
+.qe-link { color: var(--primary); font-weight: 600; min-height: 32px; padding: 0 4px; }
+.qe-error { margin: 0; padding: 7px 10px; border-radius: 10px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); font-size: 0.82rem; }
+
+/* segmented controls */
+.qe-seg { display: flex; background: var(--qe-card2); border-radius: 10px; padding: 2px; }
+.qe-seg button { flex: 1; min-height: 32px; padding: 4px 10px; border-radius: 8px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.qe-seg button.is-on { background: var(--bg-card); color: var(--text-main); box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.qe-seg.is-small button { min-height: 28px; padding: 3px 8px; font-size: 0.78rem; }
+.qe-mode button.is-on[data-mode="spending"] { background: var(--primary); color: #fff; }
+.qe-mode button.is-on[data-mode="income"] { background: var(--qe-income); color: #fff; }
+
+/* amount */
+.qe-amount { text-align: center; font-size: 1.95rem; font-weight: 750; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.qe-amount small { font-size: 0.55em; color: var(--text-muted); font-weight: 600; }
+.qe-amount.is-zero { color: var(--text-muted); }
+.qe-amount.is-income { color: var(--qe-income); }
+.qe-amount.is-shake { animation: qe-shake .12s linear 3; }
+@keyframes qe-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* chips */
+.qe-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+.qe-chips::-webkit-scrollbar { display: none; }
+.qe-chips.is-wrap { flex-wrap: wrap; overflow: visible; }
+.qe-chip { flex: none; min-height: 34px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border-radius: 11px; border: 1.5px solid var(--border-color); background: var(--bg-card); font-weight: 500; font-size: 0.86rem; }
+.qe-chip svg { color: var(--c, var(--primary)); flex: none; }
+.qe-chip.is-on { border-color: var(--c, var(--primary)); background: color-mix(in srgb, var(--c, var(--primary)) 15%, var(--bg-card)); }
+.qe-dchips { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+.qe-dchips::-webkit-scrollbar { display: none; }
+.qe-dchip { flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: 999px; background: var(--qe-card2); font-size: 0.78rem; font-weight: 600; white-space: nowrap; max-width: 190px; }
+.qe-dchip svg { color: var(--text-muted); flex: none; }
+.qe-dchip.is-set { background: var(--qe-soft); color: var(--primary); }
+.qe-dchip.is-set svg { color: var(--primary); }
+.qe-dchip.is-open { box-shadow: inset 0 0 0 2px var(--primary); }
+.qe-recent { display: flex; flex-wrap: wrap; gap: 5px; }
+.qe-recent button { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border-color); background: var(--bg-card); font-size: 0.8rem; }
+.qe-recent button.is-on { border-color: var(--primary); color: var(--primary); }
+
+/* keypad: ⌫ then + Next (one key each) on the right, ✓ spanning the last two rows. */
+.qe-keys {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 42px);
+  grid-template-areas:
+    "k1 k2 k3 del"
+    "k4 k5 k6 next"
+    "k7 k8 k9 ok"
+    "k000 k0 k0 ok";
+  gap: 5px;
+}
+.qe-keys button { border-radius: 10px; background: var(--qe-card2); font-size: 1.2rem; font-weight: 500; display: grid; place-items: center; user-select: none; }
+.qe-keys button:active { background: var(--border-color); }
+.qe-keys .qe-key-ok { background: var(--primary); color: #fff; font-size: 0.95rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
+.qe-keys .qe-key-ok span { font-size: 1.15rem; }
+.qe-keys .qe-key-ok.is-income { background: var(--qe-income); }
+.qe-keys .qe-key-next { background: var(--qe-soft); color: var(--primary); font-size: 0.92rem; font-weight: 700; }
+.qe-keys button:disabled { opacity: .55; }
+
+/* small controls */
+.qe-trow { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 36px; width: 100%; text-align: left; font-weight: 600; }
+.qe-switch { width: 40px; height: 24px; border-radius: 12px; background: var(--border-color); position: relative; flex: none; transition: background-color .2s; }
+.qe-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: left .2s; }
+.qe-switch.is-on { background: var(--success); }
+.qe-switch.is-on::after { left: 18px; }
+.qe-stepper { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+.qe-stepper button { width: 32px; height: 32px; border-radius: 9px; background: var(--qe-card2); font-weight: 700; font-size: 1rem; }
+.qe-stepper b { min-width: 26px; text-align: center; }
+.qe-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.qe-days button { min-height: 32px; border-radius: 9px; background: var(--qe-card2); font-weight: 600; font-size: 0.78rem; }
+.qe-days button.is-on { background: var(--primary); color: #fff; }
+
+/* queue */
+.qe-queue { background: var(--qe-card2); border-radius: 12px; overflow: hidden; }
+.qe-queue-h { display: flex; justify-content: space-between; padding: 7px 10px; font-weight: 700; font-size: 0.8rem; }
+.qe-qrow { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; border-top: 1px solid var(--border-color); font-size: 0.82rem; }
+.qe-ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; color: var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); }
+.qe-rt { flex: 1; min-width: 0; }
+.qe-rt b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qe-rt small { color: var(--text-muted); font-size: 0.72rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qe-amt { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.qe-amt.is-income { color: var(--qe-income); }
+.qe-x { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--text-muted); flex: none; }
+.qe-x:hover { background: var(--bg-card-hover); color: var(--text-main); }
+
+/* ---------- phone dock ---------- */
+.qe-dock { flex: none; background: var(--bg-card); border-top: 1px solid var(--border-color); padding: 6px 10px 8px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 -8px 24px rgba(0, 0, 0, .06); }
+.qe-dock.is-pulse { animation: qe-pulse .6s ease-out; }
+@keyframes qe-pulse { 30% { box-shadow: inset 0 0 0 3px var(--primary); } }
+.qe-dock-h { display: flex; align-items: center; gap: 8px; }
+.qe-dock-h .qe-seg { flex: none; }
+.qe-dock-to { flex: 1; min-width: 0; color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qe-fx { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--qe-card2); flex: none; }
+.qe-fx.is-danger { color: var(--danger); }
+.qe-tray { display: flex; align-items: center; justify-content: space-between; gap: 6px; background: var(--qe-soft); color: var(--primary); border-radius: 10px; padding: 6px 10px; font-weight: 700; font-size: 0.8rem; width: 100%; }
+.qe-panel { background: var(--qe-card2); border-radius: 12px; padding: 10px; max-height: 280px; overflow: auto; overscroll-behavior: contain; }
+.qe-panel .qe-chip, .qe-panel .qe-recent button, .qe-panel .qe-stepper button, .qe-panel .qe-days button:not(.is-on) { background: var(--bg-card); }
+.qe-panel .qe-seg { background: var(--bg-card); }
+.qe-panel .qe-seg button.is-on { background: var(--primary); color: #fff; }
+.qe-panel .qe-queue { background: var(--bg-card); }
+.qe-panel-h { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 8px; }
+
+/* ---------- web dialog ---------- */
+.qe-layer { position: fixed; inset: 0; z-index: 900; background: rgba(9, 9, 11, .5); display: grid; place-items: center; padding: 20px; animation: qe-fade .15s; }
+@keyframes qe-fade { from { opacity: 0; } }
+.qe-dialog { width: min(880px, 100%); max-height: min(760px, 100%); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, .3); display: flex; flex-direction: column; overflow: hidden; outline: none; animation: qe-pop .18s ease-out; }
+@keyframes qe-pop { from { transform: translateY(8px) scale(.985); opacity: 0; } }
+.qe-d-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border-color); }
+.qe-d-head h2 { margin: 0; font-size: 1.1rem; flex: 1; }
+.qe-d-head .qe-seg { width: 240px; }
+.qe-d-body { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: 290px minmax(0, 1fr); }
+.qe-d-left { padding: 16px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px; background: color-mix(in srgb, var(--qe-card2) 45%, var(--bg-card)); }
+.qe-d-left .qe-keys { grid-template-rows: repeat(4, 46px); }
+.qe-d-right { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.qe-sec { display: flex; flex-direction: column; gap: 6px; }
+.qe-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.qe-box { border: 1px solid var(--border-color); border-radius: 12px; padding: 8px 12px 10px; }
+.qe-search { position: relative; display: block; }
+.qe-search svg { position: absolute; left: 10px; top: 12px; color: var(--text-muted); }
+.qe-search input { padding-left: 32px; }
+.qe-cgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.qe-cgrid .qe-chip { justify-content: flex-start; min-height: 38px; overflow: hidden; }
+.qe-cgrid .qe-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qe-kbd { margin: 0; font-size: 0.72rem; color: var(--text-muted); line-height: 1.8; }
+.qe-kbd kbd { font: inherit; font-weight: 600; color: var(--text-main); border: 1px solid var(--border-color); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; background: var(--bg-card); }
+.qe-d-foot { border-top: 1px solid var(--border-color); padding: 10px 18px 12px; display: flex; flex-direction: column; gap: 8px; }
+.qe-d-actions { display: flex; align-items: center; gap: 8px; }
+.qe-d-queue { max-height: 168px; overflow: auto; border-radius: 12px; }
+.qe-sp { flex: 1; }
+.qe-btn { min-height: 40px; padding: 0 16px; border-radius: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.qe-btn.is-primary { background: var(--primary); color: #fff; }
+.qe-btn.is-income { background: var(--qe-income); color: #fff; }
+.qe-btn.is-ghost { background: var(--qe-soft); color: var(--primary); }
+.qe-btn.is-plain { border: 1px solid var(--border-color); background: var(--bg-card); }
+.qe-btn.is-danger { color: var(--danger); }
+.qe-btn:disabled { opacity: .5; cursor: default; }
+.qe-layer .m-alert-layer { position: fixed; }
+
+/* The dialog on a phone (e.g. opened from the Day page): one column, sheet from the bottom. */
+@media (max-width: 768px) {
+  .qe-layer { padding: 0; place-items: end stretch; }
+  .qe-dialog { width: 100%; max-height: 94dvh; border-radius: 20px 20px 0 0; border-bottom: 0; }
+  .qe-d-head { padding: 10px 14px; flex-wrap: wrap; }
+  .qe-d-head .qe-seg { order: 3; width: 100%; }
+  .qe-d-body { grid-template-columns: 1fr; }
+  .qe-d-left { border-right: 0; border-bottom: 1px solid var(--border-color); padding: 12px; }
+  .qe-d-left .qe-keys { grid-template-rows: repeat(4, 42px); }
+  .qe-kbd { display: none; }
+  .qe-d-right { padding: 12px 14px; }
+  .qe-cgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .qe-row2 { grid-template-columns: 1fr; }
+  .qe-d-foot { padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .qe-d-actions { flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qe-dock.is-pulse, .qe-amount.is-shake, .qe-layer, .qe-dialog { animation: none; }
+}
+
+/* Plans: the Plan tab, sure/estimate choice and the "recorded now / planned" status line. */
+.qe-mode button.is-on[data-mode="plan"] { background: var(--primary); color: #fff; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .5); }
+.qe-seg.qe-sure button { display: flex; flex-direction: column; align-items: center; line-height: 1.2; padding: 4px 8px; white-space: normal; min-height: 38px; }
+.qe-seg.qe-sure button small { font-weight: 500; font-size: 0.7rem; color: var(--text-muted); }
+.qe-status { margin: 0; padding: 8px 10px; border-radius: 10px; font-size: 0.82rem; line-height: 1.4; background: var(--qe-card2); color: var(--text-muted); }
+.qe-status.is-plan { background: var(--qe-soft); color: var(--text-main); }
+.qe-status.is-warn { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--text-main); }
+.qe-d-head .qe-seg.qe-mode { width: 300px; }

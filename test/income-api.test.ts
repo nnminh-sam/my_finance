@@ -228,3 +228,28 @@ for (const [name, operation] of operations) {
     });
   }
 }
+
+test('income pay schedule fields are sent and returned unchanged, old payloads gain no keys', async () => {
+  const twice: IncomeInput = { source: 'Salary', name: '', amount: 10, frequency: 'semimonthly', startDate: '2026-01-01', endDate: null, semimonthlyDays: [15, 31], weekendShift: true };
+  const biweekly: IncomeInput = { ...input, interval: 2 };
+  const { api, calls } = scriptedApi([
+    response({ income: { id: 'a', ...twice } }, 201),
+    response({ income: { id: 'b', ...biweekly } }),
+    response({ income: { id: 'c', ...input } }, 201),
+  ]);
+  assert.deepEqual(await api.createIncome(twice), { id: 'a', ...twice });
+  assert.deepEqual(await api.updateIncome('b', biweekly), { id: 'b', ...biweekly });
+  assert.deepEqual(await api.createIncome(input), { id: 'c', ...input });
+  assertJsonRequest(calls[0], '/api/v1/finance/incomes', 'POST', twice);
+  assertJsonRequest(calls[1], '/api/v1/finance/incomes/b', 'PUT', biweekly);
+  assertJsonRequest(calls[2], '/api/v1/finance/incomes', 'POST', input);
+});
+
+test('getPlanSummary asks for the budget period of a date, or of today', async () => {
+  const summary = { period: { start: '2026-11-25', end: '2026-12-24', nextStart: '2026-12-25', mode: 'paycheck' }, today: '2026-12-10', payments: [], income: 0, spent: 0, committed: 0, tentative: 0, left: 0, occurrences: [] };
+  const { api, calls } = scriptedApi([response({ summary }), response({ summary })]);
+  assert.deepEqual(await api.getPlanSummary('2026-12-10'), summary);
+  assert.deepEqual(await api.getPlanSummary(), summary);
+  assert.deepEqual(calls.map(call => call.path), ['/api/v1/finance/plans/summary?date=2026-12-10', '/api/v1/finance/plans/summary']);
+  assert.equal(calls[0].init, undefined);
+});

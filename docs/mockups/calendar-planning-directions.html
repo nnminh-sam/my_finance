@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendar planning directions</title>
+<style>
+:root {
+  --bg: #f4f4f5; --card: #ffffff; --card2: #eef0f3; --hover: #f1f5f9; --text: #0f172a; --muted: #64748b; --border: #e2e8f0;
+  --primary: #3b82f6; --primary-soft: rgba(59,130,246,.12); --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+  --dim: rgba(15,23,42,.38); --frame: #1f2937; --shadow: 0 18px 50px rgba(15,23,42,.18); --page: #e9ebef;
+  --plan: #3b82f6; --plan-soft: rgba(59,130,246,.08);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #09090b; --card: #18181b; --card2: #232327; --hover: #27272a; --text: #f4f4f5; --muted: #a1a1aa; --border: #3f3f46;
+  --primary-soft: rgba(59,130,246,.2); --dim: rgba(0,0,0,.55); --frame: #000; --page: #050506; --shadow: 0 18px 50px rgba(0,0,0,.5);
+  --plan: #60a5fa; --plan-soft: rgba(96,165,250,.1);
+} }
+:root[data-theme="dark"] {
+  --bg: #09090b; --card: #18181b; --card2: #232327; --hover: #27272a; --text: #f4f4f5; --muted: #a1a1aa; --border: #3f3f46;
+  --primary-soft: rgba(59,130,246,.2); --dim: rgba(0,0,0,.55); --frame: #000; --page: #050506; --shadow: 0 18px 50px rgba(0,0,0,.5);
+  --plan: #60a5fa; --plan-soft: rgba(96,165,250,.1);
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page); color: var(--text); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+.wrap { max-width: 1440px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 20px 8px; }
+.eyebrow { color: var(--primary); font-weight: 700; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+h1.page { font-size: 34px; margin: 6px 0 8px; letter-spacing: -.02em; line-height: 1.15; }
+.lede { max-width: 920px; color: var(--muted); margin: 0 0 6px; }
+.controls { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+.controls .wrap { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; }
+.jump { display: flex; gap: 6px; flex-wrap: wrap; }
+.jump a { text-decoration: none; color: var(--text); background: var(--card); border: 1px solid var(--border); padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.ctl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-left: auto; }
+.segc { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 2px; }
+.segc button { padding: 4px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.segc button.on { background: var(--primary); color: #fff; }
+.block { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 20px 22px; margin: 20px 0; }
+.block h2 { margin: 0 0 6px; font-size: 22px; }
+.feat { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 12px; }
+.feat div { background: var(--card2); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.feat b { display: block; margin-bottom: 2px; }
+
+.dir { margin: 28px 0 44px; }
+.dir-head h2 { margin: 0; font-size: 26px; letter-spacing: -.01em; }
+.letter { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 800; margin-right: 10px; font-size: 18px; vertical-align: 3px; }
+.pitch { max-width: 980px; margin: 8px 0 14px; }
+.stages { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 1100px) { .stages { grid-template-columns: 1fr; } .stage-m { justify-self: center; } }
+.stage-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 6px 4px; }
+.notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 14px; }
+.notes div { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+.notes h4 { margin: 0 0 4px; font-size: 14px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 14px; }
+.cmp th, .cmp td { border-top: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+.cmp th { width: 190px; color: var(--muted); font-weight: 600; }
+.cmp thead th { color: var(--text); border-top: 0; }
+.cmp td.win { color: var(--success); font-weight: 600; }
+
+/* ============ devices ============ */
+.inst { position: relative; font-size: 13px; line-height: 1.35; }
+svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.phone { position: relative; width: 360px; height: 760px; border-radius: 46px; border: 10px solid var(--frame); background: var(--bg); overflow: hidden; box-shadow: var(--shadow); }
+.phone .notch { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 96px; height: 26px; background: #000; border-radius: 14px; z-index: 60; }
+.phone .sb { height: 40px; display: flex; justify-content: space-between; align-items: center; padding: 6px 26px 0; font-size: 12px; font-weight: 600; }
+.phone .screen { position: absolute; top: 40px; left: 0; right: 0; bottom: 64px; display: flex; flex-direction: column; overflow: hidden; }
+.tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; display: grid; grid-template-columns: repeat(5, 1fr); align-items: start; padding-top: 8px; background: color-mix(in srgb, var(--card) 92%, transparent); border-top: 1px solid var(--border); z-index: 5; }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; color: var(--muted); }
+.tab.on { color: var(--primary); font-weight: 700; }
+.tab.plus span { width: 44px; height: 44px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; margin-top: -16px; box-shadow: 0 6px 16px rgba(59,130,246,.45), 0 0 0 4px var(--bg); }
+.browser { height: 780px; border-radius: 14px; border: 1px solid var(--border); background: var(--bg); overflow: hidden; box-shadow: var(--shadow); display: flex; flex-direction: column; min-width: 0; }
+.chrome { height: 36px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--card2); border-bottom: 1px solid var(--border); }
+.chrome i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.chrome .url { flex: 1; max-width: 460px; margin-left: 12px; background: var(--card); border-radius: 8px; padding: 3px 12px; font-size: 12px; color: var(--muted); }
+.wscreen { position: relative; flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+
+/* web shell */
+.w-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 18px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--card) 85%, transparent); }
+.w-brand { display: flex; align-items: center; gap: 10px; }
+.w-logo { width: 34px; height: 34px; border-radius: 10px; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 800; }
+.w-brand b { display: block; font-size: 15px; } .w-brand small { color: var(--muted); }
+.w-nav { display: flex; gap: 4px; }
+.w-nav span { padding: 6px 12px; border-radius: 9px; color: var(--muted); font-weight: 600; font-size: 13px; }
+.w-nav span.on { background: var(--card2); color: var(--text); }
+.w-actions { display: flex; gap: 6px; }
+.w-actions span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; }
+.w-actions span.add { background: var(--primary); color: #fff; }
+.w-body { flex: 1; display: flex; min-height: 0; }
+.w-main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 12px 16px 12px; gap: 8px; min-height: 0; }
+.ov { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 10px 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 16px; }
+.ov small { color: var(--muted); display: block; font-size: 11.5px; }
+.ov b { font-size: 19px; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.ov .c2 { text-align: center; } .ov .c3 { text-align: right; }
+.ov .proj { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px dashed color-mix(in srgb, var(--plan) 40%, transparent); padding-top: 6px; font-size: 12px; color: var(--muted); }
+.ov .proj b { font-size: 12px; color: var(--text); }
+.ov .proj b.p { color: var(--plan); }
+.toolbar { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.toolbar h4 { margin: 0; font-size: 15px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); font-size: 12px; font-weight: 600; }
+.pill.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+.seg { display: inline-flex; background: var(--card2); border-radius: 10px; padding: 2px; }
+.seg span { padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.seg span.on { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.seg.plan span.on { background: var(--plan); color: #fff; }
+.wd { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; font-size: 11px; color: var(--muted); font-weight: 600; text-align: center; }
+.wd span { padding: 2px 0; border-radius: 6px; }
+.wd span.target { background: var(--plan-soft); color: var(--plan); outline: 1.5px dashed var(--plan); }
+.grid { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 6px; min-height: 0; }
+.cell { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 5px 6px; display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
+.cell.other { opacity: .45; }
+.cell.past { background: color-mix(in srgb, var(--card) 70%, var(--card2)); }
+.cell.today { border-color: #38bdf8; box-shadow: 0 0 0 1px rgba(56,189,248,.5); }
+.cell .hd { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; font-weight: 700; }
+.cell .hd em { font-style: normal; font-weight: 700; font-size: 10.5px; color: var(--danger); }
+.cell .hd em.p { color: var(--plan); font-style: italic; font-weight: 600; }
+.chip { display: flex; justify-content: space-between; gap: 4px; font-size: 10px; padding: 1px 5px; border-radius: 5px; background: var(--card2); white-space: nowrap; }
+.chip span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.chip.p { background: transparent; border: 1px dashed color-mix(in srgb, var(--plan) 55%, transparent); color: var(--plan); }
+.chip.p.ch { border-style: solid; }
+.chip.skip { background: transparent; color: var(--muted); text-decoration: line-through; border: 1px dashed var(--border); }
+.chip.more { background: transparent; color: var(--muted); padding: 0 5px; }
+.cell.clickable { cursor: pointer; }
+.cell.clickable:hover { border-color: var(--plan); }
+.cell .addhint { position: absolute; right: 5px; bottom: 4px; width: 18px; height: 18px; border-radius: 6px; display: none; place-items: center; background: var(--plan); color: #fff; }
+.cell.clickable:hover .addhint { display: grid; }
+
+/* phone shell bits */
+.m-nav { display: flex; justify-content: space-between; align-items: flex-end; padding: 4px 16px 8px; }
+.m-nav h3 { margin: 0; font-size: 26px; letter-spacing: -.02em; line-height: 1.1; }
+.m-nav small { color: var(--muted); }
+.m-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 12px; }
+.m-grid .w { text-align: center; font-size: 10.5px; color: var(--muted); font-weight: 700; padding-bottom: 2px; border-radius: 6px; }
+.m-grid .w.target { color: var(--plan); background: var(--plan-soft); outline: 1.5px dashed var(--plan); }
+.m-d { height: 46px; border-radius: 11px; background: var(--card); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 4px; gap: 2px; font-weight: 700; font-size: 13px; position: relative; }
+.m-d.other { opacity: .35; } .m-d.today { border-color: #38bdf8; }
+.m-d small { font-size: 9.5px; font-weight: 600; color: var(--danger); }
+.m-d small.p { color: var(--plan); font-style: italic; }
+.m-d .dots { display: flex; gap: 2px; }
+.m-d .dots i { width: 5px; height: 5px; border-radius: 50%; border: 1.3px dashed var(--plan); }
+.m-d.sel { background: var(--plan); border-color: var(--plan); color: #fff; }
+.m-d.sel small { color: rgba(255,255,255,.9); }
+.m-d.sel .dots i { border-color: #fff; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 22px 22px 0 0; border-top: 1px solid var(--border); padding: 8px 16px 14px; box-shadow: 0 -10px 30px rgba(0,0,0,.18); z-index: 30; }
+.sheet .grab { width: 38px; height: 4px; border-radius: 4px; background: var(--border); margin: 0 auto 8px; }
+.sheet h5 { margin: 0 0 2px; font-size: 16px; }
+.sheet .sub { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.amt-big { font-size: 30px; font-weight: 800; letter-spacing: -.02em; text-align: center; margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chips span { padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.chips span.on { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+.chips.rail { flex-wrap: nowrap; overflow: hidden; padding: 0 12px 8px; }
+.chips span.tpl { border-style: dashed; border-color: color-mix(in srgb, var(--plan) 55%, transparent); color: var(--plan); }
+.chips span.tpl.armed { background: var(--plan); color: #fff; border-style: solid; box-shadow: 0 4px 12px rgba(59,130,246,.35); }
+.btn { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; border-radius: 12px; font-weight: 700; background: var(--primary); color: #fff; width: 100%; margin-top: 10px; }
+.btn.ghost { background: var(--card2); color: var(--text); }
+.lbl { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 8px 0 4px; }
+.hint { color: var(--muted); font-size: 11.5px; text-align: center; padding: 6px 12px; }
+.list { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.row { display: flex; align-items: center; gap: 10px; padding: 7px 12px; min-height: 46px; }
+.row + .row { border-top: 1px solid var(--border); }
+.row .rt { flex: 1; min-width: 0; } .row .rt b { display: block; font-size: 13px; } .row .rt small { color: var(--muted); font-size: 11px; }
+.row .a { font-weight: 700; font-variant-numeric: tabular-nums; }
+.row.p .a { color: var(--plan); font-style: italic; }
+.row.p .ic { border: 1.5px dashed var(--c); }
+.ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: none; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+
+/* A: plan mode */
+.cell.sel { background: var(--plan-soft); border-color: var(--plan); box-shadow: inset 0 0 0 1px var(--plan); }
+.actionbar { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: var(--text); color: var(--bg); padding: 8px 8px 8px 16px; border-radius: 14px; box-shadow: var(--shadow); font-size: 13px; white-space: nowrap; z-index: 10; }
+.actionbar b { font-weight: 700; }
+.actionbar .ab { background: var(--primary); color: #fff; padding: 6px 12px; border-radius: 9px; font-weight: 700; }
+.actionbar .ab.g { background: transparent; color: var(--bg); opacity: .75; padding: 6px 8px; }
+.planmode .cell.past { opacity: .5; }
+
+/* B: shelf */
+.shelf { width: 230px; flex: none; border-left: 1px solid var(--border); background: var(--card); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.shelf h5 { margin: 0; font-size: 14px; }
+.shelf .tplcard { border: 1.5px dashed color-mix(in srgb, var(--plan) 50%, transparent); border-radius: 12px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; cursor: grab; background: var(--card); }
+.shelf .tplcard.drag { opacity: .4; }
+.shelf .tplcard b { display: block; font-size: 13px; } .shelf .tplcard small { color: var(--muted); font-size: 11px; }
+.shelf .tplcard .a { margin-left: auto; color: var(--plan); font-weight: 700; font-size: 12px; }
+.shelf .meter { margin-top: auto; background: var(--card2); border-radius: 12px; padding: 10px; font-size: 12px; }
+.shelf .bar { height: 8px; border-radius: 6px; background: var(--border); overflow: hidden; display: flex; margin: 6px 0 4px; }
+.shelf .bar i { display: block; height: 100%; }
+.dragghost { position: absolute; z-index: 15; background: var(--plan); color: #fff; padding: 6px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; box-shadow: 0 10px 24px rgba(59,130,246,.45); transform: rotate(-3deg); pointer-events: none; }
+.droptip { position: absolute; z-index: 15; background: var(--text); color: var(--bg); font-size: 11.5px; padding: 4px 8px; border-radius: 8px; pointer-events: none; }
+
+/* C: popover */
+.pop { position: absolute; z-index: 20; width: 300px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 14px; }
+.pop::before { content: ""; position: absolute; top: -7px; left: var(--arrow, 30px); width: 12px; height: 12px; background: var(--card); border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
+.pop h5 { margin: 0; font-size: 14px; display: flex; justify-content: space-between; }
+.pop h5 small { color: var(--muted); font-weight: 500; }
+.pop .amtrow { display: flex; align-items: baseline; gap: 6px; border: 1px solid var(--primary); border-radius: 10px; padding: 6px 10px; margin: 8px 0 6px; box-shadow: 0 0 0 3px var(--primary-soft); }
+.pop .amtrow b { font-size: 22px; font-variant-numeric: tabular-nums; } .pop .amtrow span { color: var(--muted); }
+.pop .chips span { font-size: 11.5px; padding: 4px 9px; }
+.pop .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+.pop .foot { gap: 10px; }
+.pop .foot .btn { width: auto; min-height: 34px; padding: 0 14px; margin: 0; white-space: nowrap; flex: none; }
+.pop.wide { width: 440px; }
+.tokens { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; align-items: center; }
+.tokens span { font-size: 11.5px; padding: 3px 8px; border-radius: 8px; background: var(--card2); color: var(--text); cursor: pointer; border: 1px solid transparent; }
+.tokens span:hover { border-color: var(--primary); }
+.tokens span.moretoggle, .moretoggle { background: none; color: var(--primary); font-weight: 700; padding: 3px 4px; font-size: 12px; cursor: pointer; }
+.chips span[data-rep] { cursor: pointer; }
+.frm .f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.frm .fake { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); background: var(--card2); border-radius: 9px; padding: 6px 10px; font-size: 12.5px; min-height: 32px; }
+.frm .fake span { color: var(--muted); font-size: 11px; }
+.frm .fake.dim { color: var(--muted); }
+.frm .lbl i { font-style: normal; text-transform: none; font-weight: 500; letter-spacing: 0; }
+.seg5 { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--card2); border-radius: 9px; padding: 2px; }
+.seg5 span { text-align: center; font-size: 11.5px; padding: 5px 0; border-radius: 7px; color: var(--muted); font-weight: 600; }
+.seg5 span.on { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.days span { text-align: center; font-size: 11.5px; font-weight: 700; padding: 5px 0; border-radius: 8px; border: 1px solid var(--border); color: var(--muted); }
+.days span.on { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+.sumbox { margin-top: 8px; font-size: 11.5px; padding: 7px 10px; border-radius: 9px; background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--text); }
+.sheet.tall { top: 6px; overflow: auto; scrollbar-width: none; }
+.sheet.tall .amt-big { font-size: 24px; margin: 0 0 2px; }
+.cell.anchor { border-color: var(--plan); box-shadow: 0 0 0 2px var(--plan-soft), inset 0 0 0 1px var(--plan); }
+
+/* D: runway */
+.cell .bal { margin-top: auto; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cell .bal small { display: block; font-weight: 500; color: var(--muted); font-size: 9.5px; }
+.cell .stack { height: 4px; border-radius: 3px; display: flex; overflow: hidden; background: var(--card2); }
+.cell .stack i { display: block; height: 100%; }
+.cell.low .bal { color: var(--warning); }
+.cell.neg .bal { color: var(--danger); }
+.runway { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 8px 12px; display: flex; gap: 14px; align-items: center; }
+.runway svg { flex: 1; height: 44px; }
+.runway .k small { display: block; color: var(--muted); font-size: 11px; } .runway .k b { font-size: 16px; }
+.drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 300px; background: var(--card); border-left: 1px solid var(--border); box-shadow: -14px 0 30px rgba(0,0,0,.12); z-index: 12; padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.drawer h5 { margin: 0; font-size: 16px; display: flex; justify-content: space-between; align-items: center; }
+.drawer .x { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--card2); }
+.drawer .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.drawer .kpis div { background: var(--card2); border-radius: 10px; padding: 6px 8px; font-size: 11.5px; color: var(--muted); }
+.drawer .kpis b { display: block; color: var(--text); font-size: 14px; }
+.occ-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.occ-actions span { font-size: 10.5px; padding: 2px 6px; border-radius: 7px; border: 1px solid var(--border); color: var(--muted); font-weight: 600; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="hero wrap">
+  <div class="eyebrow">MyFinance · planned spendings</div>
+  <h1 class="page">Planning on the calendar: four directions</h1>
+  <p class="lede">Today plans can only be created under Profile. These four directions bring planning onto the calendar itself. Each one is shown on desktop and phone with the same data: November 2026, income 12.000.000 ₫, today is Wed 4 Nov, and you plan a 15k breakfast and a 35k lunch every weekday plus a one-off wedding gift on Sat 21 Nov. Planned items are always <b style="color:var(--plan)">blue, dashed, and prefixed with ~</b> so they never read as money already spent. Click the mockups: they respond.</p>
+</div>
+<div class="controls"><div class="wrap">
+  <nav class="jump"><a href="#rules">Shared rules</a><a href="#a">A · Plan mode</a><a href="#b">B · Plan shelf</a><a href="#c">C · Quick plan</a><a href="#d">D · Runway</a><a href="#compare">Compare</a></nav>
+  <div class="ctl">Theme <div class="segc" id="theme"><button data-t="">Auto</button><button data-t="light">Light</button><button data-t="dark">Dark</button></div></div>
+</div></div>
+
+<main class="wrap">
+  <section class="block" id="rules">
+    <h2>What every direction shares</h2>
+    <p class="muted" style="margin:0">These rules come from the plan model already built. The directions differ only in how you create and adjust plans on the calendar.</p>
+    <div class="feat">
+      <div><b>Real vs planned</b>Real spending stays solid red. Planned is blue, dashed and prefixed with ~. Skipped days are struck through.</div>
+      <div><b>Past days are read-only for plans</b>A plan never back-fills. You can only plan or change today (after now) and later.</div>
+      <div><b>Becomes real by itself</b>When the time passes, a planned item turns into a normal transaction without asking.</div>
+      <div><b>One day vs the series</b>Every planned item offers: skip this day, change this day's amount, or edit the whole plan (all upcoming, or from this date).</div>
+      <div><b>Projection in the overview</b>Still planned · Projected spending · Projected left over, for the month or pay cycle.</div>
+    </div>
+  </section>
+
+  <!-- ===================== A ===================== -->
+  <section class="dir" id="a">
+    <div class="dir-head"><h2><span class="letter">A</span>Plan mode: select days, then add</h2></div>
+    <p class="pitch">The calendar gets an <b>Actual | Plan</b> switch. In Plan mode past days fade, and you click or drag across future days to select them (like selecting cells in a spreadsheet). An action bar offers <b>Add plan to these days</b>. If the selection looks like a pattern (Mon–Fri, every Tuesday), it offers to make it a repeating plan. Try clicking future days.</p>
+    <div class="stages">
+      <div class="stage-m"><div class="stage-label">Phone</div><div class="inst phone" id="a-phone"></div></div>
+      <div><div class="stage-label">Desktop · /calendar</div><div class="inst browser" id="a-web"></div></div>
+    </div>
+    <div class="notes">
+      <div><h4>How it works</h4><ul><li>Plan mode is a lens: the same grid, past dimmed, planned items emphasised.</li><li>The selection detects patterns: 9–13 Nov → “Every weekday from 9 Nov?”</li><li>Phone: tap days to select; the sheet slides up with amount and category.</li></ul></div>
+      <div><h4>Strengths</h4><ul><li>Planning a busy week (trip, Tết) is one gesture.</li><li>Clear separation: you can't confuse planning with logging.</li><li>Works for irregular plans that no repeat rule describes.</li></ul></div>
+      <div><h4>Watch-outs</h4><ul><li>A mode is one more thing to understand, and it's easy to forget you're in it.</li><li>Drag-select needs care on touch (conflicts with scrolling).</li><li>Pattern detection must be predictable or it feels magical in a bad way.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== B ===================== -->
+  <section class="dir" id="b">
+    <div class="dir-head"><h2><span class="letter">B</span>Plan shelf: drag templates onto days</h2></div>
+    <p class="pitch">A side shelf holds your <b>plan templates</b> (Breakfast 15k, Lunch 35k, Coffee 25k). Drag one onto a day for a one-off, or onto a <b>weekday header</b> (“Wed”) to repeat it every week. The shelf's bottom shows this month's planned budget. On the phone the shelf becomes a chip rail: arm a chip, then tap days or a weekday letter.</p>
+    <div class="stages">
+      <div class="stage-m"><div class="stage-label">Phone</div><div class="inst phone" id="b-phone"></div></div>
+      <div><div class="stage-label">Desktop · /calendar (dragging “Lunch” onto Wed)</div><div class="inst browser" id="b-web"></div></div>
+    </div>
+    <div class="notes">
+      <div><h4>How it works</h4><ul><li>Templates are reusable plan shapes: amount, category, time.</li><li>Drop on a day = once. Drop on a weekday header = weekly on that day. Drop on “Mon–Fri” = weekdays.</li><li>The shelf meter shows planned vs income for the month.</li></ul></div>
+      <div><h4>Strengths</h4><ul><li>Very fast once templates exist: building a whole month takes seconds.</li><li>Tactile and fun on desktop.</li><li>Templates double as quick entries later.</li></ul></div>
+      <div><h4>Watch-outs</h4><ul><li>Takes horizontal space from the calendar.</li><li>Drag and drop is weak on touch and for keyboard users; needs the arm-and-tap fallback.</li><li>Introduces a new concept (templates) on top of plans.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== C ===================== -->
+  <section class="dir" id="c">
+    <div class="dir-head"><h2><span class="letter">C</span>Quick plan: click a future day</h2></div>
+    <p class="pitch">No mode, no new panel. Hover a future day to show a <b>+</b>; click it to open a popover anchored to that day with amount, category and <b>smart repeat chips worked out from the clicked date</b>: “Only Thu 12 Nov”, “Every weekday”, “Every Thursday”, “Monthly on the 12th”. Clicking a planned chip opens the same popover in edit mode with skip and change-this-day. Click any future day to move the popover.</p>
+    <p class="pitch"><b>Nothing from the full Add plan form is lost.</b> Every field gets a smart default, shown as a tappable token (🍴 Food · 🕛 12:00 · From … · No end). Tapping a token, <b>More options</b>, or the <b>Custom…</b> repeat chip expands the same popover or sheet into the full form: what, category, how often, weekdays, every N, time, start, end. It is the same component as Profile → Add plan, in a compact and an expanded density. Try it on both mockups.</p>
+    <table class="cmp" style="margin-bottom:14px;background:var(--card);border-radius:12px">
+      <thead><tr><th>Full form field</th><th>Quick default</th><th>Changed by</th></tr></thead>
+      <tbody>
+        <tr><th>What</th><td>Chip you pick (Lunch, Breakfast…)</td><td>Chips, or type in the expanded form</td></tr>
+        <tr><th>Amount</th><td>Typed (keypad on phone)</td><td>Always visible</td></tr>
+        <tr><th>Category</th><td>Remembered per “What” (Lunch → Food)</td><td>🍴 token</td></tr>
+        <tr><th>How often</th><td>From the repeat chip (weekday → Weekdays)</td><td>Repeat chips · Custom…</td></tr>
+        <tr><th>Weekdays / every N</th><td>From the clicked date</td><td>Custom… / More options</td></tr>
+        <tr><th>At (time)</th><td>Remembered per “What” (Lunch → 12:00)</td><td>🕛 token</td></tr>
+        <tr><th>Starts</th><td>The clicked day</td><td>“From …” token</td></tr>
+        <tr><th>Ends</th><td>No end</td><td>“No end” token</td></tr>
+      </tbody>
+    </table>
+    <div class="stages">
+      <div class="stage-m"><div class="stage-label">Phone</div><div class="inst phone" id="c-phone"></div></div>
+      <div><div class="stage-label">Desktop · /calendar</div><div class="inst browser" id="c-web"></div></div>
+    </div>
+    <div class="notes">
+      <div><h4>How it works</h4><ul><li>Past days keep today's behaviour (open the day). Future days open the quick plan.</li><li>Repeat chips are derived from the date, so the most likely choice is one tap.</li><li>Phone: tap a future day → bottom sheet with the keypad you already use for quick entry.</li></ul></div>
+      <div><h4>Strengths</h4><ul><li>Smallest learning curve: it's just “click the day you're planning for”.</li><li>Reuses the existing quick-entry keypad and category chips.</li><li>Works the same on touch, mouse and keyboard.</li></ul></div>
+      <div><h4>Watch-outs</h4><ul><li>Future-day click changes meaning (plan instead of open day); the day view needs another route (e.g. the date number).</li><li>One plan at a time; planning a whole week takes several clicks.</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== D ===================== -->
+  <section class="dir" id="d">
+    <div class="dir-head"><h2><span class="letter">D</span>Runway: the calendar answers “will I make it?”</h2></div>
+    <p class="pitch">Forecast first. Every day shows the <b>money left at the end of that day</b> (income − real − planned so far), with a thin bar of real vs planned. A runway chart above the grid shows the month's curve. Clicking a day opens a <b>day drawer</b>: its planned items with skip / change / edit series, and <b>+ Plan</b>. Days turn amber, then red, as the runway gets short. Click a day to open its drawer.</p>
+    <div class="stages">
+      <div class="stage-m"><div class="stage-label">Phone</div><div class="inst phone" id="d-phone"></div></div>
+      <div><div class="stage-label">Desktop · /calendar</div><div class="inst browser" id="d-web"></div></div>
+    </div>
+    <div class="notes">
+      <div><h4>How it works</h4><ul><li>Balance per day uses the same projection as the overview card.</li><li>The drawer replaces the full-page day view for quick adjustments.</li><li>Creating plans happens in the drawer (or with C's popover).</li></ul></div>
+      <div><h4>Strengths</h4><ul><li>Shows the payoff of planning: you see the end-of-month result change as you plan.</li><li>Warns early (“runs out on 27 Nov”).</li><li>Combines well with C for creation.</li></ul></div>
+      <div><h4>Watch-outs</h4><ul><li>Dense: balances plus chips in small cells get busy; needs a compact mode.</li><li>The balance depends on income timing (payday mid-month), which can confuse.</li><li>On its own it doesn't make creating plans faster.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="block" id="compare">
+    <h2>Compare</h2>
+    <table class="cmp">
+      <thead><tr><th></th><th>A · Plan mode</th><th>B · Plan shelf</th><th>C · Quick plan</th><th>D · Runway</th></tr></thead>
+      <tbody>
+        <tr><th>Plan one day</th><td>Select 1 day + bar</td><td>Drag 1 template</td><td class="win">Click day → Add</td><td>Click day → drawer → + Plan</td></tr>
+        <tr><th>Plan every weekday</th><td>Drag-select a week → “repeat?”</td><td class="win">Drop on “Mon–Fri”</td><td class="win">Click day → “Every weekday”</td><td>Via drawer form</td></tr>
+        <tr><th>Irregular days (trip)</th><td class="win">Select the days</td><td>Drop several times</td><td>Several popovers</td><td>Several drawers</td></tr>
+        <tr><th>Skip / change one day</th><td>Click chip</td><td>Click chip</td><td>Click chip → popover</td><td class="win">Drawer lists everything</td></tr>
+        <tr><th>Shows the outcome</th><td>Overview card</td><td>Shelf meter</td><td>Overview card</td><td class="win">Every day + runway chart</td></tr>
+        <tr><th>Phone fit</th><td>OK (tap-select)</td><td>Weak (arm-and-tap)</td><td class="win">Great (sheet + keypad)</td><td>Good (chart + list)</td></tr>
+        <tr><th>New concepts</th><td>A mode</td><td>Templates</td><td class="win">None</td><td>Daily balance</td></tr>
+        <tr><th>Build effort</th><td>Medium-high</td><td>High</td><td class="win">Low-medium</td><td>Medium</td></tr>
+      </tbody>
+    </table>
+    <p style="margin:12px 0 0"><b>Recommendation:</b> ship <b>C</b> first. It adds planning where people already look, without a new concept, and reuses the quick-entry keypad. Then layer <b>D</b>'s runway as an optional “Forecast” toggle on the calendar, since that's where planning pays off. A's multi-day select is a good later addition for trips and holidays.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  // ---------- data ----------
+  const TODAY = '2026-11-04';
+  const INCOME = 12000000;
+  const C = { food: '#10b981', car: '#3b82f6', bag: '#f59e0b', gift: '#ec4899', cafe: '#8b5cf6' };
+  const actual = {
+    '2026-10-26': [['Taxi về trọ', 110000, 'car']], '2026-10-27': [['Mua gạo', 85000, 'bag']],
+    '2026-10-31': [['Siêu thị', 281000, 'bag']], '2026-11-02': [['Breakfast', 15000, 'food'], ['Lunch', 40000, 'food']],
+    '2026-11-03': [['Breakfast', 15000, 'food'], ['Lunch', 35000, 'food'], ['Grab', 52000, 'car']],
+    '2026-11-04': [['Breakfast', 15000, 'food']],
+  };
+  const iso = d => d.toISOString().slice(0, 10);
+  const day = s => new Date(s + 'T00:00:00Z');
+  const add = (s, n) => { const d = day(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+  const dow = s => day(s).getUTCDay();
+  function planned(s) {
+    if (s < TODAY) return [];
+    const out = [];
+    const wk = dow(s) >= 1 && dow(s) <= 5;
+    if (wk && s > TODAY) out.push({ n: 'Breakfast', a: 15000, c: 'food' });
+    if (wk) {
+      if (s === '2026-11-13') out.push({ n: 'Lunch', a: 35000, c: 'food', skip: true });
+      else if (s === '2026-11-06') out.push({ n: 'Team lunch', a: 50000, c: 'food', changed: true });
+      else out.push({ n: 'Lunch', a: 35000, c: 'food' });
+    }
+    if (s === '2026-11-21') out.push({ n: 'Wedding gift', a: 500000, c: 'gift' });
+    return out;
+  }
+  const live = s => planned(s).filter(p => !p.skip);
+  const sum = xs => xs.reduce((t, x) => t + x, 0);
+  const realTotal = s => sum((actual[s] || []).map(x => x[1]));
+  const planTotal = s => sum(live(s).map(p => p.a));
+  const fmt = n => n.toLocaleString('vi-VN') + ' ₫';
+  const k = n => n >= 1e6 ? (Math.round(n / 1e5) / 10).toString().replace('.', ',') + 'M' : Math.round(n / 1000) + 'k';
+  const START = '2026-10-26';
+  const weeks = Array.from({ length: 6 }, (_, w) => Array.from({ length: 7 }, (_, d) => add(START, w * 7 + d)));
+  const allDays = weeks.flat();
+  const nov = allDays.filter(s => s.startsWith('2026-11'));
+  const spent = sum(nov.map(realTotal));
+  const still = sum(nov.map(planTotal));
+  const balanceAt = {};
+  { let b = INCOME; for (const s of nov) { b -= realTotal(s) + planTotal(s); balanceAt[s] = b; } }
+
+  // ---------- icons ----------
+  const P = {
+    plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    food: '<path d="M4 3v7a3 3 0 0 0 6 0V3M7 3v18M17 3c-2 2-2 6 0 8v10"/>', gift: '<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18M12 8S10 3 7.5 4.5 9 8 12 8Zm0 0s2-5 4.5-3.5S15 8 12 8Z"/>',
+    car: '<path d="M5 17h14M6 17l1.5-6h9L18 17M7 17v2M17 17v2"/>', cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+    week: '<path d="M4 6h16M4 12h16M4 18h10"/>', chart: '<path d="M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-3"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+    skip: '<path d="m5 4 10 8-10 8V4ZM19 5v14"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/>', refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>', moon: '<path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z"/>',
+  };
+  const ic = (n, s = 16) => `<svg class="i" viewBox="0 0 24 24" style="width:${s}px;height:${s}px">${P[n]}</svg>`;
+
+  // ---------- shells ----------
+  const webShell = (inner, url = 'localhost:5173/calendar') => `
+    <div class="chrome"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i><span class="url">${url}</span></div>
+    <div class="wscreen">
+      <div class="w-head">
+        <div class="w-brand"><span class="w-logo">₫</span><div><b>MyFinance</b><small>November 2026</small></div></div>
+        <div class="w-nav"><span class="on">${'Calendar'}</span><span>Week</span><span>Analytics</span><span>Profile</span></div>
+        <div class="w-actions"><span>${ic('refresh')}</span><span class="add">${ic('plus')}</span><span>${ic('moon')}</span></div>
+      </div>
+      <div class="w-body">${inner}</div>
+    </div>`;
+  const overview = () => `
+    <div class="ov">
+      <div><small>Monthly income</small><b style="color:var(--success)">${fmt(INCOME)}</b></div>
+      <div class="c2"><small>Total spending</small><b style="color:var(--danger)">${fmt(spent)}</b></div>
+      <div class="c3"><small>Left over</small><b style="color:var(--primary)">${fmt(INCOME - spent)}</b></div>
+      <div class="proj"><span>Still planned <b class="p">+${k(still)}</b></span><span>Projected spending <b>${k(spent + still)}</b></span><span>Projected left over <b style="color:var(--primary)">${k(INCOME - spent - still)}</b></span></div>
+    </div>`;
+  const phoneShell = (inner, active = 0) => `
+    <div class="notch"></div><div class="sb"><span>9:41</span><span>●●● 100%</span></div>
+    <div class="screen">${inner}</div>
+    <div class="tabbar">
+      <div class="tab ${active === 0 ? 'on' : ''}">${ic('cal', 20)}Month</div><div class="tab">${ic('week', 20)}Week</div>
+      <div class="tab plus"><span>${ic('plus', 22)}</span></div><div class="tab">${ic('chart', 20)}Analytics</div><div class="tab">${ic('user', 20)}Profile</div>
+    </div>`;
+
+  // ---------- cell content ----------
+  function chips(s, max = 3) {
+    const rows = [];
+    for (const [n, a, c] of actual[s] || []) rows.push(`<div class="chip"><span>${n}</span><span>${k(a)}</span></div>`);
+    for (const p of planned(s)) rows.push(p.skip
+      ? `<div class="chip skip"><span>${p.n}</span><span>skip</span></div>`
+      : `<div class="chip p${p.changed ? ' ch' : ''}"><span>${p.n}</span><span>~${k(p.a)}</span></div>`);
+    if (rows.length > max) return rows.slice(0, max - 1).join('') + `<div class="chip more">+${rows.length - max + 1} more</div>`;
+    return rows.join('');
+  }
+  function header(s) {
+    const r = realTotal(s), p = planTotal(s);
+    const d = Number(s.slice(8));
+    const label = d === 1 ? `<span><span style="color:var(--primary);font-size:9.5px">NOV</span> 1</span>` : d;
+    return `<div class="hd"><span>${label}</span>${r ? `<em>${k(r)}</em>` : p ? `<em class="p">~${k(p)}</em>` : ''}</div>`;
+  }
+  const cls = s => [s.startsWith('2026-11') ? '' : 'other', s < TODAY ? 'past' : '', s === TODAY ? 'today' : ''].join(' ');
+  const wdLabels = (target = -1) => `<div class="wd">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((w, i) => `<span class="${i === target ? 'target' : ''}">${w}</span>`).join('')}</div>`;
+
+  // ---------- phone month grid ----------
+  function phoneGrid(opts = {}) {
+    const rows = weeks.slice(0, 6);
+    let h = `<div class="m-grid">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((w, i) => `<span class="w ${i === opts.targetCol ? 'target' : ''}">${w}</span>`).join('')}`;
+    for (const s of rows.flat()) {
+      const r = realTotal(s), p = planTotal(s);
+      const sel = opts.sel && opts.sel.has(s);
+      const dots = live(s).slice(0, 3).map(() => '<i></i>').join('');
+      h += `<div class="m-d ${s.startsWith('2026-11') ? '' : 'other'} ${s === TODAY ? 'today' : ''} ${sel ? 'sel' : ''}" data-d="${s}">${Number(s.slice(8))}${r ? `<small>${k(r)}</small>` : opts.amounts && p ? `<small class="p">~${k(p)}</small>` : `<span class="dots">${dots}</span>`}</div>`;
+    }
+    return h + '</div>';
+  }
+
+  // ================= A =================
+  const aSel = new Set(['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13']);
+  function describeSel() {
+    const ds = [...aSel].sort();
+    if (!ds.length) return { n: 0, text: 'Click future days to select them', pattern: '' };
+    const allWeekdays = ds.every(s => dow(s) >= 1 && dow(s) <= 5);
+    const consecutive = ds.every((s, i) => i === 0 || add(ds[i - 1], 1) === s || (dow(s) === 1 && add(ds[i - 1], 3) === s));
+    const sameDow = ds.every(s => dow(s) === dow(ds[0]));
+    let pattern = '';
+    if (ds.length >= 5 && allWeekdays && consecutive) pattern = 'Every weekday from ' + Number(ds[0].slice(8)) + ' Nov?';
+    else if (ds.length >= 2 && sameDow) pattern = 'Every ' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dow(ds[0])] + '?';
+    return { n: ds.length, text: `<b>${ds.length} day${ds.length > 1 ? 's' : ''}</b> selected`, pattern };
+  }
+  function renderA() {
+    const d = describeSel();
+    let grid = '';
+    for (const s of allDays) {
+      const future = s >= TODAY;
+      grid += `<div class="cell ${cls(s)} ${aSel.has(s) ? 'sel' : ''} ${future ? 'clickable' : ''}" data-a="${s}">${header(s)}${chips(s)}</div>`;
+    }
+    document.getElementById('a-web').innerHTML = webShell(`
+      <div class="w-main planmode">
+        ${overview()}
+        <div class="toolbar"><h4>November 2026</h4><span class="seg plan"><span>Actual</span><span class="on">${'Plan'}</span></span></div>
+        ${wdLabels()}
+        <div class="grid">${grid}</div>
+        <div class="actionbar">${d.text}${d.n ? `<span class="ab">${ic('plus', 14)} Add plan to these days</span>${d.pattern ? `<span class="ab" style="background:transparent;border:1px solid rgba(255,255,255,.35)">${d.pattern}</span>` : ''}<span class="ab g" data-clear>Clear</span>` : ''}</div>
+      </div>`);
+    document.getElementById('a-phone').innerHTML = phoneShell(`
+      <div class="m-nav"><div><small>Plan mode</small><h3>November</h3></div><span class="seg plan"><span>Actual</span><span class="on">Plan</span></span></div>
+      ${phoneGrid({ sel: aSel })}
+      <div class="hint">Tap days to select · long-press and slide to select a range</div>
+      <div class="sheet"><div class="grab"></div>
+        <h5>${d.n || 'No'} day${d.n === 1 ? '' : 's'} selected</h5><div class="sub">${d.pattern ? 'Looks like a pattern: ' + d.pattern : 'Planned items become real when their time passes'}</div>
+        <div class="amt-big">35.000 ₫</div>
+        <div class="chips"><span class="on">🍴 Food</span><span>🚗 Transport</span><span>🛍 Shopping</span><span>🎁 Gift</span></div>
+        <div class="chips" style="margin-top:6px"><span class="on">12:00</span><span>Morning</span><span>Evening</span></div>
+        <button class="btn">${ic('plus')} Plan “Lunch” on ${d.n} day${d.n === 1 ? '' : 's'}</button>
+      </div>`);
+  }
+  document.getElementById('a-web').addEventListener('click', e => {
+    if (e.target.closest('[data-clear]')) { aSel.clear(); renderA(); return; }
+    const c = e.target.closest('[data-a]'); if (!c) return;
+    const s = c.dataset.a; if (s < TODAY) return;
+    aSel.has(s) ? aSel.delete(s) : aSel.add(s); renderA();
+  });
+  document.getElementById('a-phone').addEventListener('click', e => {
+    const c = e.target.closest('[data-d]'); if (!c) return;
+    const s = c.dataset.d; if (s < TODAY) return;
+    aSel.has(s) ? aSel.delete(s) : aSel.add(s); renderA();
+  });
+
+  // ================= B =================
+  let armed = 'Lunch';
+  const templates = [['Breakfast', 15000, 'food', '07:30'], ['Lunch', 35000, 'food', '12:00'], ['Coffee', 25000, 'cafe', '09:30'], ['Fuel', 100000, 'car', '08:00'], ['Wedding gift', 500000, 'gift', '18:00']];
+  function renderB() {
+    let grid = '';
+    for (const s of allDays) grid += `<div class="cell ${cls(s)}">${header(s)}${chips(s)}</div>`;
+    const plannedPct = Math.round(still / INCOME * 100), spentPct = Math.round(spent / INCOME * 100);
+    document.getElementById('b-web').innerHTML = webShell(`
+      <div class="w-main" style="position:relative">
+        ${overview()}
+        <div class="toolbar"><h4>November 2026</h4><span class="muted" style="font-size:12px;color:var(--muted)">Drop on a day = once · on a weekday = every week · on <b>Mon–Fri</b> = weekdays</span></div>
+        ${wdLabels(2)}
+        <div class="grid">${grid}</div>
+        <div class="dragghost" id="b-ghost">${ic('food', 13)} Lunch · 35k</div>
+        <div class="droptip" id="b-tip">Drop: every Wednesday at 12:00</div>
+      </div>
+      <aside class="shelf">
+        <h5>Plan templates</h5>
+        <small style="color:var(--muted);font-size:11.5px;margin-top:-4px">Drag onto the calendar</small>
+        ${templates.map(([n, a, c, t]) => `<div class="tplcard ${n === 'Lunch' ? 'drag' : ''}"><span class="ic" style="--c:${C[c]}">${ic(c === 'cafe' ? 'food' : c, 15)}</span><div><b>${n}</b><small>${t}</small></div><span class="a">${k(a)}</span></div>`).join('')}
+        <div class="tplcard" style="justify-content:center;color:var(--plan);font-weight:700">${ic('plus', 14)} New template</div>
+        <div class="meter"><b>November budget</b>
+          <div class="bar"><i style="width:${spentPct}%;background:var(--danger)"></i><i style="width:${plannedPct}%;background:repeating-linear-gradient(135deg,var(--plan) 0 4px,transparent 4px 7px)"></i></div>
+          <span style="color:var(--muted)">Spent ${k(spent)} · Planned ${k(still)} · Free ${k(INCOME - spent - still)}</span></div>
+      </aside>`);
+    // Pin the drag ghost onto the "Wed" header it is being dropped on.
+    requestAnimationFrame(() => {
+      const target = document.querySelector('#b-web .wd .target');
+      const main = target && target.closest('.w-main');
+      if (!main) return;
+      const m = main.getBoundingClientRect(), r = target.getBoundingClientRect();
+      const ghost = document.getElementById('b-ghost'), tip = document.getElementById('b-tip');
+      ghost.style.left = (r.left - m.left + r.width / 2 - 20) + 'px';
+      ghost.style.top = (r.top - m.top - 22) + 'px';
+      tip.style.left = (r.left - m.left + r.width / 2 - 10) + 'px';
+      tip.style.top = (r.bottom - m.top + 6) + 'px';
+    });
+    document.getElementById('b-phone').innerHTML = phoneShell(`
+      <div class="m-nav"><div><small>November 2026</small><h3>Month</h3></div><small style="color:var(--plan);font-weight:700">~${k(still)} planned</small></div>
+      <div class="chips rail">${templates.slice(0, 4).map(([n, a]) => `<span class="tpl ${n === armed ? 'armed' : ''}" data-t="${n}">${n} ${k(a)}</span>`).join('')}<span>+</span></div>
+      ${phoneGrid({ targetCol: 2 })}
+      <div class="hint" style="margin-top:6px"><b style="color:var(--plan)">${armed} armed.</b> Tap days to place it, or tap a weekday letter to repeat it every week. Tap the chip again to stop.</div>
+      <div style="padding:0 12px"><div class="list">
+        <div class="row p"><span class="ic" style="--c:${C.food}">${ic('food', 15)}</span><div class="rt"><b>${armed}</b><small>Placed on every Wed · 12:00</small></div><span class="a">Undo</span></div>
+      </div></div>`);
+  }
+  document.getElementById('b-phone').addEventListener('click', e => { const t = e.target.closest('[data-t]'); if (t) { armed = t.dataset.t; renderB(); } });
+
+  // ================= C =================
+  let anchor = '2026-11-12';
+  let cMore = false;    // "More options" expanded into the full form
+  let cRepeat = 1;      // index into the date-derived repeat chips; 4 = Custom
+  const DN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const ord = n => n + (n % 10 > 3 || [11, 12, 13].includes(n % 100) || n % 10 === 0 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10]);
+  function cModel() {
+    const d = dow(anchor), dd = Number(anchor.slice(8)), dn = DN[d];
+    const short = dn.slice(0, 3) + ' ' + dd + ' Nov';
+    const weekend = d === 0 || d === 6;
+    // Each chip is just a preset of the full form's fields.
+    const repeats = [
+      { label: `Only ${short}`, freq: 'Once', days: [] },
+      weekend ? { label: 'Every Sat & Sun', freq: 'Weekly', days: [6, 0] } : { label: 'Every weekday', freq: 'Weekdays', days: [] },
+      { label: `Every ${dn}`, freq: 'Weekly', days: [d] },
+      { label: `Monthly on the ${ord(dd)}`, freq: 'Monthly', days: [] },
+      { label: 'Custom…', freq: 'Weekly', days: [1, 3, 5] },
+    ];
+    const r = repeats[Math.min(cRepeat, 4)];
+    const when = r.freq === 'Once' ? 'once on ' + short
+      : r.freq === 'Weekdays' ? 'every weekday'
+      : r.freq === 'Monthly' ? 'monthly on the ' + ord(dd)
+      : 'weekly on ' + r.days.map(x => DN[x].slice(0, 3)).join(', ');
+    const summary = `35.000 ₫ · ${when} at 12:00${r.freq === 'Once' ? '' : ' from ' + short + ', no end'}.`;
+    return { short, repeats, r, summary };
+  }
+  const repeatChips = m => `<div class="chips">${m.repeats.map((x, i) => `<span class="${i === cRepeat ? 'on' : ''}" data-rep="${i}">${x.label}</span>`).join('')}</div>`;
+  const tokens = m => `<div class="tokens"><span data-more title="Change category">🍴 Food</span><span data-more title="Change time">🕛 12:00</span>${m.r.freq === 'Once' ? '' : `<span data-more title="Change start">From ${m.short}</span><span data-more title="Add an end date">No end</span>`}<span class="moretoggle" data-more>More options ▾</span></div>`;
+  function fullForm(m) {
+    const f = m.r.freq;
+    const unit = f === 'Daily' ? 'day' : f === 'Weekly' ? 'week' : 'month';
+    return `<div class="frm">
+      <div class="f2"><div><div class="lbl">What</div><div class="fake">Lunch</div></div>
+        <div><div class="lbl">Category</div><div class="fake">🍴 Food <span>▾</span></div></div></div>
+      <div class="lbl">How often</div>
+      <div class="seg5">${['Once', 'Daily', 'Weekdays', 'Weekly', 'Monthly'].map(x => `<span class="${x === f ? 'on' : ''}">${x}</span>`).join('')}</div>
+      ${f === 'Weekly' ? `<div class="lbl">On</div><div class="days">${[1, 2, 3, 4, 5, 6, 0].map(x => `<span class="${m.r.days.includes(x) ? 'on' : ''}">${DN[x].slice(0, 2)}</span>`).join('')}</div>` : ''}
+      <div class="f2">${['Daily', 'Weekly', 'Monthly'].includes(f) ? `<div><div class="lbl">Every</div><div class="fake">1 <span>${unit}</span></div></div>` : ''}
+        <div><div class="lbl">At</div><div class="fake">12:00 <span>🕛</span></div></div></div>
+      <div class="f2"><div><div class="lbl">${f === 'Once' ? 'On' : 'Starts'}</div><div class="fake">${m.short} 2026</div></div>
+        ${f === 'Once' ? '' : `<div><div class="lbl">Ends <i>optional</i></div><div class="fake dim">No end <span>📅</span></div></div>`}</div>
+      <div class="sumbox">📅 ${m.summary} Each one becomes a real spending once its time passes.</div>
+    </div>`;
+  }
+  function renderC() {
+    const m = cModel();
+    let grid = '';
+    for (const s of allDays) grid += `<div class="cell ${cls(s)} ${s >= TODAY ? 'clickable' : ''} ${s === anchor ? 'anchor' : ''}" data-c="${s}">${header(s)}${chips(s)}${s >= TODAY ? `<span class="addhint">${ic('plus', 12)}</span>` : ''}</div>`;
+    document.getElementById('c-web').innerHTML = webShell(`
+      <div class="w-main" style="position:relative" id="c-main">
+        ${overview()}
+        <div class="toolbar"><h4>November 2026</h4><span style="font-size:12px;color:var(--muted)">Hover a future day and click <b style="color:var(--plan)">+</b> to plan it</span></div>
+        ${wdLabels()}
+        <div class="grid" id="c-grid">${grid}</div>
+        <div class="pop ${cMore ? 'wide' : ''}" id="c-pop">
+          <h5>Plan for ${m.short} <small>${cMore ? '<span class="moretoggle" data-more>Fewer options ▴</span>' : ''} ${ic('x', 14)}</small></h5>
+          <div class="amtrow"><b>35.000</b><span>₫</span><span style="margin-left:auto;font-size:11px">type or use k = ×1000</span></div>
+          ${cMore ? fullForm(m) : `
+            <div class="chips"><span class="on">Lunch</span><span>Breakfast</span><span>Coffee</span><span>Bánh cún Q10</span></div>
+            <div class="lbl">Repeat</div>${repeatChips(m)}${tokens(m)}`}
+          <div class="foot"><span>${cMore ? '' : m.summary}</span><span class="btn">${ic('plus', 14)} Add plan</span></div>
+        </div>
+      </div>`);
+    requestAnimationFrame(() => {
+      const main = document.getElementById('c-main'), cell = main.querySelector(`[data-c="${anchor}"]`), pop = document.getElementById('c-pop');
+      if (!cell) return;
+      const mr = main.getBoundingClientRect(), r = cell.getBoundingClientRect();
+      let left = r.left - mr.left + r.width / 2 - 40;
+      left = Math.max(8, Math.min(left, mr.width - pop.offsetWidth - 8));
+      let top = r.bottom - mr.top + 8;
+      if (top + pop.offsetHeight > mr.height - 4) { top = Math.max(4, r.top - mr.top - pop.offsetHeight - 8); pop.style.setProperty('--arrow', '-999px'); }
+      else pop.style.setProperty('--arrow', Math.max(14, r.left - mr.left + r.width / 2 - left - 6) + 'px');
+      pop.style.left = left + 'px'; pop.style.top = top + 'px';
+    });
+    document.getElementById('c-phone').innerHTML = phoneShell(`
+      <div class="m-nav"><div><small>November 2026</small><h3>Month</h3></div><small style="color:var(--plan);font-weight:700">~${k(still)} planned</small></div>
+      ${phoneGrid({ sel: new Set([anchor]), amounts: true })}
+      <div class="sheet ${cMore ? 'tall' : ''}"><div class="grab"></div>
+        <h5 style="display:flex;justify-content:space-between;align-items:baseline">Plan for ${m.short}${cMore ? '<span class="moretoggle" data-more>Fewer ▴</span>' : ''}</h5>
+        ${cMore ? '' : '<div class="sub">Becomes a real expense when the time passes</div>'}
+        <div class="amt-big">35.000 ₫</div>
+        ${cMore ? fullForm(m) : `
+          <div class="chips"><span class="on">Lunch</span><span>Breakfast</span><span>Coffee</span></div>
+          <div class="lbl">Repeat</div>${repeatChips(m)}${tokens(m)}`}
+        <button class="btn">${ic('plus')} Add plan</button>
+      </div>`);
+  }
+  for (const id of ['c-web', 'c-phone']) document.getElementById(id).addEventListener('click', e => {
+    if (e.target.closest('[data-more]')) { cMore = !cMore; renderC(); return; }
+    const rep = e.target.closest('[data-rep]');
+    if (rep) { cRepeat = Number(rep.dataset.rep); if (cRepeat === 4) cMore = true; renderC(); return; }
+    const c = e.target.closest('[data-c], [data-d]');
+    const s = c && (c.dataset.c || c.dataset.d);
+    if (s && s >= TODAY) { anchor = s; if (cRepeat === 4) cRepeat = 1; renderC(); }
+  });
+
+  // ================= D =================
+  let drawer = '2026-11-06';
+  function sparkline(w = 600, h = 44) {
+    // Scale to the month's own range so the downward runway is visible.
+    const vals = nov.map(s => balanceAt[s]);
+    const hi = INCOME, lo = Math.min(...vals) - (INCOME - Math.min(...vals)) * 0.15;
+    const pts = nov.map((s, i) => [i / (nov.length - 1) * w, 4 + (hi - balanceAt[s]) / (hi - lo) * (h - 8)]);
+    const todayIdx = nov.indexOf(TODAY);
+    const solid = pts.slice(0, todayIdx + 1).map(p => p.join(',')).join(' ');
+    const dashed = pts.slice(todayIdx).map(p => p.join(',')).join(' ');
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${solid}" fill="none" stroke="var(--danger)" stroke-width="2"/><polyline points="${dashed}" fill="none" stroke="var(--plan)" stroke-width="2" stroke-dasharray="5 4"/><circle cx="${pts[todayIdx][0]}" cy="${pts[todayIdx][1]}" r="3.5" fill="#38bdf8"/></svg>`;
+  }
+  function renderD() {
+    let grid = '';
+    for (const s of allDays) {
+      const inNov = s.startsWith('2026-11');
+      const r = realTotal(s), p = planTotal(s), b = balanceAt[s];
+      const tot = Math.max(1, r + p);
+      grid += `<div class="cell ${cls(s)} clickable ${s === drawer ? 'anchor' : ''}" data-dd="${s}">
+        ${header(s)}
+        ${inNov && (r || p) ? `<div class="stack"><i style="width:${r / tot * 100}%;background:var(--danger)"></i><i style="width:${p / tot * 100}%;background:repeating-linear-gradient(135deg,var(--plan) 0 3px,transparent 3px 5px)"></i></div>` : ''}
+        ${inNov ? `<div class="bal">${s < TODAY ? '' : '~'}${k(b)}<small>${s < TODAY ? 'left' : 'left, projected'}</small></div>` : ''}
+      </div>`;
+    }
+    const items = [...(actual[drawer] || []).map(([n, a, c]) => ({ n, a, c, real: true })), ...planned(drawer)];
+    const dn = new Date(drawer + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+    document.getElementById('d-web').innerHTML = webShell(`
+      <div class="w-main" style="position:relative">
+        <div class="runway">
+          <div class="k"><small>Left on 30 Nov</small><b style="color:var(--primary)">~${k(balanceAt['2026-11-30'])}</b></div>
+          ${sparkline()}
+          <div class="k" style="text-align:right"><small>Planned this month</small><b style="color:var(--plan)">~${k(still)}</b></div>
+          <span class="seg"><span>Spending</span><span class="on">Forecast</span></span>
+        </div>
+        ${wdLabels()}
+        <div class="grid">${grid}</div>
+        ${drawer ? `<div class="drawer">
+          <h5>${dn}<span class="x" data-close>${ic('x', 14)}</span></h5>
+          <div class="kpis"><div>Spent<b>${k(realTotal(drawer))}</b></div><div>Planned<b style="color:var(--plan)">~${k(planTotal(drawer))}</b></div><div>Left after today<b>${balanceAt[drawer] !== undefined ? '~' + k(balanceAt[drawer]) : '—'}</b></div><div>Vs usual day<b>${planTotal(drawer) + realTotal(drawer) > 50000 ? '+' + k(planTotal(drawer) + realTotal(drawer) - 50000) : 'normal'}</b></div></div>
+          <div class="lbl">On this day</div>
+          <div class="list">${items.length ? items.map(it => `<div class="row ${it.real ? '' : 'p'}"><span class="ic" style="--c:${C[it.c]}">${ic(it.c, 15)}</span><div class="rt"><b style="${it.skip ? 'text-decoration:line-through;color:var(--muted)' : ''}">${it.n}</b><small>${it.real ? 'Spent' : it.skip ? 'Skipped' : it.changed ? 'Planned · changed for this day' : 'Planned · every weekday'}</small>${it.real ? '' : `<div class="occ-actions" style="margin-top:3px">${it.skip ? '<span>Undo skip</span>' : `<span>Skip</span><span>Change</span>${it.changed ? '<span>Usual</span>' : ''}<span>Edit series</span>`}</div>`}</div><span class="a">${it.real ? '−' : '~'}${k(it.a)}</span></div>`).join('') : '<div class="row"><div class="rt"><small>Nothing yet</small></div></div>'}</div>
+          ${drawer >= TODAY ? `<span class="btn">${ic('plus', 14)} Plan something for this day</span>` : '<span class="btn ghost">Open full day</span>'}
+        </div>` : ''}
+      </div>`);
+    const upcoming = nov.filter(s => s > TODAY && live(s).length).slice(0, 6);
+    document.getElementById('d-phone').innerHTML = phoneShell(`
+      <div class="m-nav"><div><small>Forecast · November</small><h3>~${k(balanceAt['2026-11-30'])} left</h3></div><small style="color:var(--muted)">on 30 Nov</small></div>
+      <div style="padding:0 12px"><div class="runway" style="padding:6px 10px">${sparkline(320, 50)}</div></div>
+      <div class="hint">Red = real so far · dashed blue = projected with plans</div>
+      <div style="padding:0 12px;overflow:hidden;flex:1"><div class="list">
+        ${upcoming.map(s => `<div class="row p"><span class="ic" style="--c:${C.food}">${ic('food', 15)}</span><div class="rt"><b>${new Date(s + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}</b><small>${live(s).map(p => p.n).join(' · ')}</small></div><span style="text-align:right"><span class="a">~${k(planTotal(s))}</span><br><small style="color:var(--muted);font-size:10.5px">${k(balanceAt[s])} left</small></span></div>`).join('')}
+      </div></div>`);
+  }
+  document.getElementById('d-web').addEventListener('click', e => {
+    if (e.target.closest('[data-close]')) { drawer = null; renderD(); return; }
+    const c = e.target.closest('[data-dd]'); if (c) { drawer = c.dataset.dd; renderD(); }
+  });
+
+  // ---------- theme ----------
+  const themeCtl = document.getElementById('theme');
+  const setTheme = t => {
+    if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+    themeCtl.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    try { localStorage.setItem('mock-theme', t); } catch {}
+  };
+  themeCtl.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.t); });
+  let saved = ''; try { saved = localStorage.getItem('mock-theme') || ''; } catch {}
+  setTheme(saved);
+
+  renderA(); renderB(); renderC(); renderD();
+  window.addEventListener('resize', () => { renderB(); renderC(); });
+})();
+</script>
+</body>
+</html>

@@ -8,7 +8,7 @@ import { useFinance } from '../contexts/FinanceContext';
 import { describeIncomeSchedule, getMonthIncome, INCOME_FREQUENCY_LABELS, INCOME_SOURCE_SUGGESTIONS, incomeMonth } from '../lib/income';
 import { createIncomeDraft, describeIncomeDraft, isIncomeDraftDirty, validateIncomeDraft } from '../lib/incomeDraft';
 import type { IncomeDraft } from '../lib/incomeDraft';
-import type { Income, IncomeFrequency } from '../types';
+import type { Income, IncomeScheduleFrequency } from '../types';
 
 export interface IncomeEditorState {
   dirty: boolean;
@@ -169,7 +169,7 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
     }
   };
 
-  const frequencyOptions = Object.entries(INCOME_FREQUENCY_LABELS) as [IncomeFrequency, string][];
+  const frequencyOptions = Object.entries(INCOME_FREQUENCY_LABELS) as [IncomeScheduleFrequency, string][];
   const once = editor?.draft.frequency === 'once';
   const adding = editor?.snapshot.id === undefined;
   const knownSource = editor ? knownSourceFor(editor.draft.source) : undefined;
@@ -180,7 +180,7 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
       <div className="profile-panel-head">
         <div>
           <h2 id={`${id}-heading`}>Income sources</h2>
-          <p id={`${id}-help`}>Salary, freelance work, allowance, gifts and other payments. Each one is paid once or repeats daily, weekly, monthly or yearly; a month’s income is the sum of every payment that falls in it.</p>
+          <p id={`${id}-help`}>Salary, freelance work, allowance, gifts and other payments. Each one is paid once or repeats daily, weekly (every 1, 2 or 4 weeks), twice a month, monthly or yearly; a month’s income is the sum of every payment that falls in it.</p>
         </div>
         <div className="profile-panel-tools">
           {restrictToMonth ? (
@@ -253,6 +253,34 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
                 ))}
               </div>
             </fieldset>
+
+            {editor.draft.frequency === 'weekly' && (
+              <label className="income-form-group">
+                <span className="income-form-label">Paid every</span>
+                <select className="income-input" value={editor.draft.interval ?? 1} onChange={event => change('interval', Number(event.target.value) as 1 | 2 | 4)}>
+                  <option value={1}>Week</option>
+                  <option value={2}>2 weeks</option>
+                  <option value={4}>4 weeks</option>
+                </select>
+              </label>
+            )}
+            {editor.draft.frequency === 'semimonthly' && (
+              <fieldset className="income-form-group">
+                <legend className="income-form-label">Paydays of the month</legend>
+                <div className="income-dates">
+                  <input type="number" className="income-input" min={1} max={31} inputMode="numeric" aria-label="First payday of the month" placeholder="15" value={editor.draft.semimonthlyDay1 ?? ''} onChange={event => change('semimonthlyDay1', event.target.value)} />
+                  <input type="number" className="income-input" min={1} max={31} inputMode="numeric" aria-label="Second payday of the month" placeholder="31" value={editor.draft.semimonthlyDay2 ?? ''} onChange={event => change('semimonthlyDay2', event.target.value)} />
+                </div>
+                <span className="income-optional">Day 31 means the last day of the month.</span>
+              </fieldset>
+            )}
+            {['weekly', 'semimonthly', 'monthly', 'yearly'].includes(editor.draft.frequency) && (
+              <label className="income-form-group">
+                <span className="income-form-label">
+                  <input type="checkbox" checked={editor.draft.weekendShift ?? false} onChange={event => change('weekendShift', event.target.checked)} /> Paid on Friday when the payday is a weekend
+                </span>
+              </label>
+            )}
 
             <div className="income-dates">
               <label className="income-form-group">

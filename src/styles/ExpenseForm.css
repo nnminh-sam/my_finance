@@ -1034,3 +1034,114 @@
   }
 }
 
+
+/* Planned (forecast) spendings: dashed and muted so they never read as money already spent. */
+.day-summary-grid:has(> :nth-child(3)) {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.day-summary-col:nth-child(2):not(:last-child) {
+  padding-right: 16px;
+  border-right: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+}
+
+.day-summary-arrow.is-planned,
+.day-summary-value.is-planned,
+.day-tx-amount.is-planned,
+.day-tx-repeat-badge.is-planned {
+  color: var(--primary);
+}
+
+.day-summary-value.is-planned {
+  opacity: 0.85;
+}
+
+.day-planned-help {
+  margin: -4px 0 0;
+  padding: 0 4px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.day-tx-row.is-planned {
+  cursor: default;
+  background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in srgb, var(--primary) 4%, transparent) 10px 20px);
+}
+
+.day-tx-row.is-planned .day-tx-icon-circle {
+  border: 1.5px dashed currentColor;
+}
+
+.day-tx-row.is-planned .day-tx-title {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.day-tx-row.is-skipped .day-tx-title,
+.day-tx-row.is-skipped .day-tx-amount {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.day-tx-row.is-skipped .day-tx-icon-circle {
+  color: var(--text-muted);
+}
+
+.day-planned-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: transparent;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.day-planned-btn:hover:not(:disabled) {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.day-planned-change {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.day-planned-change input {
+  width: 110px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--primary);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .day-summary-grid:has(> :nth-child(3)) {
+    grid-template-columns: 1fr 1fr;
+  }
+  .day-summary-grid > .day-summary-col:nth-child(3) {
+    grid-column: 1 / -1;
+    padding-top: 12px;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+  }
+  .day-summary-col:nth-child(2):not(:last-child) {
+    padding-right: 0;
+    border-right: none;
+  }
+  .day-tx-row.is-planned {
+    flex-wrap: wrap;
+  }
+  .day-planned-btn {
+    padding: 0 8px;
+  }
+}
