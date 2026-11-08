@@ -192,6 +192,36 @@ discipline you may also consult the `dataviz` skill.
 </figure>
 ```
 
+## Images (screenshots, photos) — embedded, high resolution, zoomable
+
+Every `<img>` and every diagram `<svg>` inside `figure.fig` is clickable: the shell
+opens it in a full-screen viewer (wheel / pinch zoom, drag to pan, `+` `−` `0` fit,
+`1` actual size, ←/→ between figures, Esc to close). Diagrams stay sharp at any
+zoom because they are vectors; raster images are only as sharp as the file you embed.
+
+- **Resolution:** embed the largest original you can get, at least **1200 px wide**
+  (1600–2400 px for UI screenshots). Never downscale for the page: the page shrinks
+  it, the viewer shows the full pixels. `check_doc.py` warns below 1200 px.
+- **Format:** keep the source format (PNG for UI with text, JPEG/WebP for photos).
+  A whole doc should stay under ~15 MB.
+- **How:** write a placeholder, then run `scripts/embed_images.py <doc> [--base <dir>]`,
+  which inlines each file as a `data:` URI unchanged:
+
+```html
+<figure class="fig">
+  <div class="grid2">
+    <img alt="Copilot dashboard (iPad)" src="@@shots/copilot-dashboard.png@@">
+    <img alt="Copilot cash flow (iPad)" src="@@shots/copilot-cashflow.png@@">
+  </div>
+  <figcaption>What to notice … <a class="cite" href="#src-3">S3</a></figcaption>
+</figure>
+```
+
+- Always set a meaningful `alt` — the viewer shows it as the title with the caption.
+- Optional inline style may only use sizes and `var(--…)` colours, e.g.
+  `style="border:1px solid var(--line);border-radius:8px"`; `max-width:100%` is already in the shell.
+- To opt one element out of zooming (a tiny icon, a decorative mark), add `data-nozoom` to it or a parent.
+
 ## Source entry
 
 ```html
