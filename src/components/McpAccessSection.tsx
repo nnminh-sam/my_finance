@@ -181,8 +181,7 @@ export function McpAccessSection({ disabled, onCountChange }: Props) {
 
       {adding && (
         <form
-          className="profile-card profile-form"
-          style={{ padding: '20px' }}
+          className="profile-card profile-form mcp-form"
           noValidate
           aria-label="Create personal access token"
           aria-busy={saving}

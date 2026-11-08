@@ -22,6 +22,7 @@ class MemoryFinanceStore implements FinanceStore {
   deletePlanException = this.planStore.deletePlanException.bind(this.planStore);
   materializePlans = this.planStore.materializePlans.bind(this.planStore);
   completePlanOccurrence = this.planStore.completePlanOccurrence.bind(this.planStore);
+  mergeCategory = this.planStore.mergeCategory.bind(this.planStore);
   settings = new Map<string, FinanceSettings>();
   spendings = new Map<string, Map<string, Spending>>();
   incomes = new Map<string, Map<string, Income>>();
@@ -284,6 +285,38 @@ test("settings have default categories, persist partial/full changes, and isolat
   assert.equal(store.settings.size, 2);
 });
 
+test("archived categories round-trip, and merge moves spendings then archives the source", async t => {
+  const { request } = await fixture(t);
+  const defaults = defaultFinanceSettings().categories;
+  const archivedList = defaults.map(item => item.id === "Other" ? { ...item, archived: true } : item);
+  const saved = await settings(await request("/settings", "PUT", { categories: archivedList }));
+  assert.deepEqual(saved.categories.find(item => item.id === "Other"), { ...defaults.find(item => item.id === "Other"), archived: true });
+  assert.equal(Object.hasOwn(saved.categories.find(item => item.id === "Food")!, "archived"), false);
+  assert.equal((await request("/settings", "PUT", { categories: defaults.map(item => ({ ...item, archived: "yes" })) })).status, 400);
+  const many = Array.from({ length: 151 }, (_, index) => ({ id: `c${index}`, name: `C ${index}`, color: "#10b981", icon: "Utensils" }));
+  assert.equal((await request("/settings", "PUT", { categories: many })).status, 400);
+  assert.equal((await request("/settings", "PUT", { categories: many.slice(0, 150) })).status, 200);
+  await request("/settings", "PUT", { categories: archivedList });
+
+  await created(await request("/spendings", "POST", input));
+  await created(await request("/spendings", "POST", { ...input, description: "Dinner" }));
+  // An archived category can still be named on a spending, so old ones stay editable.
+  await created(await request("/spendings", "POST", { ...input, category: "Other" }));
+
+  for (const body of [{ from: "Food", into: "Other" }, { from: "Food", into: "Food" }, { from: "Missing", into: "Bills" }, { from: "Food" }]) {
+    assert.equal((await request("/settings/categories/merge", "POST", body)).status, 400, JSON.stringify(body));
+  }
+  const merged = await request("/settings/categories/merge", "POST", { from: "Food", into: "Bills" });
+  assert.equal(merged.status, 200);
+  const result = await merged.json() as { settings: FinanceSettings; spendings: number; plans: number };
+  assert.equal(result.spendings, 2);
+  assert.equal(result.plans, 0);
+  assert.equal(result.settings.categories.find(item => item.id === "Food")?.archived, true);
+  const list = await request("/spendings");
+  const spendings = (await list.json() as { spendings: Spending[] }).spendings;
+  assert.deepEqual(spendings.map(item => item.category).sort(), ["Bills", "Bills", "Other"]);
+});
+
 test("legacy settings fields are rejected without mutating active settings", async t => {
   const { request } = await fixture(t);
   const initial = await settings(await request("/settings", "PUT", { avatar: "https://example.test/avatar.png" }));
@@ -328,7 +361,7 @@ test("strict settings validation rejects invalid money, avatar, fields and categ
   const bodies: unknown[] = [null, [], "bad", { income: 1 }, { avatar: null }, { name: "Profile" }, { email: "a@b.test" }, { theme: "light" }, { userId: randomUUID() },
     { avatar: "javascript:alert(1)" }, { avatar: "data:image/png;base64,xxx" }, { avatar: "//example.test/a" }, { avatar: "https://user:pass@example.test/a" },
     { avatar: "https://example.test/" + "a".repeat(2048) }, { avatar: " " }, { categories: {} }, { categories: null },
-    { categories: Array.from({ length: 51 }, (_, i) => ({ ...category, id: String(i) })) }, { categories: [category, category] },
+    { categories: Array.from({ length: 151 }, (_, i) => ({ ...category, id: String(i), name: `c${i}` })) }, { categories: [category, category] },
   ];
   for (const patch of [{ id: "" }, { id: "a".repeat(101) }, { name: " " }, { name: "a".repeat(101) }, { color: "#fff" },
     { color: "#GGGGGG" }, { icon: "NotAnIcon" }, { icon: 1 }, { extra: true }]) bodies.push({ categories: [{ ...category, ...patch }] });
@@ -389,7 +422,7 @@ test("UUID ascending cursor pagination retrieves all records, is user scoped and
 
 test("finance failures and malformed JSON do not expose sensitive state", async t => {
   const { request, store, url, tokens } = await fixture(t);
-  const categories = Array.from({ length: 50 }, (_, index) => ({
+  const categories = Array.from({ length: 150 }, (_, index) => ({
     id: `${index}${"界".repeat(97)}`, name: "界".repeat(100), color: "#123456", icon: "Coffee",
   }));
   assert.deepEqual((await settings(await request("/settings", "PUT", { categories }))).categories, categories);

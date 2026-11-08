@@ -1,0 +1,660 @@
+<title>Category Picker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== FIXED: tokens. Mirror src/styles/globals.css (dark is the app default, light mirrors .light-mode). ===== */
+:root {
+  --page: #050506; --bg: #09090b; --card: #18181b; --card-2: #1f1f23; --card-3: #27272a; --line: #3f3f46; --line-soft: #2a2a2f;
+  --fg: #f4f4f5; --muted: #a1a1aa; --faint: #71717a;
+  --primary: #3b82f6; --primary-text: #60a5fa; --primary-soft: rgba(59,130,246,.15);
+  --income: #34d399; --danger: #f87171; --danger-soft: rgba(239,68,68,.14); --warn: #f59e0b; --warn-soft: rgba(245,158,11,.14);
+  --ok: #34d399; --ok-soft: rgba(52,211,153,.13);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light; } }
+:root[data-theme="light"] {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light;
+}
+
+/* ===== FIXED: base ===== */
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 var(--font); background: var(--page); color: var(--fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.cur { font-size: .7em; opacity: .6; margin-left: .15em; font-weight: 500; }
+code { font-size: .9em; background: var(--card-2); padding: 1px 5px; border-radius: 5px; }
+svg { flex: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ===== FIXED: page chrome (sections 1–5) ===== */
+.intro { padding-block: 32px 8px; display: grid; gap: 12px; }
+.intro .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary-text); }
+.intro h1 { font-size: 26px; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); max-width: 76ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.part { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 32px; display: grid; gap: 16px; }
+.part > h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; display: flex; gap: 10px; align-items: baseline; }
+.part > h2 .n { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; }
+.part > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.today { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.shot { display: grid; gap: 8px; margin: 0; min-width: 0; }
+.shot img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+.shot figcaption { font-size: 12.5px; color: var(--muted); }
+.issues { display: grid; gap: 8px; counter-reset: issue; margin: 0; padding: 0; list-style: none; }
+.issues li { counter-increment: issue; display: grid; grid-template-columns: 28px 1fr; gap: 2px 10px; background: var(--card); border-radius: 12px; padding: 10px 14px; }
+.issues li::before { content: counter(issue); grid-row: span 2; width: 24px; height: 24px; border-radius: 99px; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--danger-soft); color: var(--danger); }
+.issues li.minor::before { background: var(--warn-soft); color: var(--warn); }
+.issues b { font-size: 14px; } .issues span { color: var(--muted); font-size: 13px; }
+.sev { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 1px; }
+.sev.hi { background: var(--danger-soft); color: var(--danger); } .sev.md { background: var(--warn-soft); color: var(--warn); } .sev.lo { background: var(--card-3); color: var(--muted); }
+.stories { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.story { background: var(--card); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; font-size: 13.5px; }
+.story .who { font-size: 12px; font-weight: 700; color: var(--primary-text); text-transform: uppercase; letter-spacing: .05em; }
+.story p { margin: 0; color: var(--muted); } .story p b { color: var(--fg); font-weight: 600; }
+.tbl { overflow-x: auto; background: var(--card); border-radius: 12px; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+.tbl th, .tbl td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.tbl th { color: var(--faint); font-weight: 500; font-size: 12px; border-top: 0; }
+.dir { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 24px; display: grid; gap: 16px; }
+.dir-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.dir-head .tag { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; text-transform: uppercase; }
+.dir-head h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.dir-head .rec { font-size: 11.5px; font-weight: 600; background: var(--primary-soft); color: var(--primary-text); padding: 2px 9px; border-radius: 999px; }
+.dir > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.notes div { background: var(--card); border-radius: 12px; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+.notes b { display: block; color: var(--fg); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.solves { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); align-items: center; }
+.solves i { font-style: normal; width: 20px; height: 20px; border-radius: 99px; display: inline-grid; place-items: center; font-weight: 700; background: var(--ok-soft); color: var(--ok); }
+
+/* ===== FIXED: stage + app-like components ===== */
+.stage { background: var(--bg); border-radius: 18px; padding: 28px 16px; display: grid; place-items: center; gap: 16px;
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(14.28% - 1px), var(--line-soft) calc(14.28% - 1px) 14.28%); }
+.modal { width: min(640px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.45); display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; }
+.modal.wide { width: min(860px, 100%); }
+.m-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.m-head h4 { margin: 0; font-size: 16px; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.m-head h4 small { color: var(--muted); font-weight: 500; font-size: 13px; }
+.x { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--card-2); color: var(--muted); }
+.m-body { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+.m-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.sp { flex: 1; }
+.btn { height: 38px; padding: 0 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); white-space: nowrap; }
+.btn.pri { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn[disabled] { opacity: .35; cursor: default; }
+.lbl { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.field { height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); padding: 0 12px; width: 100%; min-width: 0; font-size: 14px; }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--card-3); color: var(--muted); white-space: nowrap; }
+.sub { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.sub::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+.grid { display: grid; gap: 10px; }
+
+/* ===== FIXED: stepper visibility ===== */
+.stage-host [data-p] { display: none !important; }
+.stage-host[data-step="0"] [data-p~="0"], .stage-host[data-step="1"] [data-p~="1"], .stage-host[data-step="2"] [data-p~="2"],
+.stage-host[data-step="3"] [data-p~="3"], .stage-host[data-step="4"] [data-p~="4"], .stage-host[data-step="5"] [data-p~="5"] { display: revert !important; }
+.stage-host[data-step="0"] .grid[data-p~="0"], .stage-host[data-step="1"] .grid[data-p~="1"], .stage-host[data-step="2"] .grid[data-p~="2"],
+.stage-host[data-step="3"] .grid[data-p~="3"], .stage-host[data-step="4"] .grid[data-p~="4"], .stage-host[data-step="5"] .grid[data-p~="5"] { display: grid !important; }
+
+$1.gl { width: 26px; height: 26px; border-radius: 8px; display: inline-grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); flex: none; }
+.gl.sm { width: 20px; height: 20px; border-radius: 6px; }
+.cchip { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-size: 13.5px; text-align: left; min-width: 0; }
+.cchip span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cchip svg { color: var(--c); }
+.cchip.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); box-shadow: 0 0 0 1px var(--c); }
+.cgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.cgrid.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.searchbox { display: flex; align-items: center; gap: 8px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); padding: 0 12px; color: var(--muted); }
+.searchbox input { border: 0; background: none; outline: none; flex: 1; min-width: 0; color: var(--fg); height: 100%; }
+.searchbox:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; color: var(--faint); }
+
+/* Today rebuilds */
+.frame { height: 520px; overflow: auto; border-radius: 14px; border: 1px solid var(--line); background: var(--card); padding: 14px; display: grid; gap: 10px; align-content: start; position: relative; }
+.frame .ruler { position: sticky; top: 0; z-index: 1; justify-self: end; font-size: 11.5px; font-weight: 700; background: var(--danger-soft); color: var(--danger); padding: 3px 9px; border-radius: 99px; backdrop-filter: blur(6px); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.tile { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 10px; border: 1px solid var(--line); font-size: 13px; min-width: 0; }
+.tile span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile.on { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.ghost-editor { border-radius: 10px; background: var(--card-2); padding: 12px; font-size: 13px; color: var(--muted); border: 1px dashed var(--primary); }
+
+/* A: top row + All sheet */
+.picker { display: grid; gap: 8px; position: relative; }
+.all-btn { justify-content: center; color: var(--primary-text); font-weight: 600; border-style: dashed; }
+.sheet { position: absolute; inset: 0; background: var(--card); z-index: 2; display: grid; grid-template-rows: auto 1fr; gap: 10px; padding: 16px 18px; }
+.sheet[hidden] { display: none; }
+.sheet-list { overflow: auto; display: grid; gap: 2px; align-content: start; padding-right: 4px; }
+.sheet-list h5 { margin: 8px 0 2px; font-size: 11.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+.opt { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; text-align: left; font-size: 13.5px; }
+.opt:hover, .opt.first { background: var(--card-2); }
+.opt.on { background: var(--primary-soft); }
+.opt small { margin-left: auto; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.a-body { height: 360px; position: relative; }
+
+/* B: combobox */
+.combo { position: relative; }
+.combo .searchbox { height: 44px; }
+.drop { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,.4); padding: 6px; max-height: 250px; overflow: auto; display: grid; gap: 2px; z-index: 3; }
+.drop[hidden] { display: none; }
+.recent { display: flex; flex-wrap: wrap; gap: 6px; }
+.recent .cchip { min-height: 32px; font-size: 12.5px; }
+
+/* C: groups */
+.gtabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.gtabs button { padding: 6px 11px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--muted); white-space: nowrap; border: 1px solid var(--line-soft); }
+.gtabs button.on { background: var(--fg); color: var(--card); border-color: var(--fg); }
+.gtabs small { opacity: .6; margin-left: 3px; }
+.c-body { min-height: 150px; }
+
+/* D: list manager */
+.mtools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.mtools .searchbox { flex: 1 1 220px; }
+.seg { display: inline-flex; background: var(--card-2); border-radius: 10px; padding: 3px; }
+.seg button { padding: 6px 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.seg button.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.mlist { display: grid; max-height: 420px; overflow: auto; border-radius: 12px; border: 1px solid var(--line-soft); }
+.mrow { display: grid; grid-template-columns: 26px minmax(0,1fr) 92px 92px 18px; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line-soft); text-align: left; font-size: 13.5px; }
+.mrow:first-child { border-top: 0; }
+.mrow:hover { background: var(--card-2); }
+.mrow.open { background: var(--primary-soft); }
+.mrow .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrow small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.mrow.cold .n { color: var(--muted); }
+.mhead { display: grid; grid-template-columns: 26px minmax(0,1fr) 92px 92px 18px; gap: 10px; padding: 6px 12px; font-size: 11.5px; color: var(--faint); }
+.mhead span:nth-child(n+3) { text-align: right; }
+.editor { padding: 12px; background: var(--card-2); border-top: 1px solid var(--line-soft); display: grid; gap: 10px; }
+.swatches, .icons { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatches button { width: 24px; height: 24px; border-radius: 99px; background: var(--c); }
+.swatches button.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--fg); }
+.icons button { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; border: 1px solid var(--line-soft); color: var(--muted); }
+.icons button.on { border-color: var(--primary); color: var(--primary-text); background: var(--primary-soft); }
+.cold-sec { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--warn-soft); color: var(--warn); font-size: 13px; font-weight: 600; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.cold-sec .btn { color: var(--warn); border-color: currentColor; }
+
+/* E: two-pane */
+.two { display: grid; grid-template-columns: 260px minmax(0,1fr); min-height: 460px; }
+.two .left { border-right: 1px solid var(--line-soft); padding: 12px; display: grid; grid-template-rows: auto 1fr; gap: 10px; background: var(--card-2); min-width: 0; }
+.two .left .sheet-list { max-height: 400px; }
+.two .right { padding: 16px 18px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.preview { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card-2); flex-wrap: wrap; }
+.warn-line { font-size: 12.5px; color: var(--warn); }
+.sel-ring { box-shadow: inset 0 0 0 1px var(--primary); }
+
+@media (max-width: 640px) {
+  .cgrid, .cgrid.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mrow, .mhead { grid-template-columns: 26px minmax(0,1fr) 70px 18px; }
+  .mrow .last, .mhead .last { display: none; }
+  .two { grid-template-columns: 1fr; }
+  .two .left { border-right: 0; border-bottom: 1px solid var(--line-soft); }
+  .two .left .sheet-list { max-height: 200px; }
+}
+
+</style>
+
+<!-- FIXED: icon sprite. Add symbols here as needed (lucide-style, 24×24, stroke=currentColor). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  $1  <symbol id="i-utensils" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></symbol>
+  <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4zM6 2v2M10 2v2M14 2v2"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18.4 10 16 6H7L5 10l-2 .6c-.6.2-1 .8-1 1.4v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 17h6"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.5L21 8H6"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></symbol>
+  <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 18V6"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
+  <symbol id="i-pill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7ZM8.5 8.5l7 7"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2M16 3.1a4 4 0 0 1 0 7.8M21 21v-2a4 4 0 0 0-3-3.9"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+</svg>
+
+<main class="wrap">
+  <section class="intro">
+    <span class="eyebrow">Mockup · Categories</span>
+    <h1>Categories don't scale past a dozen</h1>
+    <p>Both the Add transaction picker and the Profile → Categories tab draw every category at once. With 16 that is a long block; with the allowed 50 the picker pushes Description and Date off screen, and Profile becomes a wall of tiles with the editor opening far below. This page uses a realistic set of 50 categories so the problem shows at full size.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--danger)"></i>High severity</span>
+      <span><i class="sw" style="background:var(--warn)"></i>Medium</span>
+      <span>Search in every mockup works and ignores accents: try <code>an trua</code>, <code>tra sua</code>, <code>hieu</code></span>
+    </div>
+  </section>
+
+  <section class="part" id="today">
+    <h2><span class="n">01</span>Today</h2>
+    <p>Rebuilt in HTML from the 8 Nov screenshots, but filled with 50 categories instead of 16.</p>
+    <div class="today">
+      <figure class="shot">
+        <div class="frame" aria-label="Add transaction picker with 50 categories">
+          <span class="ruler" data-ruler>Description is 17 rows down</span>
+          <span class="lbl">Category</span>
+          <label class="searchbox"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="Search 50 categories" aria-label="Search categories" data-today-search></label>
+          <div class="cgrid" data-today-grid></div>
+          <span class="lbl">Description</span>
+          <input class="field" placeholder="Breakfast (default)" aria-label="Description">
+          <span class="lbl">Date</span>
+          <input class="field" value="08/11/2026" aria-label="Date">
+        </div>
+        <figcaption>Add transaction → Category. Scroll the frame: every entry starts by scrolling past 17 rows. Search for <code>an trua</code> finds nothing.</figcaption>
+      </figure>
+      <figure class="shot">
+        <div class="frame" aria-label="Profile categories with 50 tiles">
+          <span class="ruler">Editor opens below all 50</span>
+          <div class="tiles" data-today-tiles></div>
+          <div class="ghost-editor">Editing <b>Breakfast</b> (row 1) opens the form here, after every tile.</div>
+        </div>
+        <figcaption>Profile → Categories. No search, no order, no sign of which ones are never used.</figcaption>
+      </figure>
+    </div>
+    <ol class="issues">
+      <li><b>The picker grows with every category <span class="sev hi">High</span></b><span>The 3-column grid renders all of them (<code>QuickEntryParts.tsx:101</code>). 50 categories = 17 rows ≈ 750px before Description, Date and Repeat.</span></li>
+      <li><b>Order is creation order, not use <span class="sev hi">High</span></b><span>Categories show in the order they were added. The default is always the first one ever created (<code>quickEntry.ts:80</code>), so Breakfast is selected at 9 pm.</span></li>
+      <li><b>Search misses Vietnamese names <span class="sev md">Medium</span></b><span>It only lowercases, so <code>an trua</code> does not match "Ăn trưa", and Enter does not pick the first match. It only appears above 8 categories.</span></li>
+      <li><b>The phone dock has no search at all <span class="sev hi">High</span></b><span><code>CategoryChips</code> (<code>QuickEntryParts.tsx:88</code>) is one sideways row: 50 chips means a long swipe.</span></li>
+      <li><b>New categories all look the same <span class="sev md">Medium</span></b><span>Each new one starts as a green $ (<code>UserProfile.tsx:192</code>); there are only 12 icons and 9 swatches. Your "1"–"5" are indistinguishable without reading.</span></li>
+      <li><b>Profile editor opens far from the tile <span class="sev md">Medium</span></b><span>The form sits after the whole grid (<code>UserProfile.tsx:445</code>).</span></li>
+      <li class="minor"><b>No way to find dead categories <span class="sev md">Medium</span></b><span>No use counts or last-used date, and at the 50 cap an unused category blocks a new one.</span></li>
+      <li class="minor"><b>Removed categories may show an ID <span class="sev lo">To verify</span></b><span>Remove deletes the category; the display falls back to the raw id (<code>MobileUi.tsx:18</code>), likely a UUID on past spendings.</span></li>
+    </ol>
+  </section>
+
+  <section class="part" id="people">
+    <h2><span class="n">02</span>Who and when</h2>
+    <div class="stories">
+      <div class="story"><span class="who">Daily logger</span><p>As someone who logs <b>breakfast, lunch and coffee every day</b>, I want my usual categories one tap away so that adding a spending takes under 5 seconds.</p></div>
+      <div class="story"><span class="who">Detailed tracker</span><p>As someone with <b>40+ categories</b>, I want to type two letters and press Enter so that I never scroll a grid.</p></div>
+      <div class="story"><span class="who">Bilingual user</span><p>As someone who names categories <b>in Vietnamese</b>, I want search to work without typing accents so that I can use a plain keyboard.</p></div>
+      <div class="story"><span class="who">Tidier</span><p>As someone near the 50 limit, I want to <b>see what I never use</b> so that I can archive it without losing old spendings.</p></div>
+    </div>
+    <div class="tbl"><table>
+      <tr><th>Use case</th><th>Trigger</th><th>Steps today (50 categories)</th><th>Goal</th></tr>
+      <tr><td>Log a usual spending</td><td>Paying for lunch</td><td>Open → scroll grid → find Lunch → scroll down to Add</td><td>1 tap on a top category</td></tr>
+      <tr><td>Log a rare spending</td><td>Pharmacy once a month</td><td>Open → search "pharm" → click → scroll down</td><td>Type 2 letters, Enter</td></tr>
+      <tr><td>Log on the phone</td><td>Paying at a counter</td><td>Swipe through up to 50 chips</td><td>Top chips, or one tap into search</td></tr>
+      <tr><td>Fix a category's look</td><td>Two categories look alike</td><td>Profile → scan 50 tiles → click → scroll to the form</td><td>Search, edit in place</td></tr>
+      <tr><td>Clean up</td><td>Hit the 50 limit</td><td>Guess which are unused, remove (old spendings may lose the name)</td><td>See unused ones, archive safely</td></tr>
+    </table></div>
+  </section>
+
+  <section class="part" id="directions">
+    <h2><span class="n">03</span>Directions</h2>
+    <p>A to C replace the picker in Add transaction (desktop dialog and phone dock). D and E replace the Profile → Categories tab. Pick one from each group.</p>
+  </section>
+
+  <!-- A -->
+  <section class="dir" id="a">
+    <div class="dir-head"><span class="tag">A · Picker</span><h3>Top 8 + All</h3><span class="rec">Recommended</span></div>
+    <p>Two fixed rows of your 8 most-used categories. "All 50" opens a search list over the form; type, then Enter picks the first match. The block is the same height at 8 or 50 categories.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>4</i></div>
+    <div class="stage"><div class="modal">
+      <div class="m-head"><h4>Add transaction</h4><button class="x" aria-label="Close"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+      <div class="m-body a-body">
+        <div class="picker">
+          <span class="lbl">Category <span class="chip">most used, last 30 days</span></span>
+          <div class="cgrid c4" data-a-top></div>
+          <button class="cchip all-btn" data-a-open><svg width="15" height="15"><use href="#i-search"/></svg>All 50 categories <span class="kbd">/</span></button>
+        </div>
+        <span class="lbl">Description</span>
+        <input class="field" data-a-desc placeholder="Breakfast (default)" aria-label="Description">
+        <span class="lbl">Date</span>
+        <input class="field" value="08/11/2026" aria-label="Date">
+        <div class="sheet" data-a-sheet hidden>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label class="searchbox" style="flex:1"><svg width="16" height="16"><use href="#i-search"/></svg><input data-a-q placeholder="Search 50 categories" aria-label="Search categories"><span class="kbd">Enter</span></label>
+            <button class="x" data-a-close aria-label="Close list"><svg width="16" height="16"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="sheet-list" data-a-list></div>
+        </div>
+      </div>
+      <div class="m-foot"><button class="btn ghost">Cancel</button><span class="sp"></span><button class="btn pri">Add</button></div>
+    </div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Fixed height: Description is always in view</li><li>Daily categories are one tap</li><li>Same component works as the phone dock: top chips + "All" sheet</li></ul></div>
+      <div><b>Watch</b><ul><li>"Most used" needs spendings from the last 30 days (already loaded for recent descriptions)</li><li>Top 8 reshuffle as habits change; keep the order stable within a session</li></ul></div>
+    </div>
+  </section>
+
+  <!-- B -->
+  <section class="dir" id="b">
+    <div class="dir-head"><span class="tag">B · Picker</span><h3>Search field + recent</h3></div>
+    <p>One field shows the chosen category. Focus it to type; the dropdown lists matches by use. Under it, 5 recent categories as small chips. Smallest possible footprint.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i></div>
+    <div class="stage"><div class="modal">
+      <div class="m-head"><h4>Add transaction</h4><button class="x" aria-label="Close"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+      <div class="m-body" style="min-height:360px">
+        <span class="lbl">Category</span>
+        <div class="combo">
+          <label class="searchbox" data-b-box><span data-b-glyph></span><input data-b-q aria-label="Category" autocomplete="off"><svg width="16" height="16"><use href="#i-down"/></svg></label>
+          <div class="drop" data-b-drop hidden></div>
+        </div>
+        <div class="recent" data-b-recent></div>
+        <span class="lbl">Description</span>
+        <input class="field" placeholder="Description" aria-label="Description">
+        <span class="lbl">Date</span>
+        <input class="field" value="08/11/2026" aria-label="Date">
+      </div>
+      <div class="m-foot"><button class="btn ghost">Cancel</button><span class="sp"></span><button class="btn pri">Add</button></div>
+    </div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Constant 2-line height</li><li>Fastest for keyboard users</li></ul></div>
+      <div><b>Watch</b><ul><li>Hides the colors and icons you scan by; weaker on phones</li><li>A dropdown inside a scrolling dialog needs care</li></ul></div>
+    </div>
+  </section>
+
+  <!-- C -->
+  <section class="dir" id="c">
+    <div class="dir-head"><span class="tag">C · Picker</span><h3>Grouped tabs</h3></div>
+    <p>Categories belong to a group (Food, Transport, Home…). A row of group tabs opens on "Most used"; each tab shows at most about 10. Needs a new <code>group</code> field on categories.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>5</i></div>
+    <div class="stage"><div class="modal">
+      <div class="m-head"><h4>Add transaction</h4><button class="x" aria-label="Close"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+      <div class="m-body">
+        <span class="lbl">Category</span>
+        <div class="gtabs" data-c-tabs></div>
+        <div class="cgrid c-body" data-c-grid></div>
+        <span class="lbl">Description</span>
+        <input class="field" placeholder="Description" aria-label="Description">
+      </div>
+      <div class="m-foot"><button class="btn ghost">Cancel</button><span class="sp"></span><button class="btn pri">Add</button></div>
+    </div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Browsing is natural: "it was some kind of Home cost"</li><li>Groups also help Analytics later</li></ul></div>
+      <div><b>Watch</b><ul><li>Data change + migration; every category needs a group</li><li>Still needs search for 50</li></ul></div>
+    </div>
+  </section>
+
+  <!-- D -->
+  <section class="dir" id="d">
+    <div class="dir-head"><span class="tag">D · Profile</span><h3>Searchable list with use</h3><span class="rec">Recommended</span></div>
+    <p>A list instead of tiles: search, sort by use or name, and each row shows how often you used it. The editor opens right under the row. Categories unused for 2+ months are gathered at the bottom with Archive.</p>
+    <div class="solves">Solves <i>5</i><i>6</i><i>7</i><i>8</i></div>
+    <div class="stage"><div class="modal wide">
+      <div class="m-head"><h4>Categories <small data-d-count>50 / 50</small></h4><button class="btn sm pri"><svg width="14" height="14"><use href="#i-plus"/></svg>New</button></div>
+      <div class="m-body">
+        <div class="mtools">
+          <label class="searchbox"><svg width="16" height="16"><use href="#i-search"/></svg><input data-d-q placeholder="Search" aria-label="Search categories"></label>
+          <div class="seg" role="radiogroup" aria-label="Sort"><button class="on" data-d-sort="use">Most used</button><button data-d-sort="az">A–Z</button></div>
+        </div>
+        <div>
+          <div class="mhead"><span></span><span>Name</span><span>30 days</span><span class="last">Last used</span><span></span></div>
+          <div class="mlist" data-d-list></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Edit where you clicked</li><li>Unused categories are obvious; Archive keeps old spendings' name and color</li></ul></div>
+      <div><b>Watch</b><ul><li>Archive needs an <code>archived</code> flag instead of deleting from settings</li><li>Use counts are computed in the browser from loaded spendings</li></ul></div>
+    </div>
+  </section>
+
+  <!-- E -->
+  <section class="dir" id="e">
+    <div class="dir-head"><span class="tag">E · Profile</span><h3>Two panes</h3></div>
+    <p>Search list on the left, editor on the right. "New" fills in the next unused color and icon, and warns when another category already looks the same.</p>
+    <div class="solves">Solves <i>5</i><i>6</i></div>
+    <div class="stage"><div class="modal wide">
+      <div class="m-head"><h4>Categories</h4><button class="btn sm pri" data-e-new><svg width="14" height="14"><use href="#i-plus"/></svg>New</button></div>
+      <div class="two">
+        <div class="left">
+          <label class="searchbox"><svg width="16" height="16"><use href="#i-search"/></svg><input data-e-q placeholder="Search" aria-label="Search categories"></label>
+          <div class="sheet-list" data-e-list></div>
+        </div>
+        <div class="right" data-e-editor></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Editor never moves</li><li>Duplicates in look are caught while editing</li></ul></div>
+      <div><b>Watch</b><ul><li>Needs ~860px; on phones it stacks (list, then editor)</li><li>No use counts unless combined with D</li></ul></div>
+    </div>
+  </section>
+
+  <section class="part" id="recommendation" style="padding-bottom:48px">
+    <h2><span class="n">04</span>Recommendation</h2>
+    <p>Build <b>A</b> for the picker (desktop dialog and phone dock share it) and <b>D</b> for Profile, with E's "next unused color and icon" for new categories. Leave groups (C) for later; they need a data change and A already solves the length problem. Verify issue 8 first: if removed categories really show an id, switch Remove to Archive in the same change.</p>
+    <div class="tbl"><table>
+      <tr><th>File</th><th>Change</th></tr>
+      <tr><td><code>src/components/quickEntry/QuickEntryParts.tsx</code></td><td>Replace <code>CategoryGrid</code> and <code>CategoryChips</code> with one picker: top 8 by use + "All" search sheet</td></tr>
+      <tr><td><code>src/lib/quickEntry.ts</code></td><td>Default category = last used instead of <code>categories[0]</code>; shared accent-free <code>fold()</code> for search</td></tr>
+      <tr><td><code>src/components/UserProfile.tsx</code></td><td>Tiles → searchable list with use counts, inline editor, unused section; new category gets next unused color and icon</td></tr>
+      <tr><td><code>src/types.ts</code> + settings storage</td><td><code>archived?: boolean</code> on categories, if Remove becomes Archive</td></tr>
+      <tr><td><code>src/components/mobile/MobileUi.tsx</code></td><td>More icons (12 → about 30)</td></tr>
+    </table></div>
+  </section>
+</main>
+
+<script>
+/* FIXED: stepper engine. Page-specific scripts go in a second <script> below. */
+(() => {
+  document.querySelectorAll('.stage-host').forEach(host => {
+    const lefts = (host.dataset.lefts || '').split('|');
+    const max = Math.max(0, ...[...host.querySelectorAll('[data-p]')].flatMap(el => el.dataset.p.split(' ').map(Number)));
+    const set = step => {
+      step = Math.max(0, Math.min(max, step));
+      host.dataset.step = step;
+      if (host.dataset.lefts) host.querySelectorAll('[data-left]').forEach(el => { el.textContent = lefts[step] ?? ''; });
+      const next = host.querySelector('[data-go="next"]');
+      if (next && next.dataset.labels) { const l = next.dataset.labels.split('|'); const t = [...next.childNodes].find(n => n.nodeType === 3); if (t) t.nodeValue = l[step] ?? l[l.length - 1]; }
+      const back = host.querySelector('[data-go="back"]'); if (back) back.disabled = step === 0;
+      host.querySelectorAll('[data-go]:not([data-go="next"]):not([data-go="back"])').forEach(b => {
+        const on = +b.dataset.go === step; b.classList.toggle('on', on); b.classList.toggle('done', +b.dataset.go < step);
+        if (on) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      });
+      host.dispatchEvent(new CustomEvent('step', { detail: step }));
+    };
+    host.addEventListener('click', e => {
+      const b = e.target.closest('[data-go]'); if (!b || b.disabled || !host.contains(b)) return;
+      const cur = +host.dataset.step, go = b.dataset.go;
+      set(go === 'next' ? (cur === max ? 0 : cur + 1) : go === 'back' ? cur - 1 : +go);
+    });
+    set(+host.dataset.step || 0);
+  });
+})();
+</script>
+
+<script>
+/* Page: 50 sample categories in creation order. [name, group, icon, color, uses in 30 days, days since last use] */
+(() => {
+  const RAW = [
+    ['Breakfast','Food','utensils','#eab308',31,0], ['Gas','Transport','car','#3b82f6',9,1], ['Subscription','Fun','dollar','#ef4444',3,3],
+    ['Shopping','Shopping','bag','#f97316',4,3], ['Bills','Home','receipt','#22c55e',2,8], ['Other','Money','dollar','#64748b',2,5],
+    ['Eat out','Food','utensils','#f43f5e',7,2], ['Transport','Transport','car','#10b981',1,20], ['Debt','Money','dollar','#f97316',1,6],
+    ['For parents','Family','heart','#ec4899',1,1], ['Lunch','Food','utensils','#ef4444',29,0],
+    ['Dinner','Food','utensils','#f97316',12,1], ['Coffee','Food','coffee','#d97706',22,0], ['Trà sữa','Food','coffee','#ec4899',5,3],
+    ['Ăn vặt','Food','cart','#f59e0b',4,4], ['Groceries','Food','cart','#10b981',6,2], ['Đi chợ','Food','cart','#22c55e',3,6],
+    ['Nhậu','Food','utensils','#8b5cf6',2,12], ['Ăn trưa','Food','utensils','#fb7185',3,5], ['Grab','Transport','car','#22c55e',8,1],
+    ['Parking','Transport','car','#64748b',3,5], ['Gửi xe','Transport','car','#06b6d4',2,7], ['Car repair','Transport','car','#0ea5e9',0,140],
+    ['Tiền trọ','Home','home','#10b981',1,1], ['Electricity','Home','bolt','#eab308',1,24], ['Water','Home','receipt','#06b6d4',1,24],
+    ['Internet','Home','receipt','#3b82f6',1,18], ['Phone','Home','phone','#6366f1',1,18], ['Home goods','Home','home','#f97316',2,9],
+    ['Kids','Family','users','#f472b6',0,60], ['Hiếu hỷ','Family','gift','#f43f5e',1,15], ['Gifts','Family','gift','#a855f7',1,30],
+    ['Pets','Family','heart','#f59e0b',0,200], ['Pharmacy','Health','pill','#ef4444',1,25], ['Doctor','Health','pill','#f43f5e',0,95],
+    ['Gym','Health','heart','#10b981',1,28], ['Insurance','Health','receipt','#64748b',0,180], ['Movies','Fun','film','#8b5cf6',1,20],
+    ['Games','Fun','film','#6366f1',0,120], ['Travel','Fun','plane','#0ea5e9',0,70], ['Books','Fun','book','#a16207',0,110],
+    ['Clothes','Shopping','bag','#ec4899',1,22], ['Electronics','Shopping','phone','#64748b',0,150], ['Beauty','Shopping','heart','#f472b6',0,100],
+    ['Haircut','Shopping','users','#a855f7',1,9], ['Savings','Money','dollar','#10b981',0,40], ['Investment','Money','dollar','#22c55e',0,130],
+    ['Fees','Money','receipt','#94a3b8',1,10], ['Charity','Money','heart','#06b6d4',0,160], ['Laundry','Home','home','#64748b',3,4],
+  ];
+  const CATS = RAW.map(([name, group, icon, color, uses, ago], id) => ({ id, name, group, icon, color, uses, ago }));
+  const GROUPS = ['Food', 'Transport', 'Home', 'Family', 'Health', 'Fun', 'Shopping', 'Money'];
+  const SWATCHES = ['#f43f5e', '#f97316', '#eab308', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b'];
+  const ICONS = ['utensils', 'coffee', 'car', 'home', 'receipt', 'heart', 'gift', 'bag', 'cart', 'film', 'phone', 'dollar', 'plane', 'pill', 'users', 'bolt', 'book'];
+  const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().trim();
+  const match = (q, list) => { const f = fold(q); return f ? list.filter(c => fold(c.name).includes(f)) : list; };
+  const byUse = list => [...list].sort((a, b) => b.uses - a.uses || a.ago - b.ago);
+  const esc = s => s.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const ic = (name, size = 15) => `<svg width="${size}" height="${size}"><use href="#i-${name}"/></svg>`;
+  const glyph = (c, cls = '') => `<span class="gl ${cls}" style="--c:${c.color}">${ic(c.icon, cls ? 12 : 15)}</span>`;
+  const chip = (c, on, attr) => `<button class="cchip${on ? ' on' : ''}" style="--c:${c.color}" ${attr}="${c.id}" role="radio" aria-checked="${on}">${ic(c.icon)}<span>${esc(c.name)}</span></button>`;
+  const ago = d => d === 0 ? 'today' : d === 1 ? 'yesterday' : d < 30 ? `${d} days ago` : d < 60 ? 'a month ago' : `${Math.round(d / 30)} months ago`;
+  const $ = s => document.querySelector(s);
+
+  /* Today: the current picker and tiles, all 50, creation order, plain lowercase search */
+  const todayGrid = $('[data-today-grid]');
+  const drawToday = q => {
+    const shown = CATS.filter(c => !q.trim() || c.name.toLowerCase().includes(q.trim().toLowerCase()));
+    todayGrid.innerHTML = shown.map(c => chip(c, c.id === 0, 'data-x')).join('') || '<span class="lbl">No matching categories</span>';
+    $('[data-ruler]').textContent = `Description is ${Math.ceil(shown.length / 3)} rows down`;
+  };
+  $('[data-today-search]').addEventListener('input', e => drawToday(e.target.value));
+  drawToday('');
+  $('[data-today-tiles]').innerHTML = CATS.map(c => `<div class="tile${c.id === 0 ? ' on' : ''}">${glyph(c)}<span>${esc(c.name)}</span></div>`).join('');
+
+  /* A: top 8 + All sheet */
+  let selA = 0;
+  const top8 = byUse(CATS).slice(0, 8);
+  const sheet = $('[data-a-sheet]'), q = $('[data-a-q]'), list = $('[data-a-list]');
+  const drawTop = () => {
+    const shown = top8.some(c => c.id === selA) ? top8 : [...top8.slice(0, 7), CATS[selA]];
+    $('[data-a-top]').innerHTML = shown.map(c => chip(c, c.id === selA, 'data-a-pick')).join('');
+    $('[data-a-desc]').placeholder = `${CATS[selA].name} (default)`;
+  };
+  const drawSheet = () => {
+    const found = match(q.value, CATS);
+    if (!found.length) { list.innerHTML = '<span class="lbl" style="padding:8px">No category matches. Press Enter to create it.</span>'; return; }
+    const first = fold(q.value) ? byUse(found)[0] : null;
+    const opt = c => `<button class="opt${c.id === selA ? ' on' : ''}${first && c.id === first.id ? ' first' : ''}" data-a-pick="${c.id}">${glyph(c, 'sm')}${esc(c.name)}<small>${c.uses ? c.uses + '×' : ''}</small></button>`;
+    list.innerHTML = fold(q.value)
+      ? byUse(found).map(opt).join('')
+      : GROUPS.map(g => { const items = found.filter(c => c.group === g).sort((a, b) => a.name.localeCompare(b.name)); return items.length ? `<h5>${g}</h5>${items.map(opt).join('')}` : ''; }).join('');
+  };
+  const openSheet = () => { sheet.hidden = false; q.value = ''; drawSheet(); q.focus(); };
+  const closeSheet = () => { sheet.hidden = true; };
+  document.getElementById('a').addEventListener('click', e => {
+    const p = e.target.closest('[data-a-pick]'); if (p) { selA = +p.dataset.aPick; closeSheet(); drawTop(); return; }
+    if (e.target.closest('[data-a-open]')) openSheet();
+    if (e.target.closest('[data-a-close]')) closeSheet();
+  });
+  q.addEventListener('input', drawSheet);
+  q.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeSheet();
+    if (e.key === 'Enter') { const f = byUse(match(q.value, CATS))[0]; if (f) { selA = f.id; closeSheet(); drawTop(); } }
+  });
+  drawTop();
+
+  /* B: combobox + recent */
+  let selB = 10;
+  const bq = $('[data-b-q]'), drop = $('[data-b-drop]');
+  const drawB = () => { bq.value = CATS[selB].name; $('[data-b-glyph]').innerHTML = glyph(CATS[selB], 'sm');
+    $('[data-b-recent]').innerHTML = [...CATS].sort((a, b) => a.ago - b.ago || b.uses - a.uses).filter(c => c.id !== selB).slice(0, 5).map(c => chip(c, false, 'data-b-pick')).join(''); };
+  const drawDrop = () => { const found = byUse(match(bq.value === CATS[selB].name ? '' : bq.value, CATS));
+    drop.innerHTML = found.length ? found.map((c, i) => `<button class="opt${i === 0 && fold(bq.value) && bq.value !== CATS[selB].name ? ' first' : ''}${c.id === selB ? ' on' : ''}" data-b-pick="${c.id}">${glyph(c, 'sm')}${esc(c.name)}<small>${c.uses ? c.uses + '×' : ''}</small></button>`).join('') : '<span class="lbl" style="padding:8px">No match</span>';
+    drop.hidden = false; };
+  bq.addEventListener('focus', () => { bq.select(); drawDrop(); });
+  bq.addEventListener('input', drawDrop);
+  bq.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { const f = byUse(match(bq.value, CATS))[0]; if (f) { selB = f.id; drop.hidden = true; drawB(); bq.blur(); } }
+    if (e.key === 'Escape') { drop.hidden = true; drawB(); bq.blur(); }
+  });
+  document.getElementById('b').addEventListener('mousedown', e => { const p = e.target.closest('[data-b-pick]'); if (p) { e.preventDefault(); selB = +p.dataset.bPick; drop.hidden = true; drawB(); bq.blur(); } });
+  bq.addEventListener('blur', () => setTimeout(() => { drop.hidden = true; drawB(); }, 120));
+  drawB();
+
+  /* C: grouped tabs */
+  let tabC = 'Most used', selC = 10;
+  const drawC = () => {
+    const tabs = ['Most used', ...GROUPS];
+    $('[data-c-tabs]').innerHTML = tabs.map(t => `<button class="${t === tabC ? 'on' : ''}" data-c-tab="${t}">${t}<small>${t === 'Most used' ? '' : CATS.filter(c => c.group === t).length}</small></button>`).join('');
+    const items = tabC === 'Most used' ? byUse(CATS).slice(0, 9) : CATS.filter(c => c.group === tabC);
+    $('[data-c-grid]').innerHTML = items.map(c => chip(c, c.id === selC, 'data-c-pick')).join('');
+  };
+  document.getElementById('c').addEventListener('click', e => {
+    const t = e.target.closest('[data-c-tab]'); if (t) { tabC = t.dataset.cTab; drawC(); }
+    const p = e.target.closest('[data-c-pick]'); if (p) { selC = +p.dataset.cPick; drawC(); }
+  });
+  drawC();
+
+  /* D: list manager with inline editor */
+  let sortD = 'use', openD = null; const archived = new Set();
+  const editor = c => `<div class="editor">
+      <label class="grid" style="gap:4px"><span class="lbl">Name</span><input class="field" value="${esc(c.name)}" aria-label="Name"></label>
+      <div class="grid" style="gap:4px"><span class="lbl">Color</span><div class="swatches">${SWATCHES.map(s => `<button style="--c:${s}" class="${s === c.color ? 'on' : ''}" aria-label="Color ${s}"></button>`).join('')}</div></div>
+      <div class="grid" style="gap:4px"><span class="lbl">Icon</span><div class="icons">${ICONS.map(i => `<button class="${i === c.icon ? 'on' : ''}" aria-label="${i} icon">${ic(i, 16)}</button>`).join('')}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-d-archive="${c.id}">${ic('archive', 14)}Archive</button><span class="sp"></span><button class="btn sm ghost" data-d-close>Cancel</button><button class="btn sm pri" data-d-close>Save</button></div>
+    </div>`;
+  const row = c => `<button class="mrow${openD === c.id ? ' open' : ''}${c.uses === 0 ? ' cold' : ''}" data-d-open="${c.id}" aria-expanded="${openD === c.id}">${glyph(c)}<span class="n">${esc(c.name)}</span><small>${c.uses ? c.uses + '×' : '—'}</small><small class="last">${ago(c.ago)}</small>${ic(openD === c.id ? 'down' : 'right', 14)}</button>${openD === c.id ? editor(c) : ''}`;
+  const drawD = () => {
+    const live = CATS.filter(c => !archived.has(c.id));
+    const found = match($('[data-d-q]').value, live);
+    const sorted = sortD === 'use' ? byUse(found) : [...found].sort((a, b) => a.name.localeCompare(b.name));
+    const warm = sorted.filter(c => c.ago < 60), cold = sorted.filter(c => c.ago >= 60);
+    $('[data-d-list]').innerHTML = warm.map(row).join('')
+      + (cold.length ? `<div class="cold-sec">Not used for 2+ months · ${cold.length}<span class="sp"></span><button class="btn sm" data-d-archive-all>${ic('archive', 14)}Archive all</button></div>${cold.map(row).join('')}` : '')
+      + (sorted.length ? '' : '<span class="lbl" style="padding:12px">No category matches</span>');
+    $('[data-d-count]').textContent = `${live.length} / 50${archived.size ? ` · ${archived.size} archived` : ''}`;
+    document.querySelectorAll('[data-d-sort]').forEach(b => b.classList.toggle('on', b.dataset.dSort === sortD));
+  };
+  document.getElementById('d').addEventListener('click', e => {
+    const s = e.target.closest('[data-d-sort]'); if (s) { sortD = s.dataset.dSort; drawD(); return; }
+    const a = e.target.closest('[data-d-archive]'); if (a) { archived.add(+a.dataset.dArchive); openD = null; drawD(); return; }
+    if (e.target.closest('[data-d-archive-all]')) { CATS.filter(c => c.ago >= 60).forEach(c => archived.add(c.id)); drawD(); return; }
+    if (e.target.closest('[data-d-close]')) { openD = null; drawD(); return; }
+    const o = e.target.closest('[data-d-open]'); if (o) { openD = openD === +o.dataset.dOpen ? null : +o.dataset.dOpen; drawD(); }
+  });
+  $('[data-d-q]').addEventListener('input', drawD);
+  drawD();
+
+  /* E: two panes; New picks the least-used color + icon pair */
+  let selE = 0, draftE = null;
+  const lookAlike = d => CATS.filter(c => c.id !== d.id && c.color.toLowerCase() === d.color.toLowerCase() && c.icon === d.icon);
+  const nextLook = () => {
+    let best = null;
+    for (const icon of ICONS) for (const color of SWATCHES) { const n = CATS.filter(c => c.icon === icon && c.color === color).length; if (!best || n < best.n) best = { icon, color, n }; if (best.n === 0) return best; }
+    return best;
+  };
+  const drawE = () => {
+    const found = match($('[data-e-q]').value, CATS);
+    $('[data-e-list]').innerHTML = GROUPS.map(g => { const items = found.filter(c => c.group === g).sort((a, b) => a.name.localeCompare(b.name));
+      return items.length ? `<h5>${g}</h5>${items.map(c => `<button class="opt${!draftE && c.id === selE ? ' on' : ''}" data-e-pick="${c.id}">${glyph(c, 'sm')}${esc(c.name)}</button>`).join('')}` : ''; }).join('') || '<span class="lbl">No match</span>';
+    const d = draftE ?? CATS[selE];
+    const twins = lookAlike(d);
+    $('[data-e-editor]').innerHTML = `
+      <div class="preview">${glyph(d)}<b>${esc(d.name || 'New category')}</b>${draftE ? '<span class="chip">new · next unused look</span>' : `<span class="chip">${d.uses}× in 30 days</span>`}</div>
+      ${twins.length ? `<span class="warn-line">Looks the same as ${twins.map(t => esc(t.name)).join(', ')}. Pick another color or icon.</span>` : ''}
+      <label class="grid" style="gap:4px"><span class="lbl">Name</span><input class="field" data-e-name value="${esc(d.name)}" placeholder="e.g. Groceries" aria-label="Name"></label>
+      <div class="grid" style="gap:4px"><span class="lbl">Color</span><div class="swatches">${SWATCHES.map(s => `<button style="--c:${s}" class="${s === d.color ? 'on' : ''}" data-e-color="${s}" aria-label="Color ${s}"></button>`).join('')}</div></div>
+      <div class="grid" style="gap:4px"><span class="lbl">Icon</span><div class="icons">${ICONS.map(i => `<button class="${i === d.icon ? 'on' : ''}" data-e-icon="${i}" aria-label="${i} icon">${ic(i, 16)}</button>`).join('')}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${draftE ? '' : `<button class="btn sm">${ic('archive', 14)}Archive</button>`}<span class="sp"></span><button class="btn sm pri">${draftE ? 'Create' : 'Save'}</button></div>`;
+  };
+  document.getElementById('e').addEventListener('click', e => {
+    const p = e.target.closest('[data-e-pick]'); if (p) { selE = +p.dataset.ePick; draftE = null; drawE(); return; }
+    if (e.target.closest('[data-e-new]')) { const n = nextLook(); draftE = { id: -1, name: '', color: n.color, icon: n.icon, uses: 0 }; drawE(); $('[data-e-name]').focus(); return; }
+    const col = e.target.closest('[data-e-color]'); const icn = e.target.closest('[data-e-icon]');
+    if (col || icn) { const target = draftE ?? CATS[selE]; const copy = { ...target, ...(col ? { color: col.dataset.eColor } : { icon: icn.dataset.eIcon }) };
+      if (draftE) draftE = copy; else { draftE = null; Object.assign(CATS[selE], copy); } drawE(); }
+  });
+  document.getElementById('e').addEventListener('input', e => { if (e.target.matches('[data-e-name]') && draftE) { draftE.name = e.target.value; const b = document.querySelector('#e .preview b'); if (b) b.textContent = draftE.name || 'New category'; } });
+  $('[data-e-q]').addEventListener('input', drawE);
+  drawE();
+})();
+</script>

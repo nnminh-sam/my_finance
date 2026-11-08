@@ -16,7 +16,6 @@ import {
   subWeeks,
   parseISO,
 } from "date-fns";
-import { Sparkles } from "lucide-react";
 import { getTotalForDate, getTopSpendingsForDate, formatCompactSpending } from "../lib/spendings";
 import {
   FETCH_WEEKS_STEP,
@@ -76,7 +75,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 }) => {
   const { settings } = useSettings();
   const { spendings, incomes, hasLoaded, fetchWeeksSpendings, projectedBetween } = useFinance();
-  const { openPlanPeriod, activeDate: shellActiveDate, calendarBasis: basis } = useFinanceShell();
+  const { activeDate: shellActiveDate, calendarBasis: basis } = useFinanceShell();
   const { user } = useAuth();
   const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
   // Pages and totals follow the calendar month or the budget period, as picked in the top bar.
@@ -642,13 +641,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     end: period.end,
     today: todayKey,
     // The period itself is named in the top bar, beside the Month / Pay cycle switch.
-    tools: (
-      <span className="calendar-overview-tools">
-        <button type="button" className="calendar-plan-btn" onClick={() => openPlanPeriod()}>
-          <Sparkles size={14} aria-hidden="true" /><span className="hide-mobile">Plan this period</span><span className="show-mobile">Plan</span>
-        </button>
-      </span>
-    ),
+    tools: null,
   };
   // A small calendar of the other period kind: the pay cycle in Month view, the month in Pay cycle view.
   // Without a pay cycle set up, the cycle is the month itself, so Month view shows none.
@@ -663,14 +656,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     end: miniPeriod.end,
     focusStart: period.start,
     focusEnd: period.end,
-    marks: (() => {
-      const marks: MiniCalendarSpec["marks"] = {};
-      for (const item of projectedBetween(miniPeriod.start, miniPeriod.end)) marks[item.date] = "planned";
-      for (let date = miniPeriod.start; date <= miniPeriod.end; date = addDays(date, 1)) {
-        if (getTotalForDate(parseISO(date), spendings) > 0) marks[date] = "spent";
-      }
-      return marks;
-    })(),
     onPick: date => onDateClick(parseISO(date)),
   };
 
@@ -779,11 +764,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           backgroundColor: heatmapBg || undefined,
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translateY(-2px)";
                           e.currentTarget.style.filter = "brightness(1.2)";
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "translateY(0)";
                           e.currentTarget.style.filter = "none";
                         }}
                       >

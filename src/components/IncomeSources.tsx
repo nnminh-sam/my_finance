@@ -275,10 +275,8 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
               </fieldset>
             )}
             {['weekly', 'semimonthly', 'monthly', 'yearly'].includes(editor.draft.frequency) && (
-              <label className="income-form-group">
-                <span className="income-form-label">
-                  <input type="checkbox" checked={editor.draft.weekendShift ?? false} onChange={event => change('weekendShift', event.target.checked)} /> Paid on Friday when the payday is a weekend
-                </span>
+              <label className="income-check">
+                <input type="checkbox" checked={editor.draft.weekendShift ?? false} onChange={event => change('weekendShift', event.target.checked)} /> Paid on Friday when the payday is a weekend
               </label>
             )}
 

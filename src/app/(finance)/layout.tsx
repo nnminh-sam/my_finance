@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { format, addMonths, subMonths, addWeeks, subWeeks, parseISO } from 'date-fns';
 import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, LayoutGrid, List, User, Sun, Moon, ChartColumn, Plus, RefreshCw } from 'lucide-react';
-import { PlanPeriodGuide } from '../../components/PlanPeriodGuide';
 import { QuickEntryDialog } from '../../components/quickEntry/QuickEntryDialog';
 import type { SaveResult } from '../../components/quickEntry/useQuickEntry';
 import { MonthlyIncomeModal } from '../../components/MonthlyIncomeModal';
@@ -146,13 +145,6 @@ function FinanceDocument({
     setIncomeDialogMonth(month);
   }, []);
 
-  // "Plan this period" screen, opened from the calendar, the Plans page and the phone Month screen.
-  // The value is a date inside the wanted period (the screen resolves the period from it).
-  const [planPeriodDate, setPlanPeriodDate] = useState<string | null>(null);
-  const openPlanPeriod = useCallback((date?: string) => {
-    setPlanPeriodDate(date ?? format(new Date(), 'yyyy-MM-dd'));
-  }, []);
-
   const urlDate = useMemo(() => readPageDate(fullSearch), [fullSearch]);
   const [calendarDate, setCalendarDate] = useState<Date>(() => new Date());
   const currentDate = page === 'calendar' ? calendarDate : urlDate;
@@ -235,13 +227,12 @@ function FinanceDocument({
     openBackToCalendar,
     openExpense,
     openIncomeModal,
-    openPlanPeriod,
     keypadOpen,
     setKeypadOpen,
     keypadPulse,
     calendarBasis,
     setCalendarBasis,
-  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, openPlanPeriod, keypadOpen, keypadPulse, calendarBasis]);
+  }), [currentDate, activeDate, onActiveDateChange, openDate, openBackToCalendar, openExpense, openIncomeModal, keypadOpen, keypadPulse, calendarBasis]);
 
   const navigation = [
     { page: 'calendar', label: 'Calendar', Icon: LayoutGrid },
@@ -453,7 +444,6 @@ function FinanceDocument({
         </nav>
 
         {incomeDialogMonth && <MonthlyIncomeModal month={incomeDialogMonth} onClose={() => setIncomeDialogMonth(null)} />}
-        {planPeriodDate && <PlanPeriodGuide date={planPeriodDate} onClose={() => setPlanPeriodDate(null)} onDone={setExpenseNotice} />}
         {expenseDialog && (
           <QuickEntryDialog
             expense={expenseDialog.expense}

@@ -67,15 +67,13 @@ test('repeating entries become plans, with weekly days sorted and required', () 
   );
 });
 
-test('a future date or the Plan tab makes a one-time plan; the past stays a real spending', () => {
+test('a future date makes a one-time plan; the past stays a real spending', () => {
   const tomorrow = prepareEntry(base({ date: '2026-11-05', time: '12:00' }), categories, NOW);
   assert.equal(tomorrow.kind, 'plan');
   assert.equal((tomorrow as Extract<PreparedEntry, { kind: 'plan' }>).input.frequency, 'once');
   // Later today is still ahead of 08:30.
   assert.equal(prepareEntry(base({ time: '12:00' }), categories, NOW).kind, 'plan');
   assert.equal(prepareEntry(base({ time: '08:00' }), categories, NOW).kind, 'spending');
-  // The Plan tab on a past time asks for a future date or a repeat.
-  assert.throws(() => prepareEntry(base({ plan: true, time: '08:00' }), categories, NOW), /future date or time/);
   // Editing a spending dated ahead keeps it a spending.
   assert.equal(prepareEntry(base({ date: '2026-11-05' }), categories, NOW, true).kind, 'spending');
 });

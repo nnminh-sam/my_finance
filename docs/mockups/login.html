@@ -1,0 +1,562 @@
+<title>Sign In Card</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== FIXED: tokens. Mirror src/styles/globals.css (dark is the app default, light mirrors .light-mode). ===== */
+:root {
+  --page: #050506; --bg: #09090b; --card: #18181b; --card-2: #1f1f23; --card-3: #27272a; --line: #3f3f46; --line-soft: #2a2a2f;
+  --fg: #f4f4f5; --muted: #a1a1aa; --faint: #71717a;
+  --primary: #3b82f6; --primary-text: #60a5fa; --primary-soft: rgba(59,130,246,.15);
+  --income: #34d399; --danger: #f87171; --danger-soft: rgba(239,68,68,.14); --warn: #f59e0b; --warn-soft: rgba(245,158,11,.14);
+  --ok: #34d399; --ok-soft: rgba(52,211,153,.13);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light; } }
+:root[data-theme="light"] {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light;
+}
+
+/* ===== FIXED: base ===== */
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 var(--font); background: var(--page); color: var(--fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.cur { font-size: .7em; opacity: .6; margin-left: .15em; font-weight: 500; }
+code { font-size: .9em; background: var(--card-2); padding: 1px 5px; border-radius: 5px; }
+svg { flex: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ===== FIXED: page chrome (sections 1–5) ===== */
+.intro { padding-block: 32px 8px; display: grid; gap: 12px; }
+.intro .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary-text); }
+.intro h1 { font-size: 26px; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); max-width: 76ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.part { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 32px; display: grid; gap: 16px; }
+.part > h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; display: flex; gap: 10px; align-items: baseline; }
+.part > h2 .n { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; }
+.part > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.today { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.shot { display: grid; gap: 8px; margin: 0; min-width: 0; }
+.shot img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+.shot figcaption { font-size: 12.5px; color: var(--muted); }
+.issues { display: grid; gap: 8px; counter-reset: issue; margin: 0; padding: 0; list-style: none; }
+.issues li { counter-increment: issue; display: grid; grid-template-columns: 28px 1fr; gap: 2px 10px; background: var(--card); border-radius: 12px; padding: 10px 14px; }
+.issues li::before { content: counter(issue); grid-row: span 2; width: 24px; height: 24px; border-radius: 99px; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--danger-soft); color: var(--danger); }
+.issues li.minor::before { background: var(--warn-soft); color: var(--warn); }
+.issues b { font-size: 14px; } .issues span { color: var(--muted); font-size: 13px; }
+.sev { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 1px; }
+.sev.hi { background: var(--danger-soft); color: var(--danger); } .sev.md { background: var(--warn-soft); color: var(--warn); } .sev.lo { background: var(--card-3); color: var(--muted); }
+.stories { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.story { background: var(--card); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; font-size: 13.5px; }
+.story .who { font-size: 12px; font-weight: 700; color: var(--primary-text); text-transform: uppercase; letter-spacing: .05em; }
+.story p { margin: 0; color: var(--muted); } .story p b { color: var(--fg); font-weight: 600; }
+.tbl { overflow-x: auto; background: var(--card); border-radius: 12px; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+.tbl th, .tbl td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.tbl th { color: var(--faint); font-weight: 500; font-size: 12px; border-top: 0; }
+.dir { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 24px; display: grid; gap: 16px; }
+.dir-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.dir-head .tag { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; text-transform: uppercase; }
+.dir-head h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.dir-head .rec { font-size: 11.5px; font-weight: 600; background: var(--primary-soft); color: var(--primary-text); padding: 2px 9px; border-radius: 999px; }
+.dir > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.notes div { background: var(--card); border-radius: 12px; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+.notes b { display: block; color: var(--fg); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.solves { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); align-items: center; }
+.solves i { font-style: normal; width: 20px; height: 20px; border-radius: 99px; display: inline-grid; place-items: center; font-weight: 700; background: var(--ok-soft); color: var(--ok); }
+
+/* ===== FIXED: stage + app-like components ===== */
+.stage { background: var(--bg); border-radius: 18px; padding: 28px 16px; display: grid; place-items: center; gap: 16px;
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(14.28% - 1px), var(--line-soft) calc(14.28% - 1px) 14.28%); }
+.modal { width: min(640px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.45); display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; }
+.modal.wide { width: min(860px, 100%); }
+.m-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.m-head h4 { margin: 0; font-size: 16px; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.m-head h4 small { color: var(--muted); font-weight: 500; font-size: 13px; }
+.x { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--card-2); color: var(--muted); }
+.m-body { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+.m-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.sp { flex: 1; }
+.btn { height: 38px; padding: 0 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); white-space: nowrap; }
+.btn.pri { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn[disabled] { opacity: .35; cursor: default; }
+.lbl { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.field { height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); padding: 0 12px; width: 100%; min-width: 0; font-size: 14px; }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--card-3); color: var(--muted); white-space: nowrap; }
+.sub { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.sub::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+.grid { display: grid; gap: 10px; }
+
+/* ===== FIXED: stepper visibility ===== */
+.stage-host [data-p] { display: none !important; }
+.stage-host[data-step="0"] [data-p~="0"], .stage-host[data-step="1"] [data-p~="1"], .stage-host[data-step="2"] [data-p~="2"],
+.stage-host[data-step="3"] [data-p~="3"], .stage-host[data-step="4"] [data-p~="4"], .stage-host[data-step="5"] [data-p~="5"] { display: revert !important; }
+.stage-host[data-step="0"] .grid[data-p~="0"], .stage-host[data-step="1"] .grid[data-p~="1"], .stage-host[data-step="2"] .grid[data-p~="2"],
+.stage-host[data-step="3"] .grid[data-p~="3"], .stage-host[data-step="4"] .grid[data-p~="4"], .stage-host[data-step="5"] .grid[data-p~="5"] { display: grid !important; }
+
+$1/* Two accent hues used only for light and gradients, mixed from the app blue. */
+:root { --violet: #8b5cf6; --teal: #14b8a6;
+  /* Solid brand blue for the logo and button: white text on it is 5.17:1 (dark) and 6.70:1 (light). The app blue #3b82f6 is only 3.68:1. */
+  --brand-solid: #2563eb; --brand-solid-hover: #1d4ed8; --aurora-strength: .42; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --brand-solid: #1d4ed8; --brand-solid-hover: #1e40af; --aurora-strength: .30; } }
+:root[data-theme="light"] { --brand-solid: #1d4ed8; --brand-solid-hover: #1e40af; --aurora-strength: .30; }
+
+/* ---------- shared form pieces (layout A) ---------- */
+.auth-stage { position: relative; overflow: hidden; min-height: 600px; padding: 56px 16px; background: var(--bg); }
+.auth-host { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; }
+.theme-fab { position: absolute; top: 14px; right: 14px; z-index: 3; width: 38px; height: 38px; border-radius: 99px; display: grid; place-items: center; border: 1px solid var(--line); background: color-mix(in srgb, var(--card) 70%, transparent); color: var(--muted); backdrop-filter: blur(8px); }
+.theme-fab:hover { color: var(--fg); }
+.acard { width: min(400px, 100%); display: grid; gap: 22px; padding: 32px 28px; border-radius: 22px; background: var(--card); border: 1px solid var(--line); }
+.brand { display: grid; justify-items: center; gap: 12px; text-align: center; }
+.brand .logo { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--primary), var(--violet)); }
+.brand .appname { font-size: 13px; font-weight: 700; color: var(--primary-text); letter-spacing: .04em; }
+.brand h4 { margin: -4px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -.025em; }
+.aform { display: grid; gap: 14px; }
+.fld { display: grid; gap: 6px; }
+.fld > span { font-size: 13px; font-weight: 600; }
+.inp { position: relative; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); transition: border-color .15s, box-shadow .15s, background .15s; }
+.inp:focus-within { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); background: var(--card); }
+.inp input { flex: 1; min-width: 0; height: 48px; border: 0; background: none; outline: none; padding: 0 14px; font-size: 15px; color: var(--fg); }
+.inp .eye { width: 42px; height: 42px; display: grid; place-items: center; color: var(--muted); border-radius: 10px; margin-right: 3px; }
+.inp .eye:hover { color: var(--fg); background: var(--card-3); }
+/* Floating label */
+.fld.float .inp input { height: 56px; padding: 20px 14px 4px; }
+.fld.float .flabel { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); font-size: 15px; color: var(--muted); pointer-events: none; transition: top .15s, font-size .15s, color .15s, transform .15s; }
+.fld.float input:focus + .flabel, .fld.float input:not(:placeholder-shown) + .flabel { top: 11px; transform: none; font-size: 11.5px; font-weight: 600; color: var(--primary-text); }
+.fld.float.bad input + .flabel { color: var(--danger); }
+.fld.bad .inp { border-color: var(--danger); }
+.fld.bad .inp:focus-within { box-shadow: 0 0 0 4px var(--danger-soft); }
+.ferr, .caps { display: flex; align-items: center; gap: 6px; font-size: 12.5px; padding-left: 2px; }
+.ferr { color: var(--danger); } .caps { color: var(--warn); }
+.ferr[hidden], .caps[hidden], .banner[hidden] { display: none; }
+.banner { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--danger-soft); color: var(--danger); font-size: 13.5px; font-weight: 500; animation: rise .2s ease; }
+@keyframes rise { from { opacity: 0; transform: translateY(-4px); } }
+.meter { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meter .bar { height: 4px; border-radius: 4px; background: var(--card-3); overflow: hidden; }
+.meter .bar i { display: block; height: 100%; width: 0; background: var(--warn); transition: width .15s, background .15s; }
+.meter.ok .bar i { background: var(--ok); } .meter.ok span { color: var(--ok); }
+.submit { position: relative; overflow: hidden; height: 50px; border-radius: 12px; color: #fff; font-weight: 600; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); transition: transform .1s, box-shadow .2s, filter .2s; }
+.submit:hover:not([disabled]) { filter: brightness(1.08); }
+.submit:active:not([disabled]) { transform: scale(.985); }
+.submit[disabled] { opacity: .7; cursor: default; }
+.switch { text-align: center; font-size: 13.5px; color: var(--muted); margin: 0; }
+.switch button { color: var(--primary-text); font-weight: 600; }
+.spin { width: 18px; height: 18px; border-radius: 99px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.success { display: grid; justify-items: center; gap: 6px; color: var(--ok); font-weight: 600; }
+
+/* ---------- A1 Aurora glass ---------- */
+/* The light stays in the corners and is weaker in light mode, so the card centre is calm and the blue logo and button stand out. */
+.st-aurora { background: var(--bg); }
+.aurora { position: absolute; inset: -20%; filter: blur(80px); opacity: var(--aurora-strength); }
+.aurora i { position: absolute; width: 42%; aspect-ratio: 1; border-radius: 50%; }
+.aurora i:nth-child(1) { left: -6%; top: -8%; background: var(--primary); animation: drift1 18s ease-in-out infinite alternate; }
+.aurora i:nth-child(2) { right: -8%; top: 18%; background: var(--violet); animation: drift2 22s ease-in-out infinite alternate; }
+.aurora i:nth-child(3) { left: 24%; bottom: -22%; background: var(--teal); animation: drift3 20s ease-in-out infinite alternate; }
+@keyframes drift1 { to { transform: translate(10%, 8%) scale(1.08); } }
+@keyframes drift2 { to { transform: translate(-8%, 10%) scale(.92); } }
+@keyframes drift3 { to { transform: translate(8%, -10%) scale(1.1); } }
+.st-aurora .acard { background: color-mix(in srgb, var(--card) 88%, transparent); border-color: color-mix(in srgb, var(--fg) 10%, transparent);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: 0 30px 80px rgba(0,0,0,.22), inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent); }
+@supports not (backdrop-filter: blur(1px)) { .st-aurora .acard { background: var(--card); } }
+/* Logo: solid deep blue, a ring in the card colour to cut it out from anything behind, then a neutral shadow. */
+.st-aurora .brand .logo { background: var(--brand-solid); box-shadow: 0 0 0 4px var(--card), 0 0 0 5px color-mix(in srgb, var(--brand-solid) 35%, transparent), 0 12px 28px rgba(0,0,0,.28); }
+.st-aurora .inp { background: color-mix(in srgb, var(--card-2) 85%, transparent); }
+.st-aurora .submit { background: var(--brand-solid); box-shadow: 0 1px 0 rgba(255,255,255,.15) inset, 0 10px 22px color-mix(in srgb, var(--brand-solid) 30%, transparent); }
+.st-aurora .submit:hover:not([disabled]) { background: var(--brand-solid-hover); filter: none; }
+.st-aurora .submit::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.18) 50%, transparent 70%); transform: translateX(-100%); transition: transform .6s; }
+.st-aurora .submit:hover::after { transform: translateX(100%); }
+.st-aurora .switch button, .st-aurora .brand .appname { color: var(--primary-text); }
+
+/* ---------- A2 Split with a glimpse ---------- */
+.st-split { padding: 0; }
+.split { display: grid; grid-template-columns: 1.1fr 1fr; min-height: 600px; width: 100%; align-self: stretch; }
+.showcase { position: relative; overflow: hidden; padding: 40px; display: flex; flex-direction: column; gap: 24px; color: #fff;
+  background: radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--violet) 70%, transparent), transparent 55%), radial-gradient(circle at 90% 90%, color-mix(in srgb, var(--teal) 60%, transparent), transparent 50%), linear-gradient(160deg, #1d4ed8, #312e81); }
+.sc-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .02em; }
+.sc-brand .logo { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(255,255,255,.16); }
+.showcase h4 { margin: 0; font-size: 34px; line-height: 1.12; letter-spacing: -.03em; font-weight: 700; text-wrap: balance; }
+.float-cards { position: relative; flex: 1; min-height: 260px; }
+.fc { position: absolute; display: grid; gap: 4px; padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); backdrop-filter: blur(12px); box-shadow: 0 20px 40px rgba(0,0,0,.25); font-size: 13px; }
+.fc small { opacity: .75; font-size: 12px; }
+.fc b { font-size: 22px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.fc-left { left: 0; top: 6px; width: min(300px, 90%); animation: bob 6s ease-in-out infinite; }
+.fc-item { right: 6%; top: 150px; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; animation: bob 7s ease-in-out -2s infinite; }
+.fc-item b { font-size: 14px; } .fc-item .dot { width: 10px; height: 10px; border-radius: 99px; background: #fde047; }
+.fc-pay { left: 12%; bottom: 0; animation: bob 8s ease-in-out -4s infinite; }
+.fc-pay b { color: #6ee7b7; font-size: 18px; }
+.runway { display: flex; gap: 3px; height: 8px; margin: 4px 0; } .runway i { border-radius: 4px; background: rgba(255,255,255,.35); }
+.runway i:nth-child(2) { background: #fbbf24; } .runway i:nth-child(3) { background: #93c5fd; }
+@keyframes bob { 50% { transform: translateY(-8px); } }
+.st-split .auth-host { padding: 40px 24px; background: var(--card); }
+.st-split .acard { border: 0; padding: 0; background: none; }
+
+/* ---------- A3 App behind glass ---------- */
+.ghost-cal { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 6px; padding: 16px;
+  filter: blur(6px) saturate(.9); opacity: .55; transform: scale(1.04); transition: filter .7s, opacity .7s, transform .7s; }
+.ghost-cal .gh { font-size: 12px; color: var(--muted); text-align: center; align-self: end; }
+.ghost-cal .gc { border-radius: 10px; background: var(--card); border: 1px solid var(--line-soft); padding: 8px; display: grid; align-content: start; gap: 4px; font-size: 12px; }
+.ghost-cal .gc b { font-size: 16px; } .ghost-cal .gc small { color: var(--primary-text); font-weight: 600; }
+.ghost-cal .gc i { height: 5px; border-radius: 3px; background: var(--card-3); } .ghost-cal .gc i + i { width: 60%; }
+.ghost-cal .gc.today { border-color: var(--primary); } .ghost-cal .gc.plan small { color: var(--muted); }
+.st-behind::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at center, color-mix(in srgb, var(--bg) 30%, transparent), color-mix(in srgb, var(--bg) 75%, transparent)); transition: opacity .7s; }
+.st-behind .acard { box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+.st-behind.unlocked .ghost-cal { filter: none; opacity: 1; transform: none; }
+.st-behind.unlocked::after { opacity: 0; }
+.st-behind.unlocked .acard { opacity: 0; transform: scale(.96); transition: opacity .5s .4s, transform .5s .4s; }
+
+/* ---------- A4 Quiet ink ---------- */
+.st-ink { background: var(--card); }
+.st-ink .acard { background: none; border: 0; padding: 0; width: min(360px, 100%); gap: 30px; }
+.st-ink .brand .logo { width: 64px; height: 64px; border-radius: 20px; background: var(--fg); color: var(--card); }
+.st-ink .brand h4 { font-size: 34px; letter-spacing: -.035em; }
+.st-ink .brand .appname { color: var(--muted); text-transform: uppercase; letter-spacing: .14em; font-size: 11.5px; }
+.st-ink .inp { border: 0; border-bottom: 1.5px solid var(--line); border-radius: 0; background: none; }
+.st-ink .inp:focus-within { box-shadow: none; border-color: var(--primary); background: none; }
+.st-ink .inp input { padding: 0 2px; }
+.st-ink .fld > span { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.st-ink .submit { background: var(--fg); color: var(--card); border-radius: 99px; margin-top: 6px; }
+.st-ink .spin { border-color: color-mix(in srgb, var(--card) 35%, transparent); border-top-color: var(--card); }
+
+@media (max-width: 760px) {
+  .split { grid-template-columns: 1fr; }
+  .showcase { padding: 24px; gap: 8px; } .showcase h4 { font-size: 24px; } .float-cards { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .aurora i, .fc { animation: none !important; } }
+
+</style>
+
+<!-- FIXED: icon sprite. Add symbols here as needed (lucide-style, 24×24, stroke=currentColor). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  $1  <symbol id="i-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 4.2A10 10 0 0 1 12 4c6.4 0 10 8 10 8a17 17 0 0 1-2.2 3.2M6.6 6.6A17 17 0 0 0 2 12s3.6 8 10 8a9.7 9.7 0 0 0 5.4-1.6M14.1 14.1a3 3 0 0 1-4.2-4.2M2 2l20 20"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-capslock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 4-8 8h5v4h6v-4h5z"/><path d="M9 20h6"/></symbol>
+</svg>
+
+<main class="wrap">
+  <section class="intro">
+    <span class="eyebrow">Mockup · Sign in and sign up</span>
+    <h1>The sign-in card talks too much and shows errors two ways</h1>
+    <p>The card explains security instead of helping you type, hides the password you typed, and reports mistakes in two different places with two different looks. It also greets everyone with "Welcome back" and mixes left and centered alignment. Below, the chosen layout A in four visual styles; every card is a working form.</p>
+    <div class="legend">
+      <span>In the demos, the right password is <code>myfinance2026</code>; anything else shows the server error</span>
+      <span>Try a bad email, an empty password, Caps Lock, and the eye button</span>
+    </div>
+  </section>
+
+  <section class="part" id="today">
+    <h2><span class="n">01</span>Today</h2>
+    <div class="today">
+      <figure class="shot"><img src="assets/login/error.png" alt="Login card with Welcome back title, red Invalid email or password text and a security footer"><figcaption>After a wrong password: red text above the button, a security note at the bottom.</figcaption></figure>
+      <figure class="shot"><img src="assets/login/native-tooltip.png" alt="The browser's own tooltip saying Please include an @ in the email address, over the old red error"><figcaption>Editing the email: the browser's own tooltip appears while the old red error is still shown.</figcaption></figure>
+    </div>
+    <ol class="issues">
+      <li><b>Technical footer text <span class="sev md">Medium</span></b><span>"Secure sign-in · Your password is never stored in plain text" with a lock icon (<code>AuthScreen.tsx:82</code>). It explains the system instead of helping the person.</span></li>
+      <li><b>No way to see the password <span class="sev hi">High</span></b><span>The field is a plain <code>type="password"</code> with no show button (<code>AuthScreen.tsx:67</code>). On a phone keyboard, typos go unseen until the server refuses.</span></li>
+      <li><b>Two error systems <span class="sev hi">High</span></b><span>Without <code>noValidate</code>, the browser shows its own English tooltip for a bad email or a short password (<code>AuthScreen.tsx:56,64,67</code>), while server errors are red text above the button (<code>:70</code>). Different place, look and wording.</span></li>
+      <li><b>The error stays while you fix it <span class="sev md">Medium</span></b><span>The message is only cleared on the next submit (<code>AuthScreen.tsx:29</code>), so "Invalid email or password" sits there while you retype.</span></li>
+      <li><b>Errors don't point at a field <span class="sev md">Medium</span></b><span>No <code>aria-invalid</code> or red border on the inputs; one sentence under Password for everything.</span></li>
+      <li><b>"Welcome back" for everyone <span class="sev md">Medium</span></b><span>The title is fixed (<code>AuthScreen.tsx:51</code>), even on a device that has never signed in. The subtitle repeats the app name already above it.</span></li>
+      <li><b>Mixed alignment <span class="sev md">Medium</span></b><span>Logo, app name, title and subtitle are left-aligned; the switch link and footer are centered (<code>AuthScreen.css</code> <code>.auth-switch</code>, <code>.auth-footer</code>). The app name floats under the logo, separated by the theme button row.</span></li>
+      <li><b>The theme button competes with the brand <span class="sev lo">Low</span></b><span>"Dark mode" is a labelled button at the same height as the logo (<code>AuthScreen.tsx:45</code>).</span></li>
+      <li><b>Sign-up rules are learned by failing <span class="sev md">Medium</span></b><span>The 12-character minimum is a small grey hint (<code>:69</code>); the browser tooltip or the server message (<code>http.ts:167</code>, "at most 512 UTF-8 bytes") is how you find out.</span></li>
+      <li><b>Waiting screens are bare text <span class="sev lo">Low</span></b><span>"Restoring your session…" and "Please wait…" are plain text (<code>(auth)/layout.tsx:23</code>, <code>AuthScreen.tsx:71</code>).</span></li>
+      <li class="minor"><b>No "Forgot password" <span class="sev lo">To verify</span></b><span>There is no reset endpoint in <code>src/server/auth</code>. Out of scope here; the layouts leave room for the link.</span></li>
+    </ol>
+  </section>
+
+  <section class="part" id="people">
+    <h2><span class="n">02</span>Who and when</h2>
+    <div class="stories">
+      <div class="story"><span class="who">Returning user on a phone</span><p>As someone signing in on a small keyboard, I want to <b>see what I typed</b> so that one typo doesn't cost a round trip.</p></div>
+      <div class="story"><span class="who">New user</span><p>As someone creating an account, I want to <b>see the password rule as I type</b> so that I don't learn it from an error.</p></div>
+      <div class="story"><span class="who">Anyone who mistypes</span><p>As someone who got it wrong, I want <b>one clear message next to the field</b> that goes away when I fix it.</p></div>
+      <div class="story"><span class="who">First visit</span><p>As someone opening the app for the first time, I want a <b>plain "Sign in"</b>, not a greeting that assumes I've been here.</p></div>
+    </div>
+    <div class="tbl"><table>
+      <tr><th>Use case</th><th>Trigger</th><th>Steps today</th><th>Goal</th></tr>
+      <tr><td>Sign in</td><td>Session expired</td><td>Type email and password blind → submit → error → retype both</td><td>Eye button; error clears as you edit</td></tr>
+      <tr><td>Typo in email</td><td>Missing @</td><td>Browser tooltip in English, old red error still visible</td><td>One message under the email field</td></tr>
+      <tr><td>Create account</td><td>New user</td><td>Short password → browser tooltip or server error</td><td>Live 12+ meter</td></tr>
+      <tr><td>Switch theme</td><td>Night use</td><td>Big "Dark mode" button inside the card</td><td>Small icon in the corner</td></tr>
+    </table></div>
+  </section>
+
+  <section class="part" id="directions">
+    <h2><span class="n">03</span>Directions: A, four ways</h2>
+    <p>Same structure and behaviour as A: centered brand, "Sign in", eye button, Caps Lock note, messages under each field, one banner that clears as you type, a live 12+ meter on sign-up, and the theme icon in the corner. What changes is the look. Each card works; switch to "Create an account" to see sign-up.</p>
+  </section>
+
+  <section class="dir" id="a1">
+    <div class="dir-head"><span class="tag">A1</span><h3>Aurora glass</h3><span class="rec">Recommended</span></div>
+    <p>Slow-moving color light behind a frosted card. The light stays in the corners so the centre is calm; the logo and button are a solid deep blue, the logo cut out by a ring in the card colour. Labels sit inside the fields and float up when you type.</p>
+    <div class="solves">Solves <i>1</i>–<i>10</i></div>
+    <div class="stage auth-stage st-aurora"><div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div><div class="auth-host" data-auth="centered" data-float></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Feels premium with pure CSS: gradients, blur, no images</li><li>Logo and button use a deeper blue with white text at 5.2:1 (dark) and 6.7:1 (light); today's button is 3.7:1</li><li>Floating labels save height on phones</li></ul></div>
+      <div><b>Watch</b><ul><li><code>backdrop-filter</code> costs a little on old Android; falls back to a solid card</li><li>Motion stops with reduced-motion settings</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="a2">
+    <div class="dir-head"><span class="tag">A2</span><h3>Split with a glimpse</h3></div>
+    <p>On wide screens the left half shows what the app does, with your real numbers as floating cards: what's left until payday, the runway bar, today's breakfast. The form on the right is plain and quiet. On phones the left half shrinks to a short colored band.</p>
+    <div class="solves">Solves <i>1</i>–<i>10</i></div>
+    <div class="stage auth-stage st-split"><div class="split">
+      <aside class="showcase" aria-hidden="true">
+        <div class="sc-brand"><span class="logo"><svg width="18" height="18" aria-hidden="true"><use href="#i-wallet"/></svg></span>MyFinance</div>
+        <h4>Know what's left<br>until payday.</h4>
+        <div class="float-cards">
+          <div class="fc fc-left"><small>Left until 5 Dec</small><b>3.836.583 ₫</b><div class="runway"><i style="flex:62"></i><i style="flex:10"></i><i style="flex:28"></i></div><small>142.096 ₫ a day for 27 days</small></div>
+          <div class="fc fc-item"><span class="dot"></span>Breakfast<b>~15.000 ₫</b></div>
+          <div class="fc fc-pay"><small>Salary · 5 Nov</small><b>+11.415.900 ₫</b></div>
+        </div>
+      </aside>
+      <div class="auth-host" data-auth="centered"></div>
+    </div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>First-time visitors see the point of the app</li><li>The form side stays minimal</li></ul></div>
+      <div><b>Watch</b><ul><li>The showcase numbers must be sample data, never the user's</li><li>More to maintain when the app's look changes</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="a3">
+    <div class="dir-head"><span class="tag">A3</span><h3>App behind glass</h3></div>
+    <p>The calendar itself sits blurred and dimmed behind the card, as if the app is waiting for you. Signing in lifts the blur.</p>
+    <div class="solves">Solves <i>1</i>–<i>10</i></div>
+    <div class="stage auth-stage st-behind"><div class="ghost-cal" aria-hidden="true" data-ghost></div><div class="auth-host" data-auth="centered"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Strong sense of place: you are one step from your calendar</li><li>Sign-in feels like unlocking, a nice moment</li></ul></div>
+      <div><b>Watch</b><ul><li>The backdrop is a static picture, not the user's data</li><li>Busy background behind form text needs strong card contrast</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="a4">
+    <div class="dir-head"><span class="tag">A4</span><h3>Quiet ink</h3></div>
+    <p>No card at all. A large logo, big type, fields drawn as simple lines that light up in blue on focus, and one solid button. Everything else is space.</p>
+    <div class="solves">Solves <i>1</i>–<i>10</i></div>
+    <div class="stage auth-stage st-ink"><div class="auth-host" data-auth="centered"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Timeless, fastest to load, nothing to date it</li><li>Fits the app's flat, quiet screens</li></ul></div>
+      <div><b>Watch</b><ul><li>Underline fields are harder to see for some people; keep a clear focus state</li><li>Less "wow" than A1</li></ul></div>
+    </div>
+  </section>
+
+  <section class="part" id="recommendation" style="padding-bottom:48px">
+    <h2><span class="n">04</span>Recommendation</h2>
+    <p>Build <b>A1, Aurora glass</b>. It is the most modern of the four, needs no images or data, and the floating labels make the form shorter on phones. If you want first-time visitors to understand the app before signing up, A2's showcase can be added to wide screens later without touching the form.</p>
+    <div class="tbl"><table>
+      <tr><th>File</th><th>Change</th></tr>
+      <tr><td><code>src/components/AuthScreen.tsx</code></td><td>Centered brand; "Sign in" / "Create account"; no subtitle or footer; <code>noValidate</code> + own field checks; floating labels; eye button; Caps Lock note; error clears on edit; length meter on sign-up; spinner in the button; theme icon in the page corner</td></tr>
+      <tr><td><code>src/styles/AuthScreen.css</code></td><td>Aurora background (3 blurred gradients, reduced-motion aware), glass card with solid fallback, floating-label fields, error and banner styles</td></tr>
+      <tr><td><code>src/server/auth/http.ts:167</code></td><td>Plain register message</td></tr>
+      <tr><td><code>src/app/(auth)/layout.tsx</code></td><td>Waiting screen on the same aurora background with the logo and a spinner</td></tr>
+    </table></div>
+  </section>
+</main>
+
+<script>
+/* FIXED: stepper engine. Page-specific scripts go in a second <script> below. */
+(() => {
+  document.querySelectorAll('.stage-host').forEach(host => {
+    const lefts = (host.dataset.lefts || '').split('|');
+    const max = Math.max(0, ...[...host.querySelectorAll('[data-p]')].flatMap(el => el.dataset.p.split(' ').map(Number)));
+    const set = step => {
+      step = Math.max(0, Math.min(max, step));
+      host.dataset.step = step;
+      if (host.dataset.lefts) host.querySelectorAll('[data-left]').forEach(el => { el.textContent = lefts[step] ?? ''; });
+      const next = host.querySelector('[data-go="next"]');
+      if (next && next.dataset.labels) { const l = next.dataset.labels.split('|'); const t = [...next.childNodes].find(n => n.nodeType === 3); if (t) t.nodeValue = l[step] ?? l[l.length - 1]; }
+      const back = host.querySelector('[data-go="back"]'); if (back) back.disabled = step === 0;
+      host.querySelectorAll('[data-go]:not([data-go="next"]):not([data-go="back"])').forEach(b => {
+        const on = +b.dataset.go === step; b.classList.toggle('on', on); b.classList.toggle('done', +b.dataset.go < step);
+        if (on) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      });
+      host.dispatchEvent(new CustomEvent('step', { detail: step }));
+    };
+    host.addEventListener('click', e => {
+      const b = e.target.closest('[data-go]'); if (!b || b.disabled || !host.contains(b)) return;
+      const cur = +host.dataset.step, go = b.dataset.go;
+      set(go === 'next' ? (cur === max ? 0 : cur + 1) : go === 'back' ? cur - 1 : +go);
+    });
+    set(+host.dataset.step || 0);
+  });
+})();
+</script>
+
+<script>
+(() => {
+  const RIGHT = 'myfinance2026';
+  const EMAIL = 'nnminh.sam.1803@gmail.com';
+  const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const ic = (n, s = 16) => `<svg width="${s}" height="${s}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  const validEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
+  /* Theme icon in each stage corner switches the whole page, like the real app would. */
+  const themeIcon = () => (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')) === 'dark' ? 'sun' : 'moon';
+  document.addEventListener('click', e => {
+    if (!e.target.closest('[data-theme-fab]')) return;
+    document.documentElement.dataset.theme = themeIcon() === 'sun' ? 'light' : 'dark';
+    document.querySelectorAll('[data-theme-fab]').forEach(b => { b.innerHTML = ic(themeIcon(), 17); b.setAttribute('aria-label', themeIcon() === 'sun' ? 'Light mode' : 'Dark mode'); });
+  });
+
+  function demo(stage) {
+    const kind = stage.dataset.auth;
+    const s = { mode: 'login', step: kind === 'emailfirst' ? 'email' : 'form', remembered: kind === 'remembered', email: kind === 'remembered' ? EMAIL : '', name: '', password: '', show: false, busy: false, done: '', errors: {}, banner: '' };
+    const id = n => `${kind}-${n}`;
+
+    const field = (name, label, type, extra = '') => {
+      const isPw = name === 'password';
+      const value = s[name];
+      const err = s.errors[name];
+      // Floating labels: the label sits inside the field and moves up once it has focus or text.
+      const float = 'float' in stage.dataset;
+      return `<label class="fld${float ? ' float' : ''}${err ? ' bad' : ''}" data-fld="${name}">
+          ${float ? '' : `<span>${label}</span>`}
+          <div class="inp"><input id="${id(name)}" name="${name}" type="${isPw && !s.show ? 'password' : type}" value="${esc(value)}" ${extra} ${float ? 'placeholder=" "' : ''}
+            aria-invalid="${Boolean(err)}" aria-describedby="${id(name)}-err">${float ? `<span class="flabel">${label}</span>` : ''}
+            ${isPw ? `<button type="button" class="eye" data-eye aria-label="${s.show ? 'Hide password' : 'Show password'}" aria-pressed="${s.show}">${ic(s.show ? 'eye-off' : 'eye', 18)}</button>` : ''}</div>
+          <span class="ferr" id="${id(name)}-err" ${err ? '' : 'hidden'}>${ic('alert', 14)}<span>${esc(err || '')}</span></span>
+          ${isPw ? `<span class="caps" data-caps hidden>${ic('capslock', 14)}Caps Lock is on</span>` : ''}
+          ${isPw && s.mode === 'signup' ? meter() : ''}
+        </label>`;
+    };
+    const meter = () => {
+      const n = s.password.length, ok = n >= 12;
+      return `<div class="meter${ok ? ' ok' : ''}" data-meter><div class="bar"><i style="width:${Math.min(100, n / 12 * 100)}%"></i></div><span>${ok ? '12+ ✓' : `${n} / 12`}</span></div>`;
+    };
+    const banner = () => `<div class="banner" role="alert" data-banner ${s.banner ? '' : 'hidden'}>${ic('alert', 17)}<span>${esc(s.banner)}</span></div>`;
+    const submit = label => `<button class="submit" type="submit" ${s.busy ? 'disabled' : ''}>${s.busy ? '<span class="spin"></span>' : esc(label)}</button>`;
+    const brand = title => `<div class="brand"><span class="logo">${ic('wallet', 28)}</span><span class="appname">MyFinance</span>${title ? `<h4>${title}</h4>` : ''}</div>`;
+
+    const render = () => {
+      stage.closest('.auth-stage')?.classList.toggle('unlocked', Boolean(s.done));
+      if (s.done) {
+        stage.innerHTML = `<button class="theme-fab" data-theme-fab aria-label="Theme">${ic(themeIcon(), 17)}</button>
+          <div class="acard">${brand('')}<div class="success">${ic('arrow', 22)}${esc(s.done)}</div><button class="btn" data-reset>Reset demo</button></div>`;
+        return;
+      }
+      let inner = '';
+      if (kind === 'tabs') {
+        inner = `${brand('')}
+          <div class="atabs" role="tablist"><button type="button" role="tab" class="${s.mode === 'login' ? 'on' : ''}" aria-selected="${s.mode === 'login'}" data-mode="login">Sign in</button><button type="button" role="tab" class="${s.mode === 'signup' ? 'on' : ''}" aria-selected="${s.mode === 'signup'}" data-mode="signup">Create account</button></div>
+          <form class="aform" novalidate>${s.mode === 'signup' ? field('name', 'Name', 'text', 'autocomplete="name"') : ''}${field('email', 'Email', 'email', 'autocomplete="username" inputmode="email"')}${field('password', 'Password', 'text', `autocomplete="${s.mode === 'signup' ? 'new-password' : 'current-password'}"`)}${banner()}${submit(s.mode === 'signup' ? 'Create account' : 'Sign in')}</form>`;
+      } else if (kind === 'emailfirst' && s.mode === 'login') {
+        inner = s.step === 'email'
+          ? `${brand('Sign in')}<form class="aform" novalidate>${field('email', 'Email', 'email', 'autocomplete="username" inputmode="email"')}${submit('Continue')}</form>
+             <p class="switch">New here? <button type="button" data-mode="signup">Create an account</button></p>`
+          : `${brand('')}<div class="brand"><span class="who"><span class="av">${esc(s.email[0]?.toUpperCase() || '?')}</span>${esc(s.email)}<button type="button" data-step="email">Change</button></span></div>
+             <form class="aform" novalidate>${field('password', 'Password', 'text', 'autocomplete="current-password"')}${banner()}${submit('Sign in')}</form>`;
+      } else if (kind === 'remembered' && s.remembered && s.mode === 'login') {
+        inner = `${brand('Welcome back, Minh')}<div class="brand"><span class="who"><span class="av">M</span>${esc(EMAIL)}<button type="button" data-forget>Not you?</button></span></div>
+          <form class="aform" novalidate>${field('password', 'Password', 'text', 'autocomplete="current-password"')}${banner()}${submit('Sign in')}</form>`;
+      } else {
+        const signup = s.mode === 'signup';
+        inner = `${brand(signup ? 'Create account' : 'Sign in')}
+          <form class="aform" novalidate>${signup ? field('name', 'Name', 'text', 'autocomplete="name"') : ''}${field('email', 'Email', 'email', 'autocomplete="username" inputmode="email"')}${field('password', 'Password', 'text', `autocomplete="${signup ? 'new-password' : 'current-password'}"`)}${banner()}${submit(signup ? 'Create account' : 'Sign in')}</form>
+          <p class="switch">${signup ? 'Have an account? <button type="button" data-mode="login">Sign in</button>' : 'New here? <button type="button" data-mode="signup">Create an account</button>'}</p>`;
+      }
+      stage.innerHTML = `<button class="theme-fab" data-theme-fab aria-label="Theme">${ic(themeIcon(), 17)}</button><div class="acard">${inner}</div>`;
+    };
+
+    const setFieldError = (name, msg) => {
+      s.errors[name] = msg || '';
+      const f = stage.querySelector(`[data-fld="${name}"]`); if (!f) return;
+      f.classList.toggle('bad', Boolean(msg));
+      f.querySelector('input').setAttribute('aria-invalid', String(Boolean(msg)));
+      const e = f.querySelector('.ferr'); e.hidden = !msg; e.querySelector('span').textContent = msg || '';
+    };
+    const check = name => {
+      if (name === 'email') return !s.email.trim() ? 'Enter your email.' : validEmail(s.email) ? '' : 'Enter an email like name@gmail.com.';
+      if (name === 'password') return !s.password ? 'Enter your password.' : s.mode === 'signup' && s.password.length < 12 ? 'Use at least 12 characters.' : '';
+      if (name === 'name') return s.name.trim() ? '' : 'Enter your name.';
+      return '';
+    };
+
+    stage.addEventListener('input', e => {
+      const n = e.target.name; if (!n) return;
+      s[n] = e.target.value;
+      if (s.errors[n]) setFieldError(n, '');
+      if (s.banner) { s.banner = ''; const b = stage.querySelector('[data-banner]'); if (b) b.hidden = true; }
+      if (n === 'password' && s.mode === 'signup') { const m = stage.querySelector('[data-meter]'); if (m) m.outerHTML = meter(); }
+    });
+    stage.addEventListener('focusout', e => { if (e.target.name === 'email' && s.email.trim()) setFieldError('email', check('email')); });
+    const caps = e => { if (e.target.name !== 'password' || !e.getModifierState) return; const c = stage.querySelector('[data-caps]'); if (c) c.hidden = !e.getModifierState('CapsLock'); };
+    stage.addEventListener('keydown', caps); stage.addEventListener('keyup', caps);
+
+    stage.addEventListener('click', e => {
+      const t = e.target;
+      if (t.closest('[data-eye]')) { const input = stage.querySelector('input[name="password"]'); const pos = input.selectionStart; s.show = !s.show; render(); const again = stage.querySelector('input[name="password"]'); again.focus(); again.setSelectionRange(pos, pos); return; }
+      const m = t.closest('[data-mode]'); if (m) { s.mode = m.dataset.mode; s.errors = {}; s.banner = ''; s.password = ''; if (s.mode === 'signup') s.remembered = false; render(); return; }
+      const st = t.closest('[data-step]'); if (st) { s.step = st.dataset.step; s.password = ''; s.banner = ''; render(); stage.querySelector('input')?.focus(); return; }
+      if (t.closest('[data-forget]')) { s.remembered = false; s.email = ''; s.password = ''; render(); return; }
+      if (t.closest('[data-reset]')) { Object.assign(s, { mode: 'login', step: kind === 'emailfirst' ? 'email' : 'form', remembered: kind === 'remembered', email: kind === 'remembered' ? EMAIL : '', name: '', password: '', show: false, done: '', errors: {}, banner: '' }); render(); }
+    });
+
+    stage.addEventListener('submit', e => {
+      e.preventDefault();
+      const names = [...stage.querySelectorAll('form input[name]')].map(i => i.name);
+      let first = null;
+      for (const n of names) { const msg = check(n); setFieldError(n, msg); if (msg && !first) first = n; }
+      if (first) { stage.querySelector(`input[name="${first}"]`).focus(); return; }
+      if (kind === 'emailfirst' && s.step === 'email') { s.step = 'password'; render(); stage.querySelector('input[name="password"]').focus(); return; }
+      s.busy = true; render();
+      setTimeout(() => {
+        s.busy = false;
+        if (s.mode === 'signup') s.done = 'Account created';
+        else if (s.password === RIGHT) s.done = 'Signed in';
+        else s.banner = 'Email or password is wrong.';
+        render();
+        if (s.banner) stage.querySelector('input[name="password"]')?.focus();
+      }, 700);
+    });
+    render();
+  }
+  document.querySelectorAll('[data-auth]').forEach(demo);
+
+  /* A3: a static picture of the calendar (sample amounts) to sit behind the card. */
+  const AMOUNTS = { 5: '1.627.000', 6: '15.000', 7: '6.555.000', 8: '199.000' };
+  document.querySelectorAll('[data-ghost]').forEach(el => {
+    const head = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => '<span class="gh">' + d + '</span>').join('');
+    const cells = Array.from({ length: 35 }, (_, i) => {
+      const day = i - 1; const real = day >= 1 && day <= 30;
+      const amt = AMOUNTS[day] ? AMOUNTS[day] + ' ₫' : day > 8 && real ? '~50.000 ₫' : '';
+      return '<div class="gc' + (day === 8 ? ' today' : '') + (day > 8 ? ' plan' : '') + '"><b>' + (real ? day : '') + '</b><small>' + amt + '</small><i></i><i></i></div>';
+    }).join('');
+    el.innerHTML = head + cells;
+  });
+})();
+</script>

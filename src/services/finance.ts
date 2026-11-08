@@ -33,6 +33,10 @@ export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
     async updateSettings(updates: FinanceSettingsUpdate): Promise<FinanceSettings> {
       return (await request<{ settings: FinanceSettings }>('/settings', json('PUT', updates))).settings;
     },
+    /** Moves every spending, plan and repeat rule from one category to another and archives the first. */
+    async mergeCategory(from: string, into: string): Promise<{ settings: FinanceSettings; spendings: number; plans: number }> {
+      return await request<{ settings: FinanceSettings; spendings: number; plans: number }>('/settings/categories/merge', json('POST', { from, into }));
+    },
     async getSpendings(range?: { startDate?: string; endDate?: string }): Promise<Spending[]> {
       const records = new Map<string, Spending>();
       const visited = new Set<string>();

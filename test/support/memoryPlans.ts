@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { addDays, dueOccurrences, isPlanDate, localNowStamp, planOccurrences, stampOf } from "../../src/lib/plans";
-import type { FinanceSettings, Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, SettingsPatch, Spending } from "../../src/server/finance/model";
+import type { FinanceSettings, Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, RepeatRule, SettingsPatch, Spending } from "../../src/server/finance/model";
 
 interface Host {
   getSettings(userId: string): Promise<FinanceSettings>;
   rows(userId: string): Map<string, Spending>;
+  repeatRuleRows(userId: string): Map<string, RepeatRule>;
+  settings: Map<string, FinanceSettings>;
 }
 
 /** In-memory twin of the Neon plan store methods, shared by the HTTP and MCP test fakes. */
@@ -22,6 +24,21 @@ export class MemoryPlans {
 
   private async localNow(userId: string) {
     return localNowStamp((await this.host.getSettings(userId)).timezone, this.now());
+  }
+
+  /** Twin of the Neon mergeCategory: move spendings, plans and repeat rules, then archive `from`. */
+  async mergeCategory(userId: string, from: string, into: string) {
+    const current = await this.host.getSettings(userId);
+    const valid = from !== into && current.categories.some(item => item.id === from)
+      && current.categories.some(item => item.id === into && !item.archived);
+    if (!valid) return "invalid-category" as const;
+    let spendings = 0, plans = 0;
+    for (const row of this.host.rows(userId).values()) if (row.category === from) { row.category = into; spendings++; }
+    for (const plan of this.planRows(userId).values()) if (plan.category === from) { plan.category = into; plans++; }
+    for (const rule of this.host.repeatRuleRows(userId).values()) if (rule.category === from) rule.category = into;
+    const settings = { ...current, categories: current.categories.map(item => item.id === from ? { ...item, archived: true } : item) };
+    this.host.settings.set(userId, settings);
+    return { settings: structuredClone(settings), spendings, plans };
   }
 
   private async categoryOk(userId: string, category: string) {

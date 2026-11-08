@@ -26,8 +26,11 @@ function weekday(date: string) {
 export function useQuickEntry(date: string) {
   const { settings } = useSettings();
   const { createSpending, createPlan, createIncome, updateSpending, deleteSpending } = useFinance();
+  // Every category, archived ones included, so an old spending still validates and shows its look.
   const categories = settings.categories;
-  const [entry, setEntry] = useState<QuickEntry>(() => createQuickEntry(categories, date));
+  // What new entries can use.
+  const active = useMemo(() => categories.filter(c => !c.archived), [categories]);
+  const [entry, setEntry] = useState<QuickEntry>(() => createQuickEntry(active, date));
   const [queue, setQueue] = useState<QueuedEntry[]>([]);
   const [editing, setEditing] = useState<{ spending: Spending; snapshot: string } | null>(null);
   const [panel, setPanel] = useState<QuickPanel | null>(null);
@@ -49,10 +52,15 @@ export function useQuickEntry(date: string) {
     });
   }, [date, editing, dateTouched]);
 
-  // Categories arrive after settings load and can be removed in Profile.
+  // Categories arrive after settings load and can be archived in Profile. Editing keeps the spending's own category.
   useEffect(() => {
-    setEntry(current => categories.some(c => c.id === current.category) || editing ? current : { ...current, category: categories[0]?.id ?? '' });
-  }, [categories, editing]);
+    setEntry(current => active.some(c => c.id === current.category) || editing ? current : { ...current, category: active[0]?.id ?? '' });
+  }, [active, editing]);
+  // The picker lists active categories, plus an archived one while editing a spending that uses it.
+  const pickable = useMemo(() => {
+    const own = categories.find(c => c.id === entry.category);
+    return own?.archived ? [...active, own] : active;
+  }, [categories, active, entry.category]);
 
   const amount = entryAmount(entry);
   const dirty = editing ? JSON.stringify(entry) !== editing.snapshot : amount > 0 || queue.length > 0;
@@ -72,17 +80,10 @@ export function useQuickEntry(date: string) {
     if (fields.startDate !== undefined) setDateTouched(true);
     update(current => ({ ...current, income: { ...current.income, ...fields } }));
   }, [update]);
-  /** Spending, Income, or Plan (a spending that is always saved as a plan). */
-  const setMode = useCallback((mode: QuickEntry['mode'] | 'plan') => {
+  /** Spending or Income. */
+  const setMode = useCallback((mode: QuickEntry['mode']) => {
     setPanel(null);
-    if (mode !== 'plan') { update(current => ({ ...current, mode, plan: false })); return; }
-    // A plan needs a moment ahead: if the entry's time has passed (and it doesn't repeat), move it to tomorrow.
-    setDateTouched(true);
-    update(current => {
-      if (current.repeat.on || `${current.date}T${current.time}` > nowStamp()) return { ...current, mode: 'spending', plan: true };
-      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-      return { ...current, mode: 'spending', plan: true, date: isoDate(tomorrow), time: '12:00' };
-    });
+    update(current => ({ ...current, mode }));
   }, [update]);
   const togglePanel = useCallback((next: QuickPanel | null) => setPanel(current => (next === null || current === next ? null : next)), []);
 
@@ -129,17 +130,17 @@ export function useQuickEntry(date: string) {
     setPanel(null);
     setError(null);
     setDateTouched(false);
-    setEntry(createQuickEntry(categories, date));
-  }, [categories, date]);
+    setEntry(createQuickEntry(active, date));
+  }, [active, date]);
 
   const loadExpense = useCallback((spending: Spending) => {
-    const loaded = entryFromSpending(spending, categories);
+    const loaded = entryFromSpending(spending, active);
     setEditing({ spending, snapshot: JSON.stringify(loaded) });
     setQueue([]);
     setPanel(null);
     setError(null);
     setEntry(loaded);
-  }, [categories]);
+  }, [active]);
 
   /** Saves the edit, or every queued entry plus the current one. Returns null when nothing was saved. */
   const save = useCallback(async (): Promise<SaveResult | null> => {
@@ -149,7 +150,7 @@ export function useQuickEntry(date: string) {
     if (editing) {
       let prepared: PreparedEntry;
       try {
-        prepared = prepareEntry({ ...entry, mode: 'spending', plan: false, repeat: { ...entry.repeat, on: false } }, categories, new Date(), true);
+        prepared = prepareEntry({ ...entry, mode: 'spending', repeat: { ...entry.repeat, on: false } }, categories, new Date(), true);
       } catch (cause) { fail(cause); return null; }
       saving.current = true;
       setBusy(true);
@@ -158,7 +159,7 @@ export function useQuickEntry(date: string) {
         await updateSpending(editing.spending.id, prepared.input);
         setEditing(null);
         setDateTouched(false);
-        setEntry(createQuickEntry(categories, date));
+        setEntry(createQuickEntry(active, date));
         return { message: `Saved ${prepared.input.description} · ${formatVnd(prepared.input.amount)}` };
       } catch (cause) { fail(cause); return null; } finally { saving.current = false; setBusy(false); }
     }
@@ -198,7 +199,7 @@ export function useQuickEntry(date: string) {
         undo: saved ? () => deleteSpending(saved.id) : undefined,
       };
     } catch (cause) { fail(cause); return null; } finally { saving.current = false; setBusy(false); }
-  }, [editing, entry, queue, amount, categories, date, fail, updateSpending, createSpending, createPlan, createIncome, deleteSpending]);
+  }, [editing, entry, queue, amount, categories, active, date, fail, updateSpending, createSpending, createPlan, createIncome, deleteSpending]);
 
   const removeEditing = useCallback(async (): Promise<SaveResult | null> => {
     if (!editing || saving.current) return null;
@@ -209,19 +210,19 @@ export function useQuickEntry(date: string) {
       await deleteSpending(spending.id);
       setEditing(null);
       setDateTouched(false);
-      setEntry(createQuickEntry(categories, date));
+      setEntry(createQuickEntry(active, date));
       const { amount: a, description, category, date: d, time } = spending;
       return {
         message: `Deleted ${spending.description} · ${formatVnd(spending.amount)}`,
         undo: async () => { await createSpending({ amount: a, description, category, date: d, time }); },
       };
     } catch (cause) { fail(cause); return null; } finally { saving.current = false; setBusy(false); }
-  }, [editing, categories, date, deleteSpending, createSpending, fail]);
+  }, [editing, active, date, deleteSpending, createSpending, fail]);
 
   const queueTotal = useMemo(() => queue.reduce((sum, q) => sum + (q.entry.mode === 'income' ? 0 : entryAmount(q.entry)), 0), [queue]);
 
   return {
-    entry, queue, queueTotal, editing: editing?.spending ?? null, panel, busy, error, shake, amount, dirty, categories,
+    entry, queue, queueTotal, editing: editing?.spending ?? null, panel, busy, error, shake, amount, dirty, categories, pickable,
     press, patch, patchRepeat, patchIncome, setMode, togglePanel, queueCurrent, editQueued, removeQueued,
     reset, loadExpense, save, removeEditing, setError,
   };

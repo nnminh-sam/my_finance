@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { safeReturnPath } from '../../lib/navigation';
-import '../../styles/AuthScreen.css';
+import { AuthWaiting } from '../../components/AuthScreen';
 
 function AuthGuard({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -18,11 +18,7 @@ function AuthGuard({ children }: { children: ReactNode }) {
   }, [destination, router]);
 
   if (loading || destination) {
-    return (
-      <main className="auth-screen" role="status">
-        {loading ? 'Restoring your session…' : 'Opening your page…'}
-      </main>
-    );
+    return <AuthWaiting message={loading ? 'Restoring your session…' : 'Opening your page…'} />;
   }
 
   return <>{children}</>;
@@ -31,11 +27,7 @@ function AuthGuard({ children }: { children: ReactNode }) {
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <Suspense
-      fallback={
-        <main className="auth-screen" role="status">
-          Restoring your session…
-        </main>
-      }
+      fallback={<AuthWaiting message="Restoring your session…" />}
     >
       <AuthGuard>{children}</AuthGuard>
     </Suspense>

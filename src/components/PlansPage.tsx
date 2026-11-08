@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { parseISO } from 'date-fns';
 import { useFinance } from '../contexts/FinanceContext';
-import { useFinanceShell } from '../contexts/FinanceShellContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { errorMessage } from '../services/auth';
 import { createFinanceApi } from '../services/finance';
@@ -29,7 +28,6 @@ const money = (amount: number) => `${amount.toLocaleString('vi-VN', { maximumFra
  */
 export function PlansPage() {
   const { incomes, spendings, plans, settings } = useFinance();
-  const { openPlanPeriod } = useFinanceShell();
   const search = useSearchParams();
   const router = useRouter();
   const [planEditor, setPlanEditor] = useState<PlanEditorState>({ dirty: false, busy: false });
@@ -96,11 +94,7 @@ export function PlansPage() {
           </div>
           <div className="plans-page-tools">
             <button type="button" className="profile-icon-button" aria-label="Previous period" disabled={!summary} onClick={() => goTo('previous')}><ChevronLeft size={18} aria-hidden="true" /></button>
-            <button type="button" className="profile-icon-button" aria-label="Next period" disabled={!summary} onClick={() => goTo('next')}><ChevronRight size={18} aria-hidden="true" /></button>
-            {summary && !past && (
-              <button type="button" className="profile-button profile-button-primary" onClick={() => openPlanPeriod(summary.period.start)}><Sparkles size={16} aria-hidden="true" />Plan this period</button>
-            )}
-          </div>
+            <button type="button" className="profile-icon-button" aria-label="Next period" disabled={!summary} onClick={() => goTo('next')}><ChevronRight size={18} aria-hidden="true" /></button>          </div>
         </div>
         {summaryError && <p className="profile-error" role="alert">Could not load the period summary: {summaryError}</p>}
         {!summary && !summaryError && <p className="profile-card profile-empty" role="status">Loading the period summary…</p>}

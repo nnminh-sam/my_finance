@@ -54,6 +54,8 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
   const busy = operation !== null;
   const blocked = disabled || busy || readOnly;
   const categories = settings.categories;
+  // New plans use active categories; a plan on an archived one still shows it.
+  const active = categories.filter(item => !item.archived);
 
   const now = new Date();
   const today = serverToday ?? iso(now);
@@ -94,7 +96,7 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
     const plan = plans.find(item => item.id === initialEdit.id);
     if (!plan) return;
     openedInitial.current = true;
-    const draft = createPlanDraft(today, categories[0]?.id ?? '', plan);
+    const draft = createPlanDraft(today, active[0]?.id ?? '', plan);
     const from = initialEdit.from;
     if (from && plan.frequency !== 'once' && from > today && from > plan.startDate) draft.effectiveFrom = from;
     setEditor({ draft, snapshot: { ...draft, daysOfWeek: [...draft.daysOfWeek] } });
@@ -104,7 +106,7 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
 
   const openEditor = (plan?: Plan) => {
     if (disabled || requestLock.current || !canDiscard()) return;
-    const draft = createPlanDraft(today, categories[0]?.id ?? '', plan);
+    const draft = createPlanDraft(today, active[0]?.id ?? '', plan);
     setEditor({ draft, snapshot: { ...draft, daysOfWeek: [...draft.daysOfWeek] } });
     setError(null);
     setNotice(null);
@@ -210,7 +212,7 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
         </div>
         <div className="profile-panel-tools">
           {!editor && !readOnly && (
-            <button type="button" className="profile-button profile-button-primary" disabled={blocked || categories.length === 0} onClick={() => openEditor()}>
+            <button type="button" className="profile-button profile-button-primary" disabled={blocked || active.length === 0} onClick={() => openEditor()}>
               <Plus size={16} aria-hidden="true" />Add plan
             </button>
           )}
@@ -243,7 +245,7 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
               </div>
             )}
 
-            <label className="income-form-group">
+            <label className="income-form-group income-field-full">
               <span className="income-form-label">What</span>
               <input type="text" className="income-input" maxLength={1000} value={draft.description} placeholder="e.g. Lunch" onChange={event => change({ description: event.target.value })} />
             </label>
@@ -259,8 +261,8 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
               <label className="income-form-group">
                 <span className="income-form-label">Category</span>
                 <select className="income-input" value={draft.category} onChange={event => change({ category: event.target.value })}>
-                  {categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-                  {!categories.some(item => item.id === draft.category) && <option value={draft.category}>{draft.category || 'Choose…'}</option>}
+                  {active.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  {!active.some(item => item.id === draft.category) && <option value={draft.category}>{categories.find(item => item.id === draft.category)?.name ?? (draft.category || 'Choose…')}</option>}
                 </select>
               </label>
             </div>
@@ -313,13 +315,6 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
                 </label>
               )}
               <label className="income-form-group">
-                <span className="income-form-label">At</span>
-                <input type="time" className="income-input" required value={draft.time} onChange={event => change({ time: event.target.value })} />
-              </label>
-            </div>
-
-            <div className="income-dates">
-              <label className="income-form-group">
                 <span className="income-form-label">{draft.frequency === 'once' ? 'On' : 'Starts'}</span>
                 <input type="date" className="income-input" min="0001-01-01" max="9999-12-31" required value={draft.startDate} onChange={event => change({ startDate: event.target.value })} />
               </label>
@@ -332,6 +327,10 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
                   </span>
                 </label>
               )}
+              <label className="income-form-group">
+                <span className="income-form-label">At</span>
+                <input type="time" className="income-input" required value={draft.time} onChange={event => change({ time: event.target.value })} />
+              </label>
             </div>
 
             {!adding && editor.snapshot.frequency !== 'once' && (

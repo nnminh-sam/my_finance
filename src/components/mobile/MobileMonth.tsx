@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { addMonths, eachDayOfInterval, endOfMonth, format, getDay, isAfter, isSameDay, startOfDay, startOfMonth } from 'date-fns';
-import { CalendarRange, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useFinance } from '../../contexts/FinanceContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useFinanceShell } from '../../contexts/FinanceShellContext';
@@ -17,7 +17,7 @@ const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 /** F · Month: a plain calendar of dates; daily spending lives in the bar chart above it. */
 export function MobileMonth() {
-  const { currentDate, activeDate, onActiveDateChange, openPlanPeriod } = useFinanceShell();
+  const { currentDate, activeDate, onActiveDateChange } = useFinanceShell();
   const { spendings, plans, incomes, fetchWeeksSpendings, projectedBetween } = useFinance();
   const { settings } = useSettings();
   const router = useRouter();
@@ -137,11 +137,6 @@ export function MobileMonth() {
           <div className="m-row" role="button" tabIndex={0} onClick={() => router.push(pages.plans.path)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); router.push(pages.plans.path); } }}>
             <span className="m-ic" style={{ ['--c' as string]: 'var(--primary)' }}><CalendarRange size={16} /></span>
             <span className="m-rt"><b>Plans</b><small>{plans.length} {plans.length === 1 ? 'plan' : 'plans'} · ~{fmtCompact(plannedTotal)} ₫ still planned this {periodWord}</small></span>
-            <ChevronRight size={18} className="m-muted" aria-hidden="true" />
-          </div>
-          <div className="m-row" role="button" tabIndex={0} style={{ borderTop: '1px solid var(--border-color)' }} onClick={() => openPlanPeriod(format(new Date(), 'yyyy-MM-dd'))} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPlanPeriod(format(new Date(), 'yyyy-MM-dd')); } }}>
-            <span className="m-ic" style={{ ['--c' as string]: 'var(--warning)' }}><Sparkles size={16} /></span>
-            <span className="m-rt"><b>Plan this period</b><small>Bills, everyday spending, extras</small></span>
             <ChevronRight size={18} className="m-muted" aria-hidden="true" />
           </div>
         </div>

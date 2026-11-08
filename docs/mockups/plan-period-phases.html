@@ -1,0 +1,632 @@
+<title>Plan Period Phases</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: intro, then five directions. Each = name + idea, a live modal stage (Back/Next work), then notes.
+   Tokens mirror src/styles/globals.css; the app is dark-first, light mirrors .light-mode. */
+:root {
+  --page: #050506; --bg: #09090b; --card: #18181b; --card-2: #1f1f23; --card-3: #27272a; --line: #3f3f46; --line-soft: #2a2a2f;
+  --fg: #f4f4f5; --muted: #a1a1aa; --faint: #71717a;
+  --primary: #3b82f6; --primary-text: #60a5fa; --primary-soft: rgba(59,130,246,.15);
+  --income: #34d399; --danger: #f87171;
+  --bill: #f59e0b; --bill-soft: rgba(245,158,11,.14);
+  --ess: #2dd4bf; --ess-soft: rgba(45,212,191,.13);
+  --extra: #c084fc; --extra-soft: rgba(192,132,252,.14);
+  --spent: #71717a;
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626;
+  --bill: #b45309; --bill-soft: rgba(217,119,6,.12); --ess: #0d9488; --ess-soft: rgba(13,148,136,.11);
+  --extra: #9333ea; --extra-soft: rgba(147,51,234,.1); --spent: #94a3b8; color-scheme: light; } }
+:root[data-theme="light"] {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626;
+  --bill: #b45309; --bill-soft: rgba(217,119,6,.12); --ess: #0d9488; --ess-soft: rgba(13,148,136,.11);
+  --extra: #9333ea; --extra-soft: rgba(147,51,234,.1); --spent: #94a3b8; color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 var(--font); background: var(--page); color: var(--fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.cur { font-size: .7em; opacity: .6; margin-left: .15em; font-weight: 500; }
+svg { flex: none; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---------- page chrome ---------- */
+.intro { padding-block: 32px 8px; display: grid; gap: 14px; }
+.intro h1 { font-size: 26px; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); max-width: 76ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.fixbox { background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 14px 16px; display: grid; gap: 8px; max-width: 900px; }
+.fixbox h2 { margin: 0; font-size: 15px; }
+.fixbox table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.fixbox td, .fixbox th { text-align: left; padding: 5px 10px 5px 0; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.fixbox th { color: var(--faint); font-weight: 500; font-size: 12px; border-top: 0; }
+.tbl { overflow-x: auto; }
+.dir { padding-block: 40px 8px; border-top: 1px solid var(--line-soft); margin-top: 32px; display: grid; gap: 16px; }
+.dir-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.dir-head .tag { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; text-transform: uppercase; }
+.dir-head h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; }
+.dir-head .rec { font-size: 11.5px; font-weight: 600; background: var(--primary-soft); color: var(--primary-text); padding: 2px 9px; border-radius: 999px; }
+.dir > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.notes div { background: var(--card); border-radius: 12px; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+.notes b { display: block; color: var(--fg); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.notes ul { margin: 0; padding-left: 18px; }
+
+/* ---------- stage: fake app behind a modal ---------- */
+.stage { background: var(--bg); border-radius: 18px; padding: 28px 16px; display: grid; place-items: center;
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(14.28% - 1px), var(--line-soft) calc(14.28% - 1px) 14.28%); }
+.modal { width: min(640px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.45); display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.modal.wide { width: min(820px, 100%); }
+.m-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.m-head h3 { margin: 0; font-size: 16px; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.m-head h3 small { color: var(--muted); font-weight: 500; font-size: 13px; }
+.x { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--card-2); color: var(--muted); }
+.m-body { padding: 16px 18px; display: grid; gap: 12px; min-height: 330px; align-content: start; }
+.m-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.sp { flex: 1; }
+.btn { height: 38px; padding: 0 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); }
+.btn.pri { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+.btn[disabled] { opacity: .35; cursor: default; }
+
+/* rows */
+.list { display: grid; gap: 6px; }
+.row { display: grid; grid-template-columns: 22px minmax(0,1fr) 120px 92px 28px; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--card-2); font-size: 13.5px; }
+.row.old { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+.row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .amt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--fg); }
+.row.old .amt { color: var(--muted); font-weight: 500; }
+.row .dt { font-size: 12.5px; color: var(--muted); text-align: right; }
+.row .ic { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; }
+.row .del { color: var(--faint); display: grid; place-items: center; height: 24px; }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--card-3); color: var(--muted); white-space: nowrap; }
+.field { height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); padding: 0 10px; width: 100%; min-width: 0; font-size: 13.5px; }
+.field.r { text-align: right; font-variant-numeric: tabular-nums; }
+.row.new { background: var(--card-2); border: 1px solid var(--primary); }
+.add { height: 34px; border-radius: 10px; border: 1px dashed var(--line); color: var(--muted); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.k-bill { color: var(--bill); background: var(--bill-soft); } .k-ess { color: var(--ess); background: var(--ess-soft); } .k-extra { color: var(--extra); background: var(--extra-soft); }
+.c-bill { color: var(--bill); } .c-ess { color: var(--ess); } .c-extra { color: var(--extra); } .c-left { color: var(--primary-text); } .c-inc { color: var(--income); }
+.sub { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.sub::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+[data-p] { display: none !important; }
+.stage-host[data-step="0"] [data-p~="0"], .stage-host[data-step="1"] [data-p~="1"], .stage-host[data-step="2"] [data-p~="2"], .stage-host[data-step="3"] [data-p~="3"] { display: revert !important; }
+.stage-host[data-step="0"] .grid[data-p~="0"], .stage-host[data-step="1"] .grid[data-p~="1"], .stage-host[data-step="2"] .grid[data-p~="2"], .stage-host[data-step="3"] .grid[data-p~="3"] { display: grid !important; }
+.grid { display: grid; gap: 10px; }
+
+/* ---------- A: stepper ---------- */
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 12px 18px 0; }
+.steps button { display: grid; gap: 6px; text-align: left; font-size: 12px; color: var(--faint); font-weight: 600; }
+.steps button::before { content: ""; height: 4px; border-radius: 3px; background: var(--line-soft); }
+.steps button.done { color: var(--muted); } .steps button.done::before { background: var(--primary); opacity: .5; }
+.steps button.on { color: var(--fg); } .steps button.on::before { background: var(--primary); }
+.steps i { font-style: normal; font-weight: 500; color: var(--faint); }
+.a-total { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--muted); }
+.a-total b { font-size: 20px; color: var(--fg); }
+.left-pill { display: flex; flex-direction: column; line-height: 1.15; font-size: 11.5px; color: var(--muted); }
+.left-pill b { font-size: 16px; color: var(--primary-text); }
+.rev { display: grid; gap: 8px; }
+.rev-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--card-2); }
+.rev-row .ic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; }
+.rev-row small { display: block; color: var(--muted); font-size: 12px; }
+.rev-row .amt { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.rev-row .amt small { font-weight: 500; }
+.eq { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13.5px; padding: 10px 12px; border-top: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; }
+.eq span:nth-child(even) { text-align: right; }
+.eq .tot { font-weight: 700; font-size: 16px; padding-top: 6px; border-top: 1px solid var(--line-soft); }
+
+/* ---------- B: waterfall ---------- */
+.b-body { display: grid; grid-template-columns: 150px minmax(0,1fr); gap: 18px; padding: 16px 18px; min-height: 360px; }
+.tank { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; }
+.tank-top { font-size: 11.5px; color: var(--muted); } .tank-top b { display: block; font-size: 15px; color: var(--income); }
+.bar { display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: var(--card-2); min-height: 260px; }
+.bar div { transition: flex-grow .35s ease, opacity .2s; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; color: #0b0b0d; min-height: 0; overflow: hidden; white-space: nowrap; }
+.bar .s-spent { background: var(--spent); }
+.bar .s-bill { background: var(--bill); } .bar .s-ess { background: var(--ess); } .bar .s-extra { background: var(--extra); }
+.bar .s-old { background: repeating-linear-gradient(135deg, var(--ess) 0 5px, transparent 5px 9px); color: var(--fg); }
+.bar .s-left { background: var(--primary); color: #fff; }
+.bar .dimmed { opacity: .35; }
+.tank-bot { font-size: 11.5px; color: var(--muted); } .tank-bot b { display: block; font-size: 17px; color: var(--primary-text); }
+.b-phase h4 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.b-phase h4 .sum { margin-left: auto; font-size: 15px; font-variant-numeric: tabular-nums; }
+.b-dots { display: flex; gap: 6px; align-items: center; }
+.b-dots span { width: 8px; height: 8px; border-radius: 99px; background: var(--line); }
+.b-dots span.on { width: 22px; background: var(--primary); }
+
+/* ---------- C: one question ---------- */
+.trail { display: flex; flex-wrap: wrap; gap: 6px; }
+.trail button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px; border-radius: 999px; background: var(--card-2); font-size: 12.5px; font-weight: 600; }
+.trail .dot { width: 18px; height: 18px; border-radius: 99px; display: grid; place-items: center; }
+.q { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin: 6px 0 0; text-wrap: balance; }
+.q span { color: var(--muted); font-weight: 500; }
+.sugs { display: flex; flex-wrap: wrap; gap: 8px; }
+.sug { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); font-size: 13.5px; }
+.sug small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.sug.on { border-color: var(--primary); background: var(--primary-soft); }
+.big-skip { width: 100%; padding: 14px; border-radius: 14px; border: 1px dashed var(--line); color: var(--muted); font-weight: 600; }
+.qamt { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.qamt .field { height: 46px; font-size: 20px; font-weight: 700; width: 200px; }
+.qamt .seg { display: inline-flex; background: var(--card-2); border-radius: 10px; padding: 3px; }
+.qamt .seg button { padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.qamt .seg button.on { background: var(--card); color: var(--fg); }
+
+/* ---------- D: timeline ---------- */
+.tl-wrap { overflow-x: auto; }
+.tl { display: grid; grid-template-columns: repeat(30, minmax(19px, 1fr)); gap: 2px; min-width: 560px; }
+.tl .d { display: grid; grid-template-rows: 16px 56px; gap: 3px; font-size: 10px; color: var(--faint); text-align: center; }
+.tl .col { border-radius: 5px; background: var(--card-2); display: flex; flex-direction: column-reverse; gap: 2px; padding: 2px; position: relative; }
+.tl .d.past .col { background: transparent; border: 1px dashed var(--line-soft); }
+.tl .d.today span { color: var(--primary-text); font-weight: 700; }
+.tl .d.sel .col { outline: 2px solid var(--primary); }
+.tl .pin { height: 10px; border-radius: 3px; }
+.tl .pin.paid { background: var(--spent); } .tl .pin.bill { background: var(--bill); } .tl .pin.ess { background: var(--ess); height: 5px; opacity: .8; }
+.tl .pin.extra { background: var(--extra); height: 14px; } .tl .pin.fuel { background: var(--ess); height: 8px; }
+.tl .pin.ghost { opacity: .25; }
+.tl-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.dayform { display: grid; grid-template-columns: auto minmax(0,1fr) 140px auto; gap: 8px; align-items: center; padding: 10px; border-radius: 12px; background: var(--card-2); }
+.daybadge { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; background: var(--primary-soft); color: var(--primary-text); font-weight: 700; line-height: 1; font-size: 17px; }
+.daybadge small { font-size: 10px; font-weight: 600; }
+.tabs { display: inline-flex; background: var(--card-2); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.tabs button { padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+.tabs button.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+
+/* ---------- E: side rail ---------- */
+.e-body { display: grid; grid-template-columns: 210px minmax(0,1fr); min-height: 380px; }
+.rail { border-right: 1px solid var(--line-soft); padding: 12px; display: flex; flex-direction: column; gap: 4px; background: var(--card-2); }
+.rail button { display: grid; grid-template-columns: 26px 1fr; gap: 2px 10px; align-items: center; text-align: left; padding: 8px; border-radius: 10px; }
+.rail button .ic { grid-row: span 2; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; }
+.rail button b { font-size: 13.5px; } .rail button small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rail button.on { background: var(--card); box-shadow: 0 0 0 1px var(--line); }
+.rail .inc { padding: 8px; font-size: 12px; color: var(--muted); }
+.rail .inc b { display: block; color: var(--income); font-size: 15px; }
+.rail .left { margin-top: auto; padding: 10px 8px 4px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--muted); }
+.rail .left b { display: block; color: var(--primary-text); font-size: 20px; }
+.e-pane { padding: 16px 18px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.e-pane h4 { margin: 0; font-size: 17px; display: flex; gap: 8px; align-items: center; }
+.e-pane h4 .sum { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 15px; }
+.perday { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--ess-soft); color: var(--ess); font-size: 13px; font-weight: 600; flex-wrap: wrap; }
+.perday b { font-size: 18px; }
+
+@media (max-width: 640px) {
+  .row { grid-template-columns: 22px minmax(0,1fr) 96px 26px; }
+  .row .dt { display: none; }
+  .b-body { grid-template-columns: 1fr; }
+  .bar { flex-direction: row; min-height: 34px; } .bar div { font-size: 0; padding: 0; }
+  .tank { grid-template-rows: auto auto auto; }
+  .e-body { grid-template-columns: 1fr; }
+  .rail { border-right: 0; border-bottom: 1px solid var(--line-soft); flex-direction: row; overflow-x: auto; }
+  .rail button { grid-template-columns: 1fr; min-width: 112px; } .rail button .ic { display: none; }
+  .rail .inc, .rail .left { display: none; }
+  .dayform { grid-template-columns: auto minmax(0,1fr); }
+  .steps i { display: none; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-bill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+  <symbol id="i-ess" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.5L21 8H6"/></symbol>
+  <symbol id="i-extra" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 15.5a2 2 0 0 0-1.4-1.4L2.4 12.5a.5.5 0 0 1 0-1l6.1-1.6a2 2 0 0 0 1.4-1.4l1.6-6.1a.5.5 0 0 1 1 0l1.6 6.1a2 2 0 0 0 1.4 1.4l6.1 1.6a.5.5 0 0 1 0 1l-6.1 1.6a2 2 0 0 0-1.4 1.4l-1.6 6.1a.5.5 0 0 1-1 0z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+</svg>
+
+<main class="wrap">
+<section class="intro">
+  <h1>Plan this period: five phased directions</h1>
+  <p>Every direction splits the modal into Bills, Essentials and Extras (optional), then a Review. Each phase opens with what is <b>already planned or paid</b> for 5 Nov – 4 Dec, so you add on top of your real plan. Numbers come from your screenshot. Back and Next work in every mockup; new rows are sample input.</p>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--spent)"></i>Paid</span>
+    <span><i class="sw" style="background:var(--bill)"></i>Bills</span>
+    <span><i class="sw" style="background:var(--ess)"></i>Essentials</span>
+    <span><i class="sw" style="background:var(--extra)"></i>Extras</span>
+    <span><i class="sw" style="background:var(--primary)"></i>Left</span>
+    <span><i class="sw" style="border:1px dashed var(--muted)"></i>Dashed row = already planned</span>
+  </div>
+  <div class="fixbox">
+    <h2>Fix for "no existing context"</h2>
+    <div class="tbl"><table>
+      <tr><th>Phase</th><th>Shows first, from <code>summary.occurrences</code> + spendings</th><th>Rule</th></tr>
+      <tr><td class="c-bill">Bills</td><td>Sure plans in the period, and bill-category spendings already paid (Tiền trọ, Cho mẹ on 7 Nov)</td><td><code>sure: true</code>, repeating monthly</td></tr>
+      <tr><td class="c-ess">Essentials</td><td>Breakfast ~15.000/day, Lunch ~35.000/day, Fuel ~80.000/week</td><td>estimate, repeating daily / weekly</td></tr>
+      <tr><td class="c-extra">Extras</td><td>One-off plans dated in the period</td><td>no repeat</td></tr>
+    </table></div>
+    <span style="font-size:13px;color:var(--muted)">The "Left" number then starts at the true 3.836.583 ₫ and only drops by what you add. The duplicate check (<code>alreadyPlanned</code>) becomes visible instead of a hint at the bottom.</span>
+  </div>
+</section>
+
+<!-- ================= A ================= -->
+<section class="dir" id="a">
+  <div class="dir-head"><span class="tag">A</span><h2>Stepper</h2><span class="rec">Recommended</span></div>
+  <p>The current modal split into four short screens. A progress bar on top shows where you are, and you can click a step to jump. The footer always shows what is left. This is the smallest change from today's code.</p>
+  <div class="stage"><div class="modal stage-host" data-step="0" data-lefts="3.466.583|2.566.583|1.566.583|1.566.583">
+    <div class="m-head"><h3><svg width="18" height="18"><use href="#i-spark"/></svg>Plan <small>5 Nov – 4 Dec</small></h3><button class="x" aria-label="Close"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+    <div class="steps">
+      <button data-go="0">Bills <i>370k</i></button><button data-go="1">Essentials <i>900k</i></button><button data-go="2">Extras <i>optional</i></button><button data-go="3">Review</button>
+    </div>
+    <div class="m-body">
+      <!-- bills -->
+      <div class="grid" data-p="0">
+        <div class="a-total"><b class="num">370.000<span class="cur">₫</span></b>new bills</div>
+        <div class="sub">Paid</div>
+        <div class="list">
+          <div class="row old"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-check"/></svg></span><span class="nm">Tiền trọ</span><span class="amt">3.000.000 ₫</span><span class="dt">7 Nov</span><span></span></div>
+          <div class="row old"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-check"/></svg></span><span class="nm">Cho mẹ</span><span class="amt">3.000.000 ₫</span><span class="dt">7 Nov</span><span></span></div>
+        </div>
+        <div class="sub">To pay</div>
+        <div class="list">
+          <div class="row new"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-bill"/></svg></span><input class="field" value="Internet" aria-label="Bill name"><input class="field r" value="250.000" aria-label="Amount"><input class="field" value="15 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+          <div class="row new"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-bill"/></svg></span><input class="field" value="Phone" aria-label="Bill name"><input class="field r" value="120.000" aria-label="Amount"><input class="field" value="20 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+          <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Bill</button>
+        </div>
+      </div>
+      <!-- essentials -->
+      <div class="grid" data-p="1">
+        <div class="a-total"><b class="num">900.000<span class="cur">₫</span></b>new essentials</div>
+        <div class="sub">Planned</div>
+        <div class="list">
+          <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Breakfast</span><span class="amt">~15.000 ₫</span><span class="dt">every day</span><button class="del" aria-label="Edit"><svg width="14" height="14"><use href="#i-right"/></svg></button></div>
+          <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Lunch</span><span class="amt">~35.000 ₫</span><span class="dt">every day</span><button class="del" aria-label="Edit"><svg width="14" height="14"><use href="#i-right"/></svg></button></div>
+          <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Fuel</span><span class="amt">~80.000 ₫</span><span class="dt">every Wed</span><button class="del" aria-label="Edit"><svg width="14" height="14"><use href="#i-right"/></svg></button></div>
+        </div>
+        <div class="sub">Add</div>
+        <div class="list">
+          <div class="row new"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><input class="field" value="Groceries" aria-label="Name"><input class="field r" value="300.000" aria-label="Amount"><input class="field" value="every Sun" aria-label="Repeat"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+          <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Essential</button>
+        </div>
+      </div>
+      <!-- extras -->
+      <div class="grid" data-p="2">
+        <div class="a-total"><b class="num">1.000.000<span class="cur">₫</span></b>new extras</div>
+        <div class="list">
+          <div class="row new"><span class="ic k-extra"><svg width="13" height="13"><use href="#i-extra"/></svg></span><input class="field" value="Wedding gift" aria-label="Name"><input class="field r" value="1.000.000" aria-label="Amount"><input class="field" value="22 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+          <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Extra</button>
+        </div>
+      </div>
+      <!-- review -->
+      <div class="grid" data-p="3">
+        <div class="rev">
+          <div class="rev-row"><span class="ic k-bill"><svg width="15" height="15"><use href="#i-bill"/></svg></span><div><b>2 bills</b><small>Internet, Phone</small></div><div class="amt">370.000 ₫</div></div>
+          <div class="rev-row"><span class="ic k-ess"><svg width="15" height="15"><use href="#i-ess"/></svg></span><div><b>1 essential</b><small>Groceries × 3 Sundays</small></div><div class="amt">900.000 ₫</div></div>
+          <div class="rev-row"><span class="ic k-extra"><svg width="15" height="15"><use href="#i-extra"/></svg></span><div><b>1 extra</b><small>Wedding gift</small></div><div class="amt">1.000.000 ₫</div></div>
+        </div>
+        <div class="eq">
+          <span class="c-inc">Income</span><span class="c-inc">13.552.583 ₫</span>
+          <span style="color:var(--muted)">Paid + already planned</span><span style="color:var(--muted)">− 9.716.000 ₫</span>
+          <span style="color:var(--muted)">New</span><span style="color:var(--muted)">− 2.270.000 ₫</span>
+          <span class="tot">Left until 5 Dec</span><span class="tot c-left">1.566.583 ₫</span>
+        </div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn ghost" data-go="back"><svg width="15" height="15"><use href="#i-left"/></svg>Back</button>
+      <span class="sp"></span>
+      <div class="left-pill">Left<b class="num" data-left>3.466.583 ₫</b></div>
+      <button class="btn pri" data-go="next" data-labels="Next|Next|Next|Create 4 plans">Next<svg width="15" height="15"><use href="#i-right"/></svg></button>
+    </div>
+  </div></div>
+  <div class="notes">
+    <div><b>Good</b><ul><li>One small job per screen</li><li>Easy to build: reuses the current rows and draft logic</li><li>Extras is just a step you can pass with Next</li></ul></div>
+    <div><b>Watch</b><ul><li>The "Left" in the footer is the only total, so the story is told with numbers, not a picture</li></ul></div>
+  </div>
+</section>
+
+<!-- ================= B ================= -->
+<section class="dir" id="b">
+  <div class="dir-head"><span class="tag">B</span><h2>Waterfall</h2></div>
+  <p>A tall bar on the left is your income. Each phase pours into it in order: paid, bills, essentials, extras. What stays blue is left. The picture explains the order, so no text is needed.</p>
+  <div class="stage"><div class="modal stage-host" data-step="0" data-lefts="3.466.583|2.566.583|1.566.583|1.566.583">
+    <div class="m-head"><h3><svg width="18" height="18"><use href="#i-spark"/></svg>Plan <small>5 Nov – 4 Dec</small></h3><div class="b-dots" data-dots><span></span><span></span><span></span><span></span></div><button class="x" aria-label="Close"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+    <div class="b-body">
+      <div class="tank">
+        <div class="tank-top">Income<b class="num">13.552.583 ₫</b></div>
+        <div class="bar" data-bar>
+          <div class="s-spent" style="flex-grow:24.0">Paid</div>
+          <div class="s-bill" data-seg="0" style="flex-grow:0">Bills</div>
+          <div class="s-old" style="flex-grow:9.7">Planned</div>
+          <div class="s-ess" data-seg="1" style="flex-grow:0">Ess.</div>
+          <div class="s-extra" data-seg="2" style="flex-grow:0">Extras</div>
+          <div class="s-left" data-segleft style="flex-grow:28.3">Left</div>
+        </div>
+        <div class="tank-bot">Left<b class="num" data-left>3.466.583 ₫</b></div>
+      </div>
+      <div class="b-phase">
+        <div class="grid" data-p="0">
+          <h4><span class="c-bill"><svg width="20" height="20"><use href="#i-bill"/></svg></span>Bills<span class="sum c-bill">370.000 ₫</span></h4>
+          <div class="list">
+            <div class="row old"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-check"/></svg></span><span class="nm">Tiền trọ</span><span class="amt">3.000.000 ₫</span><span class="dt">paid 7 Nov</span><span></span></div>
+            <div class="row old"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-check"/></svg></span><span class="nm">Cho mẹ</span><span class="amt">3.000.000 ₫</span><span class="dt">paid 7 Nov</span><span></span></div>
+            <div class="row new"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-bill"/></svg></span><input class="field" value="Internet" aria-label="Name"><input class="field r" value="250.000" aria-label="Amount"><input class="field" value="15 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+            <div class="row new"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-bill"/></svg></span><input class="field" value="Phone" aria-label="Name"><input class="field r" value="120.000" aria-label="Amount"><input class="field" value="20 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+            <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Bill</button>
+          </div>
+        </div>
+        <div class="grid" data-p="1">
+          <h4><span class="c-ess"><svg width="20" height="20"><use href="#i-ess"/></svg></span>Essentials<span class="sum c-ess">900.000 ₫</span></h4>
+          <div class="list">
+            <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Breakfast</span><span class="amt">~15.000 ₫</span><span class="dt">daily</span><span></span></div>
+            <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Lunch</span><span class="amt">~35.000 ₫</span><span class="dt">daily</span><span></span></div>
+            <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Fuel</span><span class="amt">~80.000 ₫</span><span class="dt">Wed</span><span></span></div>
+            <div class="row new"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><input class="field" value="Groceries" aria-label="Name"><input class="field r" value="300.000" aria-label="Amount"><input class="field" value="Sun" aria-label="Repeat"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+            <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Essential</button>
+          </div>
+        </div>
+        <div class="grid" data-p="2">
+          <h4><span class="c-extra"><svg width="20" height="20"><use href="#i-extra"/></svg></span>Extras<span class="sum c-extra">1.000.000 ₫</span></h4>
+          <div class="list">
+            <div class="row new"><span class="ic k-extra"><svg width="13" height="13"><use href="#i-extra"/></svg></span><input class="field" value="Wedding gift" aria-label="Name"><input class="field r" value="1.000.000" aria-label="Amount"><input class="field" value="22 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+            <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Extra</button>
+          </div>
+        </div>
+        <div class="grid" data-p="3">
+          <h4>Ready</h4>
+          <div class="rev">
+            <div class="rev-row"><span class="ic k-bill"><svg width="15" height="15"><use href="#i-bill"/></svg></span><div><b>Internet, Phone</b></div><div class="amt">370.000 ₫</div></div>
+            <div class="rev-row"><span class="ic k-ess"><svg width="15" height="15"><use href="#i-ess"/></svg></span><div><b>Groceries</b><small>3 Sundays</small></div><div class="amt">900.000 ₫</div></div>
+            <div class="rev-row"><span class="ic k-extra"><svg width="15" height="15"><use href="#i-extra"/></svg></span><div><b>Wedding gift</b></div><div class="amt">1.000.000 ₫</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn ghost" data-go="back"><svg width="15" height="15"><use href="#i-left"/></svg>Back</button>
+      <span class="sp"></span>
+      <button class="btn pri" data-go="next" data-labels="Essentials|Extras|Review|Create 4 plans">Essentials<svg width="15" height="15"><use href="#i-right"/></svg></button>
+    </div>
+  </div></div>
+  <div class="notes">
+    <div><b>Good</b><ul><li>The order bills → essentials → extras is visible as layers</li><li>You see Left shrink as you type</li><li>Already-planned money is a hatched layer, so it is never forgotten</li></ul></div>
+    <div><b>Watch</b><ul><li>Needs a wider modal (820px)</li><li>On phones the bar turns into a thin horizontal strip</li></ul></div>
+  </div>
+</section>
+
+<!-- ================= C ================= -->
+<section class="dir" id="c">
+  <div class="dir-head"><span class="tag">C</span><h2>One question at a time</h2></div>
+  <p>Each phase is a single big question with tap-to-add suggestions from last period. Finished phases shrink to pills at the top; tap one to go back. Extras has a large "No extras" button, so skipping is the obvious choice.</p>
+  <div class="stage"><div class="modal stage-host" data-step="0" data-lefts="3.466.583|2.566.583|1.566.583|1.566.583">
+    <div class="m-head"><h3><svg width="18" height="18"><use href="#i-spark"/></svg>Plan <small>5 Nov – 4 Dec</small></h3><span class="c-left num" style="font-weight:700" data-left>3.466.583 ₫</span><button class="x" aria-label="Close"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+    <div class="m-body">
+      <div class="trail">
+        <button data-go="0" data-p="1 2 3"><span class="dot k-bill"><svg width="11" height="11"><use href="#i-check"/></svg></span>Bills · 370.000 ₫</button>
+        <button data-go="1" data-p="2 3"><span class="dot k-ess"><svg width="11" height="11"><use href="#i-check"/></svg></span>Essentials · 900.000 ₫</button>
+        <button data-go="2" data-p="3"><span class="dot k-extra"><svg width="11" height="11"><use href="#i-check"/></svg></span>Extras · 1.000.000 ₫</button>
+      </div>
+      <div class="grid" data-p="0">
+        <p class="q">Bills left to pay <span>before 5 Dec?</span></p>
+        <div class="sugs">
+          <button class="sug" style="opacity:.5" disabled><svg width="14" height="14"><use href="#i-check"/></svg>Tiền trọ <small>paid 7 Nov</small></button>
+          <button class="sug" style="opacity:.5" disabled><svg width="14" height="14"><use href="#i-check"/></svg>Cho mẹ <small>paid 7 Nov</small></button>
+          <button class="sug on"><svg width="14" height="14"><use href="#i-check"/></svg>Internet <small>250.000 · 15th</small></button>
+          <button class="sug on"><svg width="14" height="14"><use href="#i-check"/></svg>Phone <small>120.000 · 20th</small></button>
+          <button class="sug"><svg width="14" height="14"><use href="#i-plus"/></svg>Electricity <small>~400.000</small></button>
+          <button class="sug"><svg width="14" height="14"><use href="#i-plus"/></svg>Other</button>
+        </div>
+      </div>
+      <div class="grid" data-p="1">
+        <p class="q">Everyday essentials</p>
+        <div class="list">
+          <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Breakfast + Lunch</span><span class="amt">~50.000 ₫</span><span class="dt">/ day</span><span></span></div>
+          <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Fuel</span><span class="amt">~80.000 ₫</span><span class="dt">/ Wed</span><span></span></div>
+        </div>
+        <div class="sugs">
+          <button class="sug on"><svg width="14" height="14"><use href="#i-check"/></svg>Groceries <small>300.000 / Sun</small></button>
+          <button class="sug"><svg width="14" height="14"><use href="#i-plus"/></svg>Health</button>
+          <button class="sug"><svg width="14" height="14"><use href="#i-plus"/></svg>Coffee</button>
+          <button class="sug"><svg width="14" height="14"><use href="#i-plus"/></svg>Other</button>
+        </div>
+      </div>
+      <div class="grid" data-p="2">
+        <p class="q">Anything special? <span>Optional</span></p>
+        <div class="list">
+          <div class="row new"><span class="ic k-extra"><svg width="13" height="13"><use href="#i-extra"/></svg></span><input class="field" value="Wedding gift" aria-label="Name"><input class="field r" value="1.000.000" aria-label="Amount"><input class="field" value="22 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+          <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Extra</button>
+        </div>
+        <button class="big-skip" data-go="3">No extras this time</button>
+      </div>
+      <div class="grid" data-p="3">
+        <p class="q">You'll have <span class="c-left">1.566.583 ₫</span> left</p>
+        <div class="eq" style="border:0;padding:0">
+          <span class="c-bill">Bills</span><span>370.000 ₫</span>
+          <span class="c-ess">Essentials</span><span>900.000 ₫</span>
+          <span class="c-extra">Extras</span><span>1.000.000 ₫</span>
+          <span class="tot">4 new plans</span><span class="tot">2.270.000 ₫</span>
+        </div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn ghost" data-go="back"><svg width="15" height="15"><use href="#i-left"/></svg>Back</button>
+      <span class="sp"></span>
+      <button class="btn pri" data-go="next" data-labels="Next|Next|Next|Create 4 plans">Next<svg width="15" height="15"><use href="#i-right"/></svg></button>
+    </div>
+  </div></div>
+  <div class="notes">
+    <div><b>Good</b><ul><li>Fastest when bills repeat: one tap each</li><li>Almost no labels: the question is the instruction</li></ul></div>
+    <div><b>Watch</b><ul><li>Suggestions need history (last period's bill spendings, last plans)</li><li>Hard to see everything at once until Review</li></ul></div>
+  </div>
+</section>
+
+<!-- ================= D ================= -->
+<section class="dir" id="d">
+  <div class="dir-head"><span class="tag">D</span><h2>Timeline</h2></div>
+  <p>The 30 days of the period form one strip, and existing plans are already drawn on it. Each phase adds its own color: bills and extras are pins on a day, essentials fill every day after today. You plan by date, the same way the calendar works.</p>
+  <div class="stage"><div class="modal wide stage-host" data-step="0" data-lefts="3.466.583|2.566.583|1.566.583|1.566.583">
+    <div class="m-head"><h3><svg width="18" height="18"><use href="#i-spark"/></svg>Plan <small>5 Nov – 4 Dec</small></h3><button class="x" aria-label="Close"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+    <div class="m-body">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <div class="tabs"><button data-go="0" class="k">Bills</button><button data-go="1">Essentials</button><button data-go="2">Extras</button><button data-go="3">Review</button></div>
+        <span class="sp"></span>
+        <span style="font-size:12.5px;color:var(--muted)">Left <b class="c-left num" style="font-size:16px" data-left>3.466.583 ₫</b></span>
+      </div>
+      <div class="tl-wrap"><div class="tl" data-tl></div></div>
+      <div class="tl-legend"><span><i class="sw" style="background:var(--spent)"></i>Paid</span><span><i class="sw" style="background:var(--bill)"></i>Bill</span><span><i class="sw" style="background:var(--ess)"></i>Essentials</span><span><i class="sw" style="background:var(--extra)"></i>Extra</span></div>
+      <div class="dayform" data-p="0"><span class="daybadge">15<small>NOV</small></span><input class="field" value="Internet" aria-label="Name"><input class="field r" value="250.000" aria-label="Amount"><button class="btn pri" style="height:34px"><svg width="14" height="14"><use href="#i-plus"/></svg>Bill</button></div>
+      <div class="dayform" data-p="1"><span class="daybadge k-ess" style="font-size:12px">Sun</span><input class="field" value="Groceries" aria-label="Name"><input class="field r" value="300.000" aria-label="Amount"><button class="btn pri" style="height:34px"><svg width="14" height="14"><use href="#i-plus"/></svg>Weekly</button></div>
+      <div class="dayform" data-p="2"><span class="daybadge k-extra">22<small>NOV</small></span><input class="field" value="Wedding gift" aria-label="Name"><input class="field r" value="1.000.000" aria-label="Amount"><button class="btn pri" style="height:34px"><svg width="14" height="14"><use href="#i-plus"/></svg>Extra</button></div>
+      <div class="eq" data-p="3" style="display:grid">
+        <span class="c-bill">Internet 15 Nov, Phone 20 Nov</span><span>370.000 ₫</span>
+        <span class="c-ess">Groceries 15, 22, 29 Nov</span><span>900.000 ₫</span>
+        <span class="c-extra">Wedding gift 22 Nov</span><span>1.000.000 ₫</span>
+        <span class="tot">Left until 5 Dec</span><span class="tot c-left">1.566.583 ₫</span>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn ghost" data-go="back"><svg width="15" height="15"><use href="#i-left"/></svg>Back</button>
+      <span class="sp"></span>
+      <button class="btn pri" data-go="next" data-labels="Next|Next|Next|Create 4 plans">Next<svg width="15" height="15"><use href="#i-right"/></svg></button>
+    </div>
+  </div></div>
+  <div class="notes">
+    <div><b>Good</b><ul><li>Dates are picked by tapping a day, so there is no date input</li><li>You see crowded days (22 Nov: gift + groceries)</li></ul></div>
+    <div><b>Watch</b><ul><li>The most work to build</li><li>30 columns are tight on phones and need sideways scrolling</li></ul></div>
+  </div>
+</section>
+
+<!-- ================= E ================= -->
+<section class="dir" id="e">
+  <div class="dir-head"><span class="tag">E</span><h2>Side rail</h2></div>
+  <p>A left rail lists the phases with their running totals, like a settings screen. Income sits on top and Left at the bottom, so the rail reads as a budget from top to bottom. The right pane edits one phase.</p>
+  <div class="stage"><div class="modal wide stage-host" data-step="0" data-lefts="3.466.583|2.566.583|1.566.583|1.566.583">
+    <div class="m-head"><h3><svg width="18" height="18"><use href="#i-spark"/></svg>Plan <small>5 Nov – 4 Dec</small></h3><button class="x" aria-label="Close"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+    <div class="e-body">
+      <nav class="rail">
+        <div class="inc">Income<b class="num">13.552.583 ₫</b></div>
+        <button data-go="0"><span class="ic k-bill"><svg width="14" height="14"><use href="#i-bill"/></svg></span><b>Bills</b><small>6.370.000 ₫ · 4</small></button>
+        <button data-go="1"><span class="ic k-ess"><svg width="14" height="14"><use href="#i-ess"/></svg></span><b>Essentials</b><small>~2.220.000 ₫ · 4</small></button>
+        <button data-go="2"><span class="ic k-extra"><svg width="14" height="14"><use href="#i-extra"/></svg></span><b>Extras</b><small>1.000.000 ₫ · 1</small></button>
+        <button data-go="3"><span class="ic" style="background:var(--primary-soft);color:var(--primary-text)"><svg width="14" height="14"><use href="#i-check"/></svg></span><b>Review</b><small>4 new</small></button>
+        <div class="left">Left until 5 Dec<b class="num" data-left>3.466.583 ₫</b></div>
+      </nav>
+      <div class="e-pane">
+        <div class="grid" data-p="0">
+          <h4><span class="c-bill"><svg width="18" height="18"><use href="#i-bill"/></svg></span>Bills<span class="sum">6.370.000 ₫</span></h4>
+          <div class="list">
+            <div class="row old"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-lock"/></svg></span><span class="nm">Tiền trọ</span><span class="amt">3.000.000 ₫</span><span class="dt">paid 7 Nov</span><span></span></div>
+            <div class="row old"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-lock"/></svg></span><span class="nm">Cho mẹ</span><span class="amt">3.000.000 ₫</span><span class="dt">paid 7 Nov</span><span></span></div>
+            <div class="row new"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-bill"/></svg></span><input class="field" value="Internet" aria-label="Name"><input class="field r" value="250.000" aria-label="Amount"><input class="field" value="15 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+            <div class="row new"><span class="ic k-bill"><svg width="13" height="13"><use href="#i-bill"/></svg></span><input class="field" value="Phone" aria-label="Name"><input class="field r" value="120.000" aria-label="Amount"><input class="field" value="20 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+            <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Bill</button>
+          </div>
+        </div>
+        <div class="grid" data-p="1">
+          <h4><span class="c-ess"><svg width="18" height="18"><use href="#i-ess"/></svg></span>Essentials<span class="sum">~2.220.000 ₫</span></h4>
+          <div class="perday">≈ <b class="num">85.000 ₫</b> a day for the next 26 days</div>
+          <div class="list">
+            <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Breakfast</span><span class="amt">~15.000 ₫</span><span class="dt">daily</span><span></span></div>
+            <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Lunch</span><span class="amt">~35.000 ₫</span><span class="dt">daily</span><span></span></div>
+            <div class="row old"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><span class="nm">Fuel</span><span class="amt">~80.000 ₫</span><span class="dt">Wed</span><span></span></div>
+            <div class="row new"><span class="ic k-ess"><svg width="13" height="13"><use href="#i-ess"/></svg></span><input class="field" value="Groceries" aria-label="Name"><input class="field r" value="300.000" aria-label="Amount"><input class="field" value="Sun" aria-label="Repeat"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+            <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Essential</button>
+          </div>
+        </div>
+        <div class="grid" data-p="2">
+          <h4><span class="c-extra"><svg width="18" height="18"><use href="#i-extra"/></svg></span>Extras<span class="chip">optional</span><span class="sum">1.000.000 ₫</span></h4>
+          <div class="list">
+            <div class="row new"><span class="ic k-extra"><svg width="13" height="13"><use href="#i-extra"/></svg></span><input class="field" value="Wedding gift" aria-label="Name"><input class="field r" value="1.000.000" aria-label="Amount"><input class="field" value="22 Nov" aria-label="Date"><button class="del" aria-label="Remove"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+            <button class="add"><svg width="14" height="14"><use href="#i-plus"/></svg>Extra</button>
+          </div>
+        </div>
+        <div class="grid" data-p="3">
+          <h4>Review</h4>
+          <div class="rev">
+            <div class="rev-row"><span class="ic k-bill"><svg width="15" height="15"><use href="#i-bill"/></svg></span><div><b>Internet, Phone</b></div><div class="amt">370.000 ₫</div></div>
+            <div class="rev-row"><span class="ic k-ess"><svg width="15" height="15"><use href="#i-ess"/></svg></span><div><b>Groceries</b><small>3 Sundays</small></div><div class="amt">900.000 ₫</div></div>
+            <div class="rev-row"><span class="ic k-extra"><svg width="15" height="15"><use href="#i-extra"/></svg></span><div><b>Wedding gift</b></div><div class="amt">1.000.000 ₫</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn ghost" data-go="back"><svg width="15" height="15"><use href="#i-left"/></svg>Back</button>
+      <span class="sp"></span>
+      <button class="btn pri" data-go="next" data-labels="Next|Next|Next|Create 4 plans">Next<svg width="15" height="15"><use href="#i-right"/></svg></button>
+    </div>
+  </div></div>
+  <div class="notes">
+    <div><b>Good</b><ul><li>Totals per phase include the old plans, so the rail is a full budget</li><li>Free jumping between phases</li></ul></div>
+    <div><b>Watch</b><ul><li>Feels more like a settings page than a guided flow</li><li>On phones the rail becomes a row of tabs</li></ul></div>
+  </div>
+</section>
+
+<section class="dir" style="padding-bottom:48px">
+  <div class="dir-head"><h2>Recommendation</h2></div>
+  <p>Build <b>A (Stepper)</b> and borrow the thin waterfall bar from <b>B</b> as the footer meter. That keeps the build small, puts the old plans first in every phase, and lets the bar show the bills → essentials → extras order without any text. C's suggestion chips can come later, once there is a period of history to suggest from.</p>
+</section>
+</main>
+
+<script>
+(() => {
+  // Generic stepper: [data-go] = back | next | index. Elements with data-p="n ..." show on those steps.
+  const hosts = document.querySelectorAll('.stage-host');
+  // Bar growth per step for B: [bills, ess, extras, left]
+  const barSteps = [[2.7, 0, 0, 25.6], [2.7, 6.6, 0, 19.0], [2.7, 6.6, 7.4, 11.6], [2.7, 6.6, 7.4, 11.6]];
+  // Timeline data for D: 30 days from 5 Nov.
+  const days = Array.from({ length: 30 }, (_, i) => { const d = new Date(2026, 10, 5 + i); return { n: d.getDate(), dow: d.getDay(), i }; });
+  const TODAY = 3; // 8 Nov
+  function drawTl(tl, step) {
+    tl.innerHTML = days.map(d => {
+      const pins = [];
+      if (d.i === 2) pins.push('<i class="pin paid"></i>', '<i class="pin paid"></i>');
+      if (d.i > TODAY) { pins.push('<i class="pin ess"></i>'); if (d.dow === 3) pins.push('<i class="pin fuel"></i>'); }
+      if (step >= 0 && (d.n === 15 || d.n === 20) && d.i < 26) pins.push('<i class="pin bill' + (step === 0 && d.n === 15 ? '' : '') + '"></i>');
+      if (step >= 1 && d.dow === 0 && d.i > TODAY) pins.push('<i class="pin ess" style="height:9px;opacity:1"></i>');
+      if (step >= 2 && d.n === 22 && d.i < 26) pins.push('<i class="pin extra"></i>');
+      const sel = (step === 0 && d.n === 15 && d.i < 26) || (step === 2 && d.n === 22 && d.i < 26);
+      const cls = ['d', d.i < TODAY ? 'past' : '', d.i === TODAY ? 'today' : '', sel ? 'sel' : ''].join(' ');
+      return `<div class="${cls}"><span>${d.n}</span><div class="col">${pins.join('')}</div></div>`;
+    }).join('');
+  }
+  hosts.forEach(host => {
+    const lefts = (host.dataset.lefts || '').split('|');
+    const set = step => {
+      step = Math.max(0, Math.min(3, step));
+      host.dataset.step = step;
+      host.querySelectorAll('[data-left]').forEach(el => { el.textContent = lefts[step] + ' ₫'; });
+      const next = host.querySelector('[data-go="next"]');
+      const labels = (next.dataset.labels || '').split('|');
+      next.firstChild.nodeValue = labels[step];
+      host.querySelector('[data-go="back"]').disabled = step === 0;
+      host.querySelectorAll('.steps button, .tabs button, .rail button').forEach(b => {
+        const i = +b.dataset.go; b.classList.toggle('on', i === step); b.classList.toggle('done', i < step);
+        if (i === step) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      });
+      host.querySelectorAll('[data-dots] span').forEach((s, i) => s.classList.toggle('on', i === step));
+      const bar = host.querySelector('[data-bar]');
+      if (bar) {
+        const g = barSteps[step];
+        bar.querySelector('[data-seg="0"]').style.flexGrow = g[0];
+        bar.querySelector('[data-seg="1"]').style.flexGrow = g[1];
+        bar.querySelector('[data-seg="2"]').style.flexGrow = g[2];
+        bar.querySelector('[data-segleft]').style.flexGrow = g[3];
+        bar.querySelectorAll('[data-seg]').forEach(s => s.classList.toggle('dimmed', step < 3 && +s.dataset.seg !== step));
+      }
+      const tl = host.querySelector('[data-tl]'); if (tl) drawTl(tl, step);
+    };
+    host.addEventListener('click', e => {
+      const b = e.target.closest('[data-go]'); if (!b || b.disabled) return;
+      const cur = +host.dataset.step, go = b.dataset.go;
+      set(go === 'next' ? (cur === 3 ? 0 : cur + 1) : go === 'back' ? cur - 1 : +go);
+    });
+    set(0);
+  });
+})();
+</script>
