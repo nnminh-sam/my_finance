@@ -1,0 +1,32 @@
+/* The app's alert, used for every confirm and prompt on phone and desktop instead of the browser's own.
+   It is a native <dialog> opened with showModal(), so it stacks above any other modal (the income modal is one). */
+.m-alert-layer {
+  position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none;
+  margin: 0; border: 0; padding: 16px; color: inherit;
+  display: grid; place-items: center; background: rgba(0, 0, 0, .45);
+}
+.m-alert-layer::backdrop { background: transparent; }
+.m-alert { width: min(320px, 100%); background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 16px; text-align: center; overflow: hidden; box-shadow: 0 20px 50px rgba(0, 0, 0, .35); animation: m-alert-pop .18s ease-out; }
+@keyframes m-alert-pop { from { transform: scale(1.1); opacity: 0; } }
+.m-alert-body { padding: 18px 16px 14px; }
+.m-alert-body b { font-size: 1.05rem; }
+.m-alert-body p { margin: 4px 0 0; color: var(--text-muted); font-size: 0.92rem; overflow-wrap: anywhere; }
+.m-alert-input {
+  display: block; width: 100%; margin-top: 12px; padding: 9px 12px; min-height: 40px;
+  background: var(--bg-main); color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-sm, 8px);
+  font: inherit; font-size: 1rem; text-align: center;
+}
+.m-alert-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+.m-alert-actions { display: flex; border-top: 1px solid var(--border-color); }
+.m-alert-actions button { flex: 1; padding: 12px; min-height: 44px; color: var(--primary); }
+.m-alert-actions button + button { border-left: 1px solid var(--border-color); }
+.m-alert-actions button:hover { background: var(--bg-card-hover); }
+.m-alert-actions button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.m-alert-actions button.is-destructive { color: var(--danger); font-weight: 600; }
+.m-alert-actions button.is-primary { font-weight: 600; }
+.m-alert-actions.is-vertical { flex-direction: column; }
+.m-alert-actions.is-vertical button + button { border-left: 0; border-top: 1px solid var(--border-color); }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-alert { animation: none; }
+}

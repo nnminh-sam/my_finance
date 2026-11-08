@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Trash2, X } from 'lucide-react';
-import { MobileAlert } from '../mobile/MobileUi';
+import { SystemAlert } from '../SystemAlert';
 import { isoDate } from '../../lib/quickEntry';
 import type { Spending } from '../../types';
 import type { ExpenseDefaults } from '../../contexts/FinanceShellContext';
@@ -137,7 +137,7 @@ export function QuickEntryDialog({ expense, defaults, onClose, onSaved }: {
         </footer>
       </div>
       {confirmClose && (
-        <MobileAlert
+        <SystemAlert
           title="Discard this entry?"
           message={qe.queue.length ? `${qe.queue.length} queued ${qe.queue.length === 1 ? 'entry' : 'entries'} and the current one are not saved yet.` : 'Your changes are not saved yet.'}
           buttons={[

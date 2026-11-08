@@ -14,6 +14,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { incomeMonth } from '../lib/income';
 
 import { useRouter } from 'next/navigation';
+import { format } from 'date-fns';
 import { pageHref } from '../lib/navigation';
 
 // Phones get direction F (Ledger Month): a plain Month, a Week ledger with a keypad, segmented Analytics.
@@ -50,7 +51,7 @@ export function DayPageView() {
     <DayDetails
       date={currentDate}
       onBack={openBackToCalendar}
-      onAddExpense={() => openExpense()}
+      onAddExpense={() => openExpense(undefined, { date: format(currentDate, 'yyyy-MM-dd') })}
       onEditExpense={openExpense}
     />
   );
