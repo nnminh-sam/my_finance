@@ -9,6 +9,11 @@ export interface FinanceStore {
   getSettings(userId: string): Promise<FinanceSettings>;
   /** "invalid-budget-period": the paycheck income is missing, not the user's, or not weekly, semimonthly or monthly. Nothing is written. */
   updateSettings(userId: string, patch: SettingsPatch): Promise<FinanceSettings | "invalid-budget-period">;
+  /**
+   * Moves every spending, plan and repeat rule from category `from` to `into`, then archives `from`.
+   * "invalid-category": `from` is not in settings, or `into` is missing or archived. Nothing is written.
+   */
+  mergeCategory(userId: string, from: string, into: string): Promise<{ settings: FinanceSettings; spendings: number; plans: number } | "invalid-category">;
   /** Spendings made from a plan whose occurrence date is in [fromDate, toDate], whatever date they were paid on (early "Done now"). */
   listPlanSpendings(userId: string, fromDate: string, toDate: string): Promise<Spending[]>;
   listSpendings(userId: string, limit: number, cursor?: string, startDate?: string, endDate?: string): Promise<SpendingPage>;
@@ -189,6 +194,25 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
           period?.mode ?? null, period?.startDay ?? null, setsPaycheck, period?.paycheckIncomeId ?? null, period !== undefined, patch.showBy ?? null]),
       ], { isolationLevel: "ReadCommitted" });
       return results[2][0] ? settings(results[2][0]) : "invalid-budget-period";
+    },
+    async mergeCategory(userId, from, into) {
+      // Every statement re-checks that `from` exists and `into` exists unarchived, so a bad pair writes nothing.
+      const valid = `(SELECT count(*) FROM finance_settings s, jsonb_array_elements(s.categories) c
+        WHERE s.user_id = $1 AND (c->>'id' = $2 OR (c->>'id' = $3 AND NOT COALESCE((c->>'archived')::boolean, false)))) = 2`;
+      const params = [userId, from, into];
+      const results = await sql.transaction([
+        ensure(userId), lock(userId),
+        sql.query(`UPDATE finance_spendings SET category = $3 WHERE user_id = $1 AND category = $2 AND ${valid} RETURNING id`, params),
+        sql.query(`UPDATE finance_plans SET category = $3 WHERE user_id = $1 AND category = $2 AND ${valid} RETURNING id`, params),
+        sql.query(`UPDATE finance_repeat_rules SET category = $3 WHERE user_id = $1 AND category = $2 AND ${valid} RETURNING id`, params),
+        sql.query(`UPDATE finance_settings SET categories = (
+            SELECT jsonb_agg(CASE WHEN c->>'id' = $2 THEN c || '{"archived": true}'::jsonb ELSE c END ORDER BY n)
+            FROM jsonb_array_elements(categories) WITH ORDINALITY AS t(c, n))
+          WHERE user_id = $1 AND ${valid} RETURNING ${settingsColumns}`, params),
+      ], { isolationLevel: "ReadCommitted" });
+      const saved = results[5][0];
+      if (!saved) return "invalid-category";
+      return { settings: settings(saved), spendings: results[2].length, plans: results[3].length };
     },
     async listPlanSpendings(userId, fromDate, toDate) {
       const rows = await query(`SELECT ${spendingColumns} FROM finance_spendings

@@ -164,7 +164,7 @@ export async function handleAuthRequest(
     const name = typeof recordBody?.name === "string" ? recordBody.name.trim() : "";
     const password = recordBody?.password;
     if (!email || !name || name.length > 100 || /[\u0000-\u001f\u007f]/.test(name) || !validPassword(password)) {
-      throw new HttpError(400, "Provide a name (1–100 characters), valid email, and password (12–128 characters, at most 512 UTF-8 bytes)");
+      throw new HttpError(400, "Use a name, a valid email and a password of 12–128 characters.");
     }
     await limit(email);
     const passwordHash = await hashPassword(password);

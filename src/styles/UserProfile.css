@@ -105,10 +105,20 @@
 .user-profile .profile-panel-head h2 { font-size: 1.25rem; font-weight: 600; }
 .user-profile .profile-panel-head p { margin-top: 2px; color: var(--text-muted); font-size: 0.875rem; line-height: 1.6; }
 .user-profile .profile-panel-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* Readable width on desktop: the profile shell and stand-alone panels (Plans page) stop growing. */
+.user-profile > .profile-identity,
+.user-profile > .profile-shell { width: 100%; max-width: 1180px; margin-inline: auto; }
+.user-profile > .profile-panel { width: 100%; max-width: 960px; margin-inline: auto; }
+/* A panel head used inside a card (Paycycle) gets the card's 20px gutter. */
+.user-profile .profile-card > .profile-panel-head { padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+.user-profile .profile-card > .profile-panel-head h3 { display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 600; }
+.user-profile .profile-card > .profile-panel-head p { font-size: 0.8125rem; }
 .user-profile .profile-empty { padding: 20px; color: var(--text-muted); font-size: 0.875rem; line-height: 1.6; }
 
 /* Buttons */
 .user-profile .profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* Save / Cancel placed directly in a card form become a padded, right-aligned footer. */
+.user-profile form.profile-card > .profile-actions { justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--border-color); background: var(--profile-sunken); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
 .user-profile .profile-button {
   display: inline-flex;
   align-items: center;
@@ -164,7 +174,7 @@
 .user-profile .profile-signout-card h3 { font-size: 0.9375rem; font-weight: 600; }
 
 /* Summary strip */
-.user-profile .profile-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.user-profile .profile-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .user-profile .profile-summary > div { min-width: 0; padding: 14px 20px; border-left: 1px solid var(--border-color); }
 .user-profile .profile-summary > div:first-child { border-left: 0; }
 .user-profile .profile-summary dt { color: var(--text-muted); font-size: 0.75rem; }
@@ -192,31 +202,53 @@
 .user-profile .profile-month-switch input { width: 10.5rem; padding: 4px 8px; border: 0; background: none; }
 .user-profile .profile-income-month { font-size: 0.875rem; color: var(--text-muted); }
 
-/* Categories */
-.user-profile .profile-category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; padding: 20px; }
-.user-profile .profile-category-tile {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-align: left;
-}
-.user-profile .profile-category-tile > span:last-child { min-width: 0; overflow-wrap: break-word; hyphens: auto; }
-.user-profile .profile-category-tile .profile-glyph { width: 32px; height: 32px; }
-.user-profile .profile-category-tile:hover:not(:disabled) { background: var(--bg-card-hover); }
-.user-profile .profile-category-tile[aria-expanded='true'] { border-color: var(--primary); box-shadow: 0 0 0 3px var(--profile-soft); }
-.user-profile .profile-category-add { justify-content: center; border-style: dashed; color: var(--text-muted); }
-.user-profile .profile-category-editor { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-top: 1px solid var(--border-color); background: var(--profile-sunken); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
-.user-profile .profile-category-editor fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
-.user-profile .profile-category-editor input[type='text'] { background: var(--bg-card); }
-.user-profile .profile-field-full { grid-column: 1 / -1; }
-.user-profile .profile-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 0.875rem; font-weight: 500; }
+/* Categories: add line, toolbar, fixed-height list that scrolls inside itself, row menu, bulk footer */
+.user-profile .cat-manager { position: relative; display: flex; flex-direction: column; }
+.user-profile .cat-add { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border-color); background: var(--profile-sunken); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.user-profile .cat-add input { flex: 1; background: var(--bg-card); }
+.user-profile .cat-look-btn { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 2px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card); color: var(--text-muted); }
+.user-profile .cat-look-btn .profile-glyph { width: 32px; height: 32px; }
+.user-profile .cat-look-btn.is-row { padding: 0; border-color: transparent; background: none; border-radius: 10px; }
+.user-profile .cat-look-btn:hover:not(:disabled) { border-color: var(--primary); }
+.user-profile .cat-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border-color); }
+.user-profile .cat-search { flex: 1 1 200px; flex-direction: row; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--profile-sunken); color: var(--text-muted); }
+.user-profile .cat-search:focus-within { border-color: var(--primary); }
+.user-profile .cat-search input:not([type='checkbox']) { padding: 7px 0; border: 0; background: none; outline: none; }
+.user-profile .cat-scroll { position: relative; max-height: min(440px, 60vh); overflow-y: auto; overscroll-behavior: contain; }
+.user-profile .cat-list { margin: 0; padding: 0; list-style: none; }
+.user-profile .cat-row { display: grid; grid-template-columns: 18px 36px minmax(0, 1fr) 56px 72px 32px; gap: 10px; align-items: center; min-height: 48px; padding: 4px 12px 4px 16px; border-bottom: 1px solid var(--border-color); font-size: 0.875rem; }
+.user-profile .cat-row input[type='checkbox'] { width: 16px; height: 16px; margin: 0; accent-color: var(--primary); }
+.user-profile .cat-list .cat-row:hover { background: var(--bg-card-hover); }
+.user-profile .cat-row.is-selected { background: var(--profile-soft); }
+.user-profile .cat-row.is-unused .cat-name { color: var(--text-muted); }
+.user-profile .cat-head { position: sticky; top: 0; z-index: 1; min-height: 34px; background: var(--bg-card); color: var(--text-muted); font-size: 0.75rem; font-weight: 500; }
+.user-profile .cat-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-profile .cat-row .cat-rename { padding: 5px 8px; border-color: var(--primary); background: var(--bg-card); font-weight: 500; }
+.user-profile .cat-num { text-align: right; color: var(--text-muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.user-profile .cat-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 56px; padding: 10px 16px; font-size: 0.8125rem; color: var(--text-muted); }
+.user-profile .cat-foot.is-bulk { background: var(--profile-soft); color: var(--text-main); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.user-profile .cat-sp { flex: 1; }
+.user-profile .cat-notice { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-main); }
+.user-profile .cat-link { color: var(--primary); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.user-profile .cat-error { margin: 0; padding: 0 16px 14px; }
+.user-profile .cat-float { position: absolute; z-index: 20; }
+.user-profile .cat-menu, .user-profile .cat-look { min-width: 200px; padding: 6px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card); box-shadow: 0 16px 40px color-mix(in srgb, #000 28%, transparent); display: flex; flex-direction: column; gap: 1px; }
+.user-profile .cat-menu > button, .user-profile .cat-merge-list > button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 0.875rem; text-align: left; }
+.user-profile .cat-menu > button:hover:not(:disabled), .user-profile .cat-merge-list > button:hover:not(:disabled) { background: var(--bg-card-hover); }
+.user-profile .cat-menu > button.is-danger { color: var(--danger); }
+.user-profile .cat-menu hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--border-color); }
+.user-profile .cat-menu-title { padding: 4px 10px; color: var(--text-muted); font-size: 0.75rem; font-weight: 500; }
+.user-profile .cat-merge { width: 260px; gap: 6px; }
+.user-profile .cat-merge .cat-search { flex: none; margin: 0 4px; }
+.user-profile .cat-merge-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; }
+.user-profile .cat-merge-list .profile-glyph { width: 24px; height: 24px; border-radius: 7px; }
+.user-profile .cat-confirm { width: 300px; padding: 14px; gap: 12px; }
+.user-profile .cat-confirm p { margin: 0; font-size: 0.875rem; line-height: 1.5; color: var(--text-main); }
+.user-profile .cat-confirm .profile-actions { justify-content: flex-end; }
+.user-profile .cat-look { width: 290px; padding: 12px; gap: 12px; }
+.user-profile .cat-look-head { display: flex; align-items: center; gap: 10px; font-size: 0.875rem; min-width: 0; }
+.user-profile .cat-look-head b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-profile .cat-look .profile-icon-grid button { width: 34px; height: 34px; }
 .user-profile .profile-swatches,
 .user-profile .profile-icon-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .user-profile .profile-swatch { position: relative; width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; box-shadow: inset 0 0 0 2px var(--profile-sunken); }
@@ -225,13 +257,18 @@
 .user-profile .profile-swatch-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .user-profile .profile-icon-grid button { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-muted); }
 .user-profile .profile-icon-grid button[aria-pressed='true'] { border-color: var(--primary); background: var(--profile-soft); color: var(--primary); }
-.user-profile .profile-editor-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 
 /* Preferences */
 .user-profile .profile-pref { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-top: 1px solid var(--border-color); }
 .user-profile .profile-pref:first-child { border-top: 0; }
 .user-profile .profile-pref > div:first-child { min-width: 0; max-width: 48ch; display: flex; flex-direction: column; gap: 2px; }
 .user-profile .profile-pref label { display: inline; }
+/* Option rows whose root is a <label> (Paycycle): undo the global label column, text left, radio right.
+   The text wrapper stays a <span> because a <div> is not allowed inside a <label>. */
+.user-profile label.profile-pref { flex-direction: row; flex-wrap: nowrap; cursor: pointer; }
+.user-profile label.profile-pref:hover { background: var(--bg-card-hover); }
+.user-profile label.profile-pref > span:first-child { min-width: 0; max-width: 60ch; display: flex; flex-direction: column; gap: 2px; }
+.user-profile label.profile-pref input[type='radio'] { flex: none; width: 18px; height: 18px; accent-color: var(--primary); }
 .user-profile .profile-pref select { width: auto; }
 .user-profile .profile-segmented { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--profile-sunken); }
 .user-profile .profile-segmented button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; color: var(--text-muted); font-size: 0.875rem; font-weight: 500; }
@@ -258,8 +295,9 @@
   .user-profile .profile-summary > div:first-child { border-top: 0; }
   .user-profile .profile-list-item { grid-template-columns: 36px minmax(0, 1fr) auto; padding: 12px 16px; }
   .user-profile .profile-row-actions { grid-column: 2 / -1; }
-  .user-profile .profile-category-editor fieldset { grid-template-columns: minmax(0, 1fr); }
-  .user-profile .profile-category-grid { padding: 16px; }
+  .user-profile .cat-add, .user-profile .cat-toolbar { padding-left: 12px; padding-right: 12px; }
+  .user-profile .cat-row { grid-template-columns: 18px 36px minmax(0, 1fr) 44px 32px; gap: 8px; padding-left: 12px; padding-right: 8px; }
+  .user-profile .cat-spent { display: none; }
 }
 
 /* Income form: chips for source, one prominent amount, segmented frequency, live schedule sentence. */
@@ -269,6 +307,7 @@
 .user-profile .income-form-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; padding: 20px 24px; }
 .user-profile .income-form-body > :first-child,
 .user-profile .income-form-body > fieldset,
+.user-profile .income-form-body > .income-field-full,
 .user-profile .income-dates { grid-column: 1 / -1; }
 .user-profile .income-form-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 0; border: 0; }
 .user-profile .income-form-label { padding: 0; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -311,10 +350,19 @@
 .user-profile .income-segment input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .user-profile .income-segment span { display: block; padding: 7px 10px; border-radius: 6px; text-align: center; color: var(--text-muted); font-size: 0.875rem; font-weight: 500; }
 .user-profile .income-segment:hover span { color: var(--text-main); }
-.user-profile .income-segment input:checked + span { background: var(--bg-card); color: var(--text-main); box-shadow: 0 1px 2px color-mix(in srgb, var(--text-main) 15%, transparent); }
+.user-profile .income-segment input:checked + span { background: var(--profile-soft); color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); font-weight: 600; }
 .user-profile .income-segment input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 1px; }
 
-.user-profile .income-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; }
+/* auto-fit: 2–4 fields share a row without leaving an empty half. */
+.user-profile .income-dates { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px 24px; }
+/* A checkbox reads as a sentence, not as an uppercase field label. */
+.user-profile label.income-check { flex-direction: row; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 400; color: var(--text-main); }
+.user-profile label.income-check input { width: 16px; height: 16px; accent-color: var(--primary); }
+
+/* Token form (AI & MCP): name on its own row, the two selects paired, actions use the card footer. */
+.user-profile .mcp-form { gap: 0; }
+.user-profile .mcp-form > fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; padding: 20px; }
+.user-profile .mcp-form > fieldset > label:first-child { grid-column: 1 / -1; }
 .user-profile .income-date-clear { display: flex; align-items: center; gap: 4px; }
 
 .user-profile .income-schedule { display: flex; align-items: flex-start; gap: 10px; margin: 0 24px; padding: 12px 14px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--success) 10%, transparent); color: var(--text-main); font-size: 0.875rem; line-height: 1.5; }
@@ -333,6 +381,7 @@
   .user-profile .income-form > .profile-error { margin-inline: 16px; }
   .user-profile .income-form-foot { padding-inline: 16px; }
   .user-profile .income-form-foot .profile-button { flex: 1; }
+  .user-profile .mcp-form > fieldset { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Phone layout (direction F): a grouped list that pushes one section at a time. */

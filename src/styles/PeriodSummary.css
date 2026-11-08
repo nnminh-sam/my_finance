@@ -28,7 +28,6 @@
 .period-side-section h3 { margin: 0 0 6px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
 .period-side-section p { margin: 0; font-size: 0.8rem; line-height: 1.5; color: var(--text-muted); }
 .period-side-section p b { color: var(--text-main); font-weight: 600; }
-.period-side .calendar-overview-tools { flex-wrap: wrap; }
 .period-side .calendar-pay-cycle-hint { margin: 0; padding: 0; }
 
 /* Slim strip */
@@ -45,7 +44,7 @@
 .period-strip-legend b { color: var(--text-main); font-weight: 600; }
 .period-strip-legend .runway-swatch { width: 9px; height: 9px; }
 .period-strip-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.period-strip-tools button, .period-side .calendar-overview-tools button { white-space: nowrap; }
+.period-strip-tools button { white-space: nowrap; }
 .period-strip-details { min-height: 30px; padding: 3px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
 .period-strip-details:hover { color: var(--text-main); }
 .period-strip-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0; padding-top: 10px; border-top: 1px dashed var(--border-color); }
@@ -70,12 +69,10 @@
 .period-side [data-seg], .period-strip [data-seg] { transition: opacity 0.15s ease; }
 
 /* Mini calendar of the other period kind */
+.period-mini { margin-top: 14px; }
 .period-mini-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .period-mini-head { text-align: center; font-size: 0.65rem; color: var(--text-muted); padding-bottom: 2px; }
 .period-mini-day { position: relative; height: 28px; border-radius: 6px; font-size: 0.75rem; font-variant-numeric: tabular-nums; color: var(--text-main); }
 .period-mini-day:hover { background: color-mix(in srgb, var(--text-muted) 16%, transparent); }
 .period-mini-muted { color: var(--text-muted); opacity: 0.55; }
 .period-mini-today { box-shadow: inset 0 0 0 1.5px var(--calendar-today-border, var(--primary)); font-weight: 700; }
-.period-mini-spent::after, .period-mini-planned::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; }
-.period-mini-spent::after { background: var(--primary); }
-.period-mini-planned::after { border: 1px solid var(--primary); width: 2px; height: 2px; }

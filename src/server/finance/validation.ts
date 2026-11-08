@@ -1,7 +1,7 @@
 import { HttpError } from "../auth/http";
 import { BUDGET_PERIOD_MODES, SHOW_BY, type BudgetPeriodMode, type ShowBy } from "../../lib/periods";
 import { isValidTimeZone, PLAN_FREQUENCIES, type PlanFrequency } from "../../lib/plans";
-import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category, type IncomeFrequency, type IncomeInput, type PlanExceptionInput, type PlanInput, type SettingsPatch, type SpendingInput } from "./model";
+import { CATEGORY_ICONS, INCOME_FREQUENCIES, MAX_CATEGORIES, type Category, type IncomeFrequency, type IncomeInput, type PlanExceptionInput, type PlanInput, type SettingsPatch, type SpendingInput } from "./model";
 
 function invalid(field: string): never { throw new HttpError(400, `Invalid ${field}`); }
 function object(value: unknown, allowed: readonly string[]): Record<string, unknown> {
@@ -21,18 +21,27 @@ function money(value: unknown, field: string, positive = false): number {
   return value;
 }
 function categories(value: unknown): Category[] {
-  if (!Array.isArray(value) || value.length > 50) return invalid("categories");
+  if (!Array.isArray(value) || value.length > MAX_CATEGORIES) return invalid("categories");
   const ids = new Set<string>();
   return value.map(value => {
-    const item = object(value, ["id", "name", "color", "icon"]);
+    const item = object(value, ["id", "name", "color", "icon", "archived"]);
     const id = text(item.id, "category id", 100);
     const name = text(item.name, "category name", 100);
     if (ids.has(id)) return invalid("duplicate category id");
     ids.add(id);
     if (typeof item.color !== "string" || !/^#[0-9a-f]{6}$/i.test(item.color)) return invalid("category color");
     if (typeof item.icon !== "string" || !CATEGORY_ICONS.has(item.icon)) return invalid("category icon");
-    return { id, name, color: item.color, icon: item.icon };
+    if (Object.hasOwn(item, "archived") && typeof item.archived !== "boolean") return invalid("category archived");
+    return item.archived ? { id, name, color: item.color, icon: item.icon, archived: true } : { id, name, color: item.color, icon: item.icon };
   });
+}
+/** Body of POST /settings/categories/merge: move everything from one category into another. */
+export function categoryMerge(value: unknown): { from: string; into: string } {
+  const body = object(value, ["from", "into"]);
+  const from = text(body.from, "from", 100);
+  const into = text(body.into, "into", 100);
+  if (from === into) return invalid("into");
+  return { from, into };
 }
 function budgetPeriodPatch(value: unknown): NonNullable<SettingsPatch["budgetPeriod"]> {
   const body = object(value, ["mode", "startDay", "paycheckIncomeId"]);

@@ -8,6 +8,8 @@ export interface CategoryData {
   name: string;
   color: string;
   icon: string;
+  /** Hidden from pickers; kept so past spendings and plans still show its name, color and icon. */
+  archived?: boolean;
 }
 
 export interface Spending {

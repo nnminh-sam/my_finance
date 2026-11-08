@@ -25,15 +25,15 @@ export const PANEL_TITLES: Record<QuickPanel, string> = {
   date: 'Date', time: 'Time', note: 'Description', repeat: 'Repeat & plan', queue: 'Queued', freq: 'How often', start: 'Start date', end: 'End date', name: 'Source & name',
 };
 
-const MODE_LABELS = { spending: 'Spending', income: 'Income', plan: 'Plan' } as const;
+const MODE_LABELS = { spending: 'Spending', income: 'Income' } as const;
 
-/** Spending · Income · Plan. Plan is a spending that is always saved as a plan (a forecast). */
+/** Spending · Income. A spending that repeats or is dated ahead is saved as a plan. */
 export function ModeToggle({ qe, small }: { qe: QuickEntryController; small?: boolean }) {
   if (qe.editing) return null;
-  const current = qe.entry.mode === 'income' ? 'income' : qe.entry.plan ? 'plan' : 'spending';
+  const current = qe.entry.mode;
   return (
     <div className={`qe-seg qe-mode${small ? ' is-small' : ''}`} role="radiogroup" aria-label="Transaction type">
-      {(['spending', 'income', 'plan'] as const).map(mode => (
+      {(['spending', 'income'] as const).map(mode => (
         <button key={mode} type="button" role="radio" aria-checked={current === mode} data-mode={mode} className={current === mode ? 'is-on' : undefined} onClick={() => qe.setMode(mode)}>
           {MODE_LABELS[mode]}
         </button>
@@ -88,25 +88,25 @@ export function saveLabelFor(qe: QuickEntryController) {
 export function CategoryChips({ qe }: { qe: QuickEntryController }) {
   return (
     <div className="qe-chips" role="radiogroup" aria-label="Category">
-      {qe.categories.map(c => (
+      {qe.pickable.map(c => (
         <button key={c.id} type="button" role="radio" aria-checked={c.id === qe.entry.category} className={`qe-chip${c.id === qe.entry.category ? ' is-on' : ''}`} style={{ ['--c' as string]: c.color }} onClick={() => { haptic(5); qe.patch({ category: c.id }); }}>
           <CategoryIcon icon={c.icon} size={14} /> {c.name}
         </button>
       ))}
-      {qe.categories.length === 0 && <span className="qe-hint">No categories yet — add one in Profile.</span>}
+      {qe.pickable.length === 0 && <span className="qe-hint">No categories yet — add one in Profile.</span>}
     </div>
   );
 }
 
 export function CategoryGrid({ qe }: { qe: QuickEntryController }) {
   const [query, setQuery] = useState('');
-  const shown = qe.categories.filter(c => !query.trim() || c.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const shown = qe.pickable.filter(c => !query.trim() || c.name.toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <div className="qe-stack">
-      {qe.categories.length > 8 && (
+      {qe.pickable.length > 8 && (
         <label className="qe-search">
           <Search size={16} aria-hidden="true" />
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${qe.categories.length} categories`} aria-label="Search categories" />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={`Search ${qe.pickable.length} categories`} aria-label="Search categories" />
         </label>
       )}
       <div className="qe-cgrid" role="radiogroup" aria-label="Category">
@@ -299,9 +299,6 @@ export function PlanStatus({ qe }: { qe: QuickEntryController }) {
   if (entry.mode !== 'spending') return null;
   const r = entry.repeat;
   const ahead = `${entry.date}T${entry.time}` > nowStamp();
-  if (entry.plan && !r.on && !ahead) {
-    return <p className="qe-status is-warn" role="status">A plan needs a future date or time, or Repeat turned on. Pick <b>Tomorrow</b>, or switch to Spending to record it now.</p>;
-  }
   if (!isPlanEntry(entry)) {
     return <p className="qe-status" role="status">Recorded as a real expense on {dayLabel(entry.date)} at {entry.time}.</p>;
   }
