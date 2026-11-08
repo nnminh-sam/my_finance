@@ -2,7 +2,7 @@ import { authenticateRequest, HttpError } from "../auth/http";
 import type { AuthStore } from "../auth/store";
 import { loadPlanPeriodSummary } from "./periodSummary";
 import type { FinanceStore } from "./store";
-import { incomeInput, pagination, planDate, planExceptionInput, planInput, planSummaryDate, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
+import { categoryMerge, incomeInput, pagination, planDate, planExceptionInput, planInput, planSummaryDate, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
 
 function planId(value: unknown): string {
   try { return uuid(value); }
@@ -68,6 +68,13 @@ export async function handleFinanceRequest(
       if (settings === "invalid-budget-period") throw new HttpError(400, "Paycheck period needs one of your weekly, twice-a-month or monthly incomes");
       return jsonResponse({ settings });
     }
+  }
+
+  if (subpath === "/settings/categories/merge" && method === "POST") {
+    const { from, into } = categoryMerge(body);
+    const result = await store.mergeCategory(user.id, from, into);
+    if (result === "invalid-category") throw new HttpError(400, "Both categories must exist, and the one to merge into must not be archived");
+    return jsonResponse(result);
   }
 
   if (subpath === "/spendings") {

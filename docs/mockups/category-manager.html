@@ -1,0 +1,674 @@
+<title>Category Manager</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== FIXED: tokens. Mirror src/styles/globals.css (dark is the app default, light mirrors .light-mode). ===== */
+:root {
+  --page: #050506; --bg: #09090b; --card: #18181b; --card-2: #1f1f23; --card-3: #27272a; --line: #3f3f46; --line-soft: #2a2a2f;
+  --fg: #f4f4f5; --muted: #a1a1aa; --faint: #71717a;
+  --primary: #3b82f6; --primary-text: #60a5fa; --primary-soft: rgba(59,130,246,.15);
+  --income: #34d399; --danger: #f87171; --danger-soft: rgba(239,68,68,.14); --warn: #f59e0b; --warn-soft: rgba(245,158,11,.14);
+  --ok: #34d399; --ok-soft: rgba(52,211,153,.13);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light; } }
+:root[data-theme="light"] {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light;
+}
+
+/* ===== FIXED: base ===== */
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 var(--font); background: var(--page); color: var(--fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.cur { font-size: .7em; opacity: .6; margin-left: .15em; font-weight: 500; }
+code { font-size: .9em; background: var(--card-2); padding: 1px 5px; border-radius: 5px; }
+svg { flex: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ===== FIXED: page chrome (sections 1–5) ===== */
+.intro { padding-block: 32px 8px; display: grid; gap: 12px; }
+.intro .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary-text); }
+.intro h1 { font-size: 26px; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); max-width: 76ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.part { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 32px; display: grid; gap: 16px; }
+.part > h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; display: flex; gap: 10px; align-items: baseline; }
+.part > h2 .n { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; }
+.part > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.today { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.shot { display: grid; gap: 8px; margin: 0; min-width: 0; }
+.shot img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+.shot figcaption { font-size: 12.5px; color: var(--muted); }
+.issues { display: grid; gap: 8px; counter-reset: issue; margin: 0; padding: 0; list-style: none; }
+.issues li { counter-increment: issue; display: grid; grid-template-columns: 28px 1fr; gap: 2px 10px; background: var(--card); border-radius: 12px; padding: 10px 14px; }
+.issues li::before { content: counter(issue); grid-row: span 2; width: 24px; height: 24px; border-radius: 99px; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--danger-soft); color: var(--danger); }
+.issues li.minor::before { background: var(--warn-soft); color: var(--warn); }
+.issues b { font-size: 14px; } .issues span { color: var(--muted); font-size: 13px; }
+.sev { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 1px; }
+.sev.hi { background: var(--danger-soft); color: var(--danger); } .sev.md { background: var(--warn-soft); color: var(--warn); } .sev.lo { background: var(--card-3); color: var(--muted); }
+.stories { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.story { background: var(--card); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; font-size: 13.5px; }
+.story .who { font-size: 12px; font-weight: 700; color: var(--primary-text); text-transform: uppercase; letter-spacing: .05em; }
+.story p { margin: 0; color: var(--muted); } .story p b { color: var(--fg); font-weight: 600; }
+.tbl { overflow-x: auto; background: var(--card); border-radius: 12px; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+.tbl th, .tbl td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.tbl th { color: var(--faint); font-weight: 500; font-size: 12px; border-top: 0; }
+.dir { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 24px; display: grid; gap: 16px; }
+.dir-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.dir-head .tag { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; text-transform: uppercase; }
+.dir-head h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.dir-head .rec { font-size: 11.5px; font-weight: 600; background: var(--primary-soft); color: var(--primary-text); padding: 2px 9px; border-radius: 999px; }
+.dir > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.notes div { background: var(--card); border-radius: 12px; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+.notes b { display: block; color: var(--fg); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.solves { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); align-items: center; }
+.solves i { font-style: normal; width: 20px; height: 20px; border-radius: 99px; display: inline-grid; place-items: center; font-weight: 700; background: var(--ok-soft); color: var(--ok); }
+
+/* ===== FIXED: stage + app-like components ===== */
+.stage { background: var(--bg); border-radius: 18px; padding: 28px 16px; display: grid; place-items: center; gap: 16px;
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(14.28% - 1px), var(--line-soft) calc(14.28% - 1px) 14.28%); }
+.modal { width: min(640px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.45); display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; }
+.modal.wide { width: min(860px, 100%); }
+.m-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.m-head h4 { margin: 0; font-size: 16px; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.m-head h4 small { color: var(--muted); font-weight: 500; font-size: 13px; }
+.x { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--card-2); color: var(--muted); }
+.m-body { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+.m-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.sp { flex: 1; }
+.btn { height: 38px; padding: 0 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); white-space: nowrap; }
+.btn.pri { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn[disabled] { opacity: .35; cursor: default; }
+.lbl { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.field { height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); padding: 0 12px; width: 100%; min-width: 0; font-size: 14px; }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--card-3); color: var(--muted); white-space: nowrap; }
+.sub { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.sub::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+.grid { display: grid; gap: 10px; }
+
+/* ===== FIXED: stepper visibility ===== */
+.stage-host [data-p] { display: none !important; }
+.stage-host[data-step="0"] [data-p~="0"], .stage-host[data-step="1"] [data-p~="1"], .stage-host[data-step="2"] [data-p~="2"],
+.stage-host[data-step="3"] [data-p~="3"], .stage-host[data-step="4"] [data-p~="4"], .stage-host[data-step="5"] [data-p~="5"] { display: revert !important; }
+.stage-host[data-step="0"] .grid[data-p~="0"], .stage-host[data-step="1"] .grid[data-p~="1"], .stage-host[data-step="2"] .grid[data-p~="2"],
+.stage-host[data-step="3"] .grid[data-p~="3"], .stage-host[data-step="4"] .grid[data-p~="4"], .stage-host[data-step="5"] .grid[data-p~="5"] { display: grid !important; }
+
+$1/* Profile panel stage (not a modal): mirrors .profile-panel + .profile-category-grid */
+.ppanel { width: min(960px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 18px; display: flex; flex-direction: column; overflow: hidden; position: relative; min-width: 0; }
+.p-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.p-head h4 { margin: 0; font-size: 17px; display: flex; align-items: baseline; gap: 8px; }
+.p-head h4 small { font-size: 12.5px; color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.p-tools { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end; flex-wrap: wrap; }
+.searchbox { display: flex; align-items: center; gap: 8px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); padding: 0 10px; color: var(--muted); width: 220px; max-width: 100%; }
+.searchbox input { border: 0; background: none; outline: none; flex: 1; min-width: 0; color: var(--fg); height: 100%; font-size: 13.5px; }
+.searchbox:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.seg { display: inline-flex; background: var(--card-2); border-radius: 10px; padding: 3px; }
+.seg button { padding: 5px 10px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.seg button.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.p-body { padding: 16px 18px; display: grid; gap: 14px; min-height: 300px; align-content: start; }
+.gl { width: 30px; height: 30px; border-radius: 9px; display: inline-grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); flex: none; }
+.gl.sm { width: 22px; height: 22px; border-radius: 7px; }
+.gl.lg { width: 44px; height: 44px; border-radius: 12px; }
+
+/* tiles */
+.tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.tile { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); text-align: left; min-width: 0; position: relative; font-size: 13.5px; }
+.tile:hover { background: var(--card-2); }
+.tile .t { display: grid; min-width: 0; line-height: 1.25; }
+.tile .t b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .t small { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tile.on { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.tile.cold { opacity: .55; }
+.tile.add { justify-content: center; border-style: dashed; color: var(--muted); font-weight: 600; }
+.tgrid.dense { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 6px; }
+.tgrid.dense .tile { padding: 6px 8px; gap: 7px; }
+.empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+
+/* Today rebuild */
+.frame { height: 480px; overflow: auto; border-radius: 14px; border: 1px solid var(--line); background: var(--card); padding: 14px; display: grid; gap: 10px; align-content: start; }
+.frame .ruler { position: sticky; top: 0; z-index: 1; justify-self: end; font-size: 11.5px; font-weight: 700; background: var(--danger-soft); color: var(--danger); padding: 3px 9px; border-radius: 99px; }
+.frame .tgrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.ghost-editor { border-radius: 10px; background: var(--card-2); padding: 12px; font-size: 13px; color: var(--muted); border: 1px dashed var(--primary); }
+
+/* A: drawer */
+.a-wrap { position: relative; overflow: hidden; min-height: 470px; }
+.drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(340px, 100%); background: var(--card); border-left: 1px solid var(--line); box-shadow: -16px 0 40px rgba(0,0,0,.25); display: grid; grid-template-rows: auto 1fr auto; transform: translateX(105%); transition: transform .22s ease; z-index: 2; }
+.drawer.open { transform: none; }
+.dr-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line-soft); }
+.dr-head input { flex: 1; min-width: 0; font-size: 16px; font-weight: 700; border: 0; background: none; outline: none; color: var(--fg); }
+.dr-body { padding: 14px 16px; display: grid; gap: 14px; align-content: start; overflow: auto; }
+.dr-foot { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stats div { background: var(--card-2); border-radius: 10px; padding: 8px 10px; font-size: 11.5px; color: var(--muted); }
+.stats b { display: block; font-size: 15px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.swatches, .icons { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatches button { width: 24px; height: 24px; border-radius: 99px; background: var(--c); }
+.swatches button.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--fg); }
+.icons button { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; border: 1px solid var(--line-soft); color: var(--muted); }
+.icons button.on { border-color: var(--primary); color: var(--primary-text); background: var(--primary-soft); }
+.twin { font-size: 12px; color: var(--warn); }
+
+/* B: groups */
+.grp { display: grid; gap: 8px; }
+.grp-h { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; padding: 4px 2px; text-align: left; }
+.grp-h small { color: var(--faint); font-weight: 600; font-variant-numeric: tabular-nums; }
+.grp-h .sum { margin-left: auto; color: var(--muted); font-weight: 600; font-size: 12px; font-variant-numeric: tabular-nums; }
+.grp-h svg.chev { transition: transform .15s; color: var(--faint); }
+.grp.closed .grp-h svg.chev { transform: rotate(-90deg); }
+.grp.closed .tgrid { display: none; }
+.grp + .grp { border-top: 1px solid var(--line-soft); padding-top: 10px; }
+
+/* C: quick row */
+.zone { border-radius: 14px; padding: 12px; display: grid; gap: 10px; }
+.zone.quick { background: var(--primary-soft); }
+.zone-h { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--primary-text); }
+.zone-h small { color: var(--muted); font-weight: 600; }
+.qgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.qgrid .tile { cursor: grab; }
+.qgrid .tile .grip { color: var(--faint); margin-left: auto; }
+.qgrid .slot { border: 1px dashed var(--primary); border-radius: 12px; min-height: 48px; display: grid; place-items: center; color: var(--primary-text); font-size: 12px; opacity: .7; }
+.qgrid .tile.drag-over { box-shadow: 0 0 0 2px var(--primary); }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 5px; border-radius: 99px; border: 1px solid var(--line); font-size: 13px; }
+.pill:hover { border-color: var(--primary); }
+.pill .gl { width: 22px; height: 22px; border-radius: 99px; }
+.pill .pinme { color: var(--faint); }
+.shake { animation: shake .3s; }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* D: in place */
+.tile.editing { grid-column: span 2; grid-row: span 3; flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); cursor: default; }
+.tile.editing .ed-top { display: flex; gap: 8px; align-items: center; }
+.tile.editing .ed-top input { flex: 1; min-width: 0; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); padding: 0 10px; font-weight: 600; }
+.tile.editing .icons button { width: 28px; height: 28px; }
+.tile.editing .swatches button { width: 20px; height: 20px; }
+.tile.editing .ed-foot { display: flex; gap: 6px; }
+
+/* E: select mode */
+.tile .ck { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--line); display: none; place-items: center; background: var(--card); color: #fff; }
+.selecting .tile .ck { display: grid; }
+.selecting .tile.sel { border-color: var(--primary); background: var(--primary-soft); }
+.selecting .tile.sel .ck { background: var(--primary); border-color: var(--primary); }
+.bulkbar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--fg); color: var(--card); border-radius: 14px; flex-wrap: wrap; font-size: 13px; font-weight: 600; box-shadow: 0 12px 30px rgba(0,0,0,.3); }
+.bulkbar[hidden] { display: none; }
+.bulkbar .btn { height: 32px; font-size: 12.5px; color: var(--card); border-color: color-mix(in srgb, var(--card) 35%, transparent); }
+.bulkbar select { height: 32px; border-radius: 9px; background: transparent; color: var(--card); border: 1px solid color-mix(in srgb, var(--card) 35%, transparent); padding: 0 8px; font: inherit; font-size: 12.5px; }
+.bulkbar select option { color: var(--fg); background: var(--card); }
+.toast { font-size: 12.5px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.archived { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-top: 10px; border-top: 1px solid var(--line-soft); font-size: 12.5px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .frame .tgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .qgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .searchbox { width: 100%; }
+  .p-tools { justify-content: flex-start; }
+  .tile.editing { grid-column: 1 / -1; }
+}
+
+/* ===== v2: fixed list ===== */
+.mgr { width: min(760px, 100%); }
+.mgr.wide { width: min(960px, 100%); }
+.addrow { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); background: var(--card-2); position: relative; }
+.addrow input { flex: 1; min-width: 0; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); padding: 0 12px; font-size: 14px; }
+.addrow input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.lookbtn { border-radius: 10px; padding: 2px; border: 1px solid var(--line); background: var(--card); display: inline-flex; align-items: center; gap: 2px; color: var(--faint); }
+.toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.toolbar .searchbox { flex: 1 1 200px; width: auto; }
+.listbox { height: 420px; overflow: auto; position: relative; }
+.lhead { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: var(--cols); gap: 10px; align-items: center; padding: 6px 14px; font-size: 11.5px; color: var(--faint); background: var(--card); border-bottom: 1px solid var(--line-soft); }
+.lrow { display: grid; grid-template-columns: var(--cols); gap: 10px; align-items: center; padding: 0 14px; height: 44px; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; position: relative; }
+.lrow:hover { background: var(--card-2); }
+.lrow.sel { background: var(--primary-soft); }
+.lrow.cold .nm { color: var(--muted); }
+.lrow .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.lrow .nm input { width: 100%; height: 30px; border-radius: 8px; border: 1px solid var(--primary); background: var(--card); padding: 0 8px; font-weight: 600; }
+.lrow small, .lhead .r { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.lrow .glb { border-radius: 9px; }
+.kebab { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); }
+.kebab:hover, .kebab[aria-expanded="true"] { background: var(--card-3); color: var(--fg); }
+.ck2 { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--line); display: grid; place-items: center; color: #fff; }
+.lrow.sel .ck2, .lhead .ck2.on { background: var(--primary); border-color: var(--primary); }
+.menu { position: absolute; z-index: 5; min-width: 200px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,.35); padding: 6px; display: grid; gap: 1px; }
+.menu[hidden] { display: none; }
+.menu button { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 13px; text-align: left; }
+.menu button:hover { background: var(--card-2); }
+.menu button.danger { color: var(--danger); }
+.menu hr { border: 0; border-top: 1px solid var(--line-soft); margin: 4px 0; }
+.menu .sublist { max-height: 180px; overflow: auto; display: grid; }
+.pop { position: absolute; z-index: 5; width: 280px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,.35); padding: 12px; display: grid; gap: 10px; }
+.pop[hidden] { display: none; }
+.lfoot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line-soft); font-size: 12.5px; color: var(--muted); flex-wrap: wrap; min-height: 52px; }
+.lfoot.bulk { background: var(--fg); color: var(--card); }
+.lfoot.bulk .btn { height: 32px; font-size: 12.5px; color: var(--card); border-color: color-mix(in srgb, var(--card) 35%, transparent); }
+.hov { display: flex; gap: 2px; opacity: 0; transition: opacity .1s; }
+.lrow:hover .hov, .lrow:focus-within .hov { opacity: 1; }
+.hov button { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--muted); }
+.hov button:hover { background: var(--card-3); color: var(--fg); }
+.hov button.danger:hover { color: var(--danger); }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 0; }
+.cols2 .lrow:nth-child(odd) { border-right: 1px solid var(--line-soft); }
+.az { position: absolute; right: 2px; top: 8px; bottom: 8px; display: flex; flex-direction: column; justify-content: space-between; z-index: 2; }
+.az button { font-size: 10px; font-weight: 700; color: var(--primary-text); width: 18px; line-height: 1; padding: 1px 0; border-radius: 4px; }
+.az button:disabled { color: var(--faint); opacity: .4; cursor: default; }
+.lgroup { position: sticky; top: 0; z-index: 1; padding: 4px 14px; font-size: 11.5px; font-weight: 700; color: var(--primary-text); background: var(--card-2); border-bottom: 1px solid var(--line-soft); grid-column: 1 / -1; }
+.c-wrap { position: relative; }
+@media (max-width: 640px) {
+  .lrow, .lhead { --cols: 26px minmax(0,1fr) 30px !important; }
+  .lrow small, .lhead .r, .lrow .ck2, .lhead .ck2 { display: none; }
+  .cols2 { grid-template-columns: 1fr; }
+  .hov { opacity: 1; }
+}
+
+</style>
+
+<!-- FIXED: icon sprite. Add symbols here as needed (lucide-style, 24×24, stroke=currentColor). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  $1  <symbol id="i-utensils" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></symbol>
+  <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4zM6 2v2M10 2v2M14 2v2"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18.4 10 16 6H7L5 10l-2 .6c-.6.2-1 .8-1 1.4v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 17h6"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.5L21 8H6"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></symbol>
+  <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 18V6"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
+  <symbol id="i-pill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7ZM8.5 8.5l7 7"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2M16 3.1a4 4 0 0 1 0 7.8M21 21v-2a4 4 0 0 0-3-3.9"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5M9 10.8V5h6v5.8l2.6 2.6c.3.3.4.6.4 1V16H6v-1.6c0-.4.1-.7.4-1z"/><path d="M8 5h8"/></symbol>
+  <symbol id="i-merge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 4-4 4 4M12 2v10.3a4 4 0 0 1-1.2 2.8L4 22M20 22l-5-5"/></symbol>
+  <symbol id="i-select" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".8" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".8" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".8" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".8" fill="currentColor"/><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7h2A5.6 5.6 0 0 0 22 11c0-5-4.5-9-10-9z"/></symbol>
+</svg>
+
+<main class="wrap">
+  <section class="intro">
+    <span class="eyebrow">Mockup · Profile → Categories · v2</span>
+    <h1>A fixed list that holds 100+ categories</h1>
+    <p>The tile grid grows with every category, so at 100+ the whole Profile page becomes a scroll. This version follows your direction: one box of fixed height that scrolls inside itself, a one-line form to add a category, and an action menu on each row. The sample has 120 categories.</p>
+    <div class="legend">
+      <span>Search ignores accents: try <code>pho</code>, <code>tra sua</code>, <code>li xi</code></span>
+      <span>Type a name in the top line and press Enter to add</span>
+    </div>
+  </section>
+
+  <section class="part" id="today">
+    <h2><span class="n">01</span>Today</h2>
+    <div class="today">
+      <figure class="shot"><img src="assets/category-manager/today.png" alt="Profile Categories tab with 16 tiles in five columns and an Add category tile"><figcaption>Your screenshot, 8 Nov: 16 tiles.</figcaption></figure>
+      <figure class="shot">
+        <div class="frame" aria-label="The same grid with 120 categories">
+          <span class="ruler" data-today-ruler>24 rows of tiles</span>
+          <div class="tgrid" data-today></div>
+          <div class="ghost-editor">Clicking any tile opens the form here, after all of them.</div>
+        </div>
+        <figcaption>The same grid with 120. The page itself keeps growing.</figcaption>
+      </figure>
+    </div>
+    <ol class="issues">
+      <li><b>The grid has no height limit <span class="sev hi">High</span></b><span>Every category adds to the page (<code>UserProfile.tsx:423</code>). 120 tiles in 5 columns is 24 rows before you reach the editor or the next section.</span></li>
+      <li><b>The editor opens after the whole grid <span class="sev hi">High</span></b><span>The form is rendered after the grid (<code>UserProfile.tsx:445</code>), far from the tile you clicked.</span></li>
+      <li><b>Removing a category leaves an ID on old spendings <span class="sev hi">High</span></b><span>Remove deletes it from settings (<code>UserProfile.tsx:205</code>); Week view and phone Analytics then show the raw UUID as the name (<code>WeekView.tsx:171</code>, <code>MobileAnalytics.tsx:63</code>).</span></li>
+      <li><b>No search, sort or bulk action <span class="sev md">Medium</span></b><span>Finding one of 120 means reading tiles; cleaning up 20 means 20 × open, scroll, remove, confirm.</span></li>
+      <li><b>Every action needs the big form <span class="sev md">Medium</span></b><span>Adding, renaming and recolouring all open the same editor; adding a category is a tile at the very end.</span></li>
+      <li class="minor"><b>The cap is 50 <span class="sev md">Medium</span></b><span><code>MAX_CATEGORIES = 50</code> (<code>UserProfile.tsx:26</code>). 100+ needs the limit raised; the list below makes that safe.</span></li>
+    </ol>
+  </section>
+
+  <section class="part" id="people">
+    <h2><span class="n">02</span>Who and when</h2>
+    <div class="stories">
+      <div class="story"><span class="who">Adder</span><p>As someone who just paid at a new shop, I want to <b>type a name and press Enter</b> so that the category exists in two seconds.</p></div>
+      <div class="story"><span class="who">Detailed tracker</span><p>As someone with <b>100+ categories</b>, I want the page to stay one screen high so that Profile stays usable.</p></div>
+      <div class="story"><span class="who">Fixer</span><p>As someone who misspelled "Phở", I want to <b>rename it on its row</b> without opening a form.</p></div>
+      <div class="story"><span class="who">Tidier</span><p>As someone with many unused categories, I want to <b>select them and archive at once</b>, keeping old spendings' names.</p></div>
+    </div>
+    <div class="tbl"><table>
+      <tr><th>Use case</th><th>Trigger</th><th>Steps today</th><th>Goal</th></tr>
+      <tr><td>Add</td><td>New kind of spending</td><td>Scroll to the last tile → Add → fill form → Save</td><td>Type in the top line, Enter</td></tr>
+      <tr><td>Find</td><td>"Where is Bún bò?"</td><td>Read up to 120 tiles</td><td>Type <code>bun</code></td></tr>
+      <tr><td>Rename / recolour</td><td>Typo, look-alike</td><td>Click tile → scroll to form → edit → Save</td><td>Row menu → Rename, inline</td></tr>
+      <tr><td>Clean up</td><td>Too many</td><td>One by one; old spendings show an ID</td><td>Select unused → Archive</td></tr>
+    </table></div>
+  </section>
+
+  <section class="part" id="directions">
+    <h2><span class="n">03</span>Directions</h2>
+    <p>All three: fixed height (the list scrolls, the page does not), the add form always on top, actions per row. They differ in how actions are reached and how 120 rows are laid out.</p>
+  </section>
+
+  <section class="dir" id="a">
+    <div class="dir-head"><span class="tag">A</span><h3>List + row menu</h3><span class="rec">Recommended</span></div>
+    <p>Each row: checkbox, look, name, 30-day use and spend, and a ⋯ menu (Rename, Color &amp; icon, Merge into, Archive). Ticking rows turns the footer into a bulk bar.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></div>
+    <div class="stage"><div class="ppanel mgr" data-list="menu"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Same height at 16 or 150</li><li>All actions in one predictable place; nothing to discover</li><li>Bulk archive for cleanup</li></ul></div>
+      <div><b>Watch</b><ul><li>Archive needs an <code>archived</code> flag (fixes issue 3)</li><li>Merge rewrites past spendings: server work</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="b">
+    <div class="dir-head"><span class="tag">B</span><h3>Hover actions</h3></div>
+    <p>The same list without checkboxes or menu: Rename, Look and Archive appear as icons when you hover a row (always visible on phones). Fewer clicks, fewer features.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>5</i></div>
+    <div class="stage"><div class="ppanel mgr" data-list="hover"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>One click to any action</li><li>Simplest to build</li></ul></div>
+      <div><b>Watch</b><ul><li>No bulk actions, no merge</li><li>Icons need tooltips to be clear</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="c">
+    <div class="dir-head"><span class="tag">C</span><h3>Two columns A–Z</h3></div>
+    <p>For wide screens: rows in two columns under letter headings, with an A–Z strip to jump. Twice as many categories visible at once; actions through the same ⋯ menu.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>5</i></div>
+    <div class="stage"><div class="ppanel mgr wide" data-list="az"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>About 18 rows visible instead of 9</li><li>Letter jump suits people who think by name</li></ul></div>
+      <div><b>Watch</b><ul><li>No room for use and spend columns</li><li>Falls back to one column on phones</li></ul></div>
+    </div>
+  </section>
+
+  <section class="part" id="recommendation" style="padding-bottom:48px">
+    <h2><span class="n">04</span>Recommendation</h2>
+    <p>Build <b>A</b>. It is the only one with bulk cleanup, which a 100+ list needs, and its menu keeps rows quiet. Ship Archive (instead of Remove) in the same change, and raise the 50 cap once the list is in.</p>
+    <div class="tbl"><table>
+      <tr><th>File</th><th>Change</th></tr>
+      <tr><td><code>src/components/UserProfile.tsx</code></td><td>Replace tile grid + bottom editor with: add line, search/sort toolbar, fixed-height list, row menu, bulk footer; raise <code>MAX_CATEGORIES</code></td></tr>
+      <tr><td><code>src/styles/UserProfile.css</code></td><td>List rows, sticky header, menu and look popover</td></tr>
+      <tr><td><code>src/types.ts</code>, settings validation</td><td><code>archived?: boolean</code>; pickers hide archived, lookups still find them</td></tr>
+      <tr><td><code>WeekView.tsx</code>, <code>MobileAnalytics.tsx</code></td><td>No raw-id fallback needed once archived categories stay in settings</td></tr>
+      <tr><td>Later: merge endpoint</td><td>Move spendings and plans to another category, then archive the old one</td></tr>
+    </table></div>
+  </section>
+</main>
+
+<script>
+/* FIXED: stepper engine. Page-specific scripts go in a second <script> below. */
+(() => {
+  document.querySelectorAll('.stage-host').forEach(host => {
+    const lefts = (host.dataset.lefts || '').split('|');
+    const max = Math.max(0, ...[...host.querySelectorAll('[data-p]')].flatMap(el => el.dataset.p.split(' ').map(Number)));
+    const set = step => {
+      step = Math.max(0, Math.min(max, step));
+      host.dataset.step = step;
+      if (host.dataset.lefts) host.querySelectorAll('[data-left]').forEach(el => { el.textContent = lefts[step] ?? ''; });
+      const next = host.querySelector('[data-go="next"]');
+      if (next && next.dataset.labels) { const l = next.dataset.labels.split('|'); const t = [...next.childNodes].find(n => n.nodeType === 3); if (t) t.nodeValue = l[step] ?? l[l.length - 1]; }
+      const back = host.querySelector('[data-go="back"]'); if (back) back.disabled = step === 0;
+      host.querySelectorAll('[data-go]:not([data-go="next"]):not([data-go="back"])').forEach(b => {
+        const on = +b.dataset.go === step; b.classList.toggle('on', on); b.classList.toggle('done', +b.dataset.go < step);
+        if (on) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      });
+      host.dispatchEvent(new CustomEvent('step', { detail: step }));
+    };
+    host.addEventListener('click', e => {
+      const b = e.target.closest('[data-go]'); if (!b || b.disabled || !host.contains(b)) return;
+      const cur = +host.dataset.step, go = b.dataset.go;
+      set(go === 'next' ? (cur === max ? 0 : cur + 1) : go === 'back' ? cur - 1 : +go);
+    });
+    set(+host.dataset.step || 0);
+  });
+})();
+</script>
+
+<script>
+(() => {
+  /* 120 sample categories. Base 50 have real-looking use; the extra 70 are more specific names, many rarely used. */
+  const BASE = [
+    ['Breakfast','Food','utensils','#eab308',31,0,25000], ['Gas','Transport','car','#3b82f6',9,1,80000], ['Subscription','Fun','dollar','#ef4444',3,3,185000],
+    ['Shopping','Shopping','bag','#f97316',4,3,320000], ['Bills','Home','receipt','#22c55e',2,8,450000], ['Other','Money','dollar','#64748b',2,5,60000],
+    ['Eat out','Food','utensils','#f43f5e',7,2,120000], ['Transport','Transport','car','#10b981',1,20,50000], ['Debt','Money','dollar','#f97316',1,6,1000000],
+    ['For parents','Family','heart','#ec4899',1,1,3000000], ['Lunch','Food','utensils','#ef4444',29,0,35000],
+    ['Dinner','Food','utensils','#f97316',12,1,60000], ['Coffee','Food','coffee','#d97706',22,0,30000], ['Trà sữa','Food','coffee','#ec4899',5,3,45000],
+    ['Ăn vặt','Food','cart','#f59e0b',4,4,20000], ['Groceries','Food','cart','#10b981',6,2,250000], ['Đi chợ','Food','cart','#22c55e',3,6,150000],
+    ['Nhậu','Food','utensils','#8b5cf6',2,12,300000], ['Ăn trưa','Food','utensils','#fb7185',3,5,35000], ['Grab','Transport','car','#22c55e',8,1,45000],
+    ['Parking','Transport','car','#64748b',3,5,10000], ['Gửi xe','Transport','car','#06b6d4',2,7,5000], ['Car repair','Transport','car','#0ea5e9',0,140,900000],
+    ['Tiền trọ','Home','home','#10b981',1,1,3000000], ['Electricity','Home','bolt','#eab308',1,24,420000], ['Water','Home','receipt','#06b6d4',1,24,90000],
+    ['Internet','Home','receipt','#3b82f6',1,18,250000], ['Phone','Home','phone','#6366f1',1,18,120000], ['Home goods','Home','home','#f97316',2,9,180000],
+    ['Kids','Family','users','#f472b6',0,60,200000], ['Hiếu hỷ','Family','gift','#f43f5e',1,15,500000], ['Gifts','Family','gift','#a855f7',1,30,300000],
+    ['Pets','Family','heart','#f59e0b',0,200,150000], ['Pharmacy','Health','pill','#ef4444',1,25,95000], ['Doctor','Health','pill','#f43f5e',0,95,400000],
+    ['Gym','Health','heart','#10b981',1,28,600000], ['Insurance','Health','receipt','#64748b',0,180,1200000], ['Movies','Fun','film','#8b5cf6',1,20,110000],
+    ['Games','Fun','film','#6366f1',0,120,250000], ['Travel','Fun','plane','#0ea5e9',0,70,2500000], ['Books','Fun','book','#a16207',0,110,150000],
+    ['Clothes','Shopping','bag','#ec4899',1,22,450000], ['Electronics','Shopping','phone','#64748b',0,150,2000000], ['Beauty','Shopping','heart','#f472b6',0,100,250000],
+    ['Haircut','Shopping','users','#a855f7',1,9,90000], ['Savings','Money','dollar','#10b981',0,40,2000000], ['Investment','Money','dollar','#22c55e',0,130,5000000],
+    ['Fees','Money','receipt','#94a3b8',1,10,22000], ['Charity','Money','heart','#06b6d4',0,160,200000], ['Laundry','Home','home','#64748b',3,4,40000],
+  ];
+  const EXTRA = {
+    Food: ['utensils', 45000, 'Phở', 'Bún bò', 'Bánh mì', 'Cơm tấm', 'Hủ tíu', 'Bún chả', 'Highlands', 'Phúc Long', 'Starbucks', 'Trái cây', 'Bia', 'Kem', 'Bánh ngọt', 'Lẩu', 'Nướng'],
+    Transport: ['car', 60000, 'Xe buýt', 'Taxi', 'Be', 'Vé tàu', 'Vé máy bay', 'Xăng xe máy', 'Rửa xe', 'Phí cầu đường'],
+    Home: ['home', 200000, 'Tiền nước', 'Gas nấu ăn', 'Sửa nhà', 'Nội thất', 'Đồ bếp', 'Giúp việc', 'Phí quản lý'],
+    Family: ['gift', 300000, 'Học phí con', 'Sữa cho con', 'Đồ chơi', 'Quà Tết', 'Lì xì', 'Đám cưới', 'Đám giỗ'],
+    Health: ['pill', 250000, 'Nha sĩ', 'Mắt kính', 'Vitamin', 'Yoga', 'Spa', 'Xét nghiệm'],
+    Fun: ['film', 150000, 'Netflix', 'Spotify', 'YouTube Premium', 'iCloud', 'ChatGPT', 'Steam', 'Karaoke', 'Concert', 'Khách sạn', 'Tour'],
+    Shopping: ['bag', 350000, 'Shopee', 'Lazada', 'Tiki', 'Giày dép', 'Mỹ phẩm', 'Phụ kiện', 'Đồng hồ'],
+    Money: ['dollar', 800000, 'Trả góp', 'Thẻ tín dụng', 'Phí ngân hàng', 'Chứng khoán', 'Vàng', 'Cho vay', 'Từ thiện chùa', 'Bảo hiểm xe', 'Thuế', 'Phạt'],
+  };
+  const SWATCHES = ['#f43f5e', '#f97316', '#eab308', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b'];
+  const ICONS = ['utensils', 'coffee', 'car', 'home', 'receipt', 'heart', 'gift', 'bag', 'cart', 'film', 'phone', 'dollar', 'plane', 'pill', 'users', 'bolt', 'book'];
+  const fresh = () => {
+    const list = BASE.map(([name, group, icon, color, uses, ago, avg]) => ({ name, group, icon, color, uses, ago, spent: uses * avg }));
+    let k = 0;
+    for (const [group, [icon, avg, ...names]] of Object.entries(EXTRA)) for (const name of names) {
+      k++; const uses = k % 4 === 0 ? 0 : (k * 7) % 9; const ago = uses ? (k * 5) % 28 : 60 + (k * 13) % 200;
+      list.push({ name, group, icon, color: SWATCHES[k % SWATCHES.length], uses, ago, spent: uses * avg });
+    }
+    return list.map((c, id) => ({ ...c, id, created: id }));
+  };
+  const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().trim();
+  const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const short = n => n >= 1e6 ? `${(n / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}tr` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : n ? `${n}` : '—';
+  const ic = (n, s = 15) => `<svg width="${s}" height="${s}"><use href="#i-${n}"/></svg>`;
+  const glyph = (c, cls = '') => `<span class="gl ${cls}" style="--c:${c.color}">${ic(c.icon, cls === 'sm' ? 12 : 15)}</span>`;
+  const nextLook = list => { let best = null; for (const icon of ICONS) for (const color of SWATCHES) { const n = list.filter(c => c.icon === icon && c.color === color).length; if (!best || n < best.n) best = { icon, color, n }; if (!n) return best; } return best; };
+
+  /* Today: 120 tiles */
+  const today = fresh();
+  document.querySelector('[data-today]').innerHTML = today.map(c => `<div class="tile">${glyph(c)}<span class="t"><b>${esc(c.name)}</b></span></div>`).join('');
+  document.querySelector('[data-today-ruler]').textContent = `${Math.ceil(today.length / 5)} rows of tiles`;
+
+  const COLS = {
+    menu: '18px 30px minmax(0,1fr) 52px 64px 30px',
+    hover: '30px minmax(0,1fr) 52px 64px 96px',
+    az: '30px minmax(0,1fr) 30px',
+  };
+
+  function makeList(host) {
+    const mode = host.dataset.list;
+    const cats = fresh();
+    const live = () => cats.filter(c => !c.archived);
+    const sel = new Set();
+    let sort = mode === 'az' ? 'az' : 'use', renaming = null, lastArchived = [], addLook = nextLook(cats), notice = '';
+    host.style.setProperty('--cols', COLS[mode]);
+    host.innerHTML = `
+      <div class="addrow">
+        <button class="lookbtn" data-look-new aria-label="Color and icon of the new category"></button>
+        <input data-add placeholder="New category" aria-label="New category name" maxlength="100">
+        <button class="btn sm pri" data-add-btn>${ic('plus', 14)}Add</button>
+      </div>
+      <div class="toolbar">
+        <label class="searchbox"><svg width="15" height="15"><use href="#i-search"/></svg><input data-q aria-label="Search categories"></label>
+        ${mode === 'az' ? '' : `<div class="seg" role="radiogroup" aria-label="Sort"><button data-sort="use">Most used</button><button data-sort="az">A–Z</button><button data-sort="new">Newest</button></div>`}
+      </div>
+      <div class="c-wrap"><div class="listbox" data-box tabindex="-1"></div>${mode === 'az' ? '<div class="az" data-az></div>' : ''}</div>
+      <div class="lfoot" data-foot></div>
+      <div class="menu" data-menu hidden role="menu"></div>
+      <div class="pop" data-pop hidden></div>`;
+    const $ = s => host.querySelector(s);
+    const box = $('[data-box]'), menu = $('[data-menu]'), pop = $('[data-pop]'), q = $('[data-q]'), add = $('[data-add]');
+
+    const sorted = () => {
+      const f = fold(q.value);
+      let list = live().filter(c => !f || fold(c.name).includes(f));
+      if (sort === 'use') list.sort((a, b) => b.uses - a.uses || a.ago - b.ago);
+      if (sort === 'az') list.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+      if (sort === 'new') list.sort((a, b) => b.created - a.created);
+      return [...list.filter(c => c.fresh), ...list.filter(c => !c.fresh)];
+    };
+    const nameCell = c => renaming === c.id
+      ? `<span class="nm"><input data-rename value="${esc(c.name)}" aria-label="Rename ${esc(c.name)}"></span>`
+      : `<span class="nm">${esc(c.name)}${c.fresh ? ' <span class="chip">new</span>' : ''}</span>`;
+    const row = c => {
+      const cls = `lrow${sel.has(c.id) ? ' sel' : ''}${c.uses === 0 ? ' cold' : ''}`;
+      if (mode === 'menu') return `<div class="${cls}" data-id="${c.id}"><button class="ck2" data-ck aria-pressed="${sel.has(c.id)}" aria-label="Select ${esc(c.name)}">${ic('check', 11)}</button><button class="glb" data-look aria-label="Color and icon">${glyph(c)}</button>${nameCell(c)}<small>${c.uses ? c.uses + '×' : '—'}</small><small>${short(c.spent)}</small><button class="kebab" data-kebab aria-haspopup="menu" aria-label="Actions for ${esc(c.name)}">${ic('dots', 16)}</button></div>`;
+      if (mode === 'hover') return `<div class="${cls}" data-id="${c.id}"><button class="glb" data-look aria-label="Color and icon">${glyph(c)}</button>${nameCell(c)}<small>${c.uses ? c.uses + '×' : '—'}</small><small>${short(c.spent)}</small><span class="hov"><button data-act="rename" title="Rename" aria-label="Rename ${esc(c.name)}">${ic('pencil', 14)}</button><button data-act="look" title="Color and icon" aria-label="Color and icon">${ic('palette', 14)}</button><button class="danger" data-act="archive" title="Archive" aria-label="Archive ${esc(c.name)}">${ic('archive', 14)}</button></span></div>`;
+      return `<div class="${cls}" data-id="${c.id}"><button class="glb" data-look aria-label="Color and icon">${glyph(c)}</button>${nameCell(c)}<button class="kebab" data-kebab aria-haspopup="menu" aria-label="Actions for ${esc(c.name)}">${ic('dots', 16)}</button></div>`;
+    };
+    const draw = () => {
+      const list = sorted();
+      q.placeholder = `Search ${live().length} categories`;
+      host.querySelectorAll('[data-sort]').forEach(b => b.classList.toggle('on', b.dataset.sort === sort));
+      $('[data-look-new]').innerHTML = `${glyph(addLook)}${ic('down', 12)}`;
+      if (mode === 'az') {
+        const letters = {}; for (const c of list) { const L = fold(c.name)[0].toUpperCase(); (letters[L] ??= []).push(c); }
+        box.innerHTML = Object.entries(letters).map(([L, items]) => `<div class="lgroup" data-letter="${L}">${L}</div><div class="cols2">${items.map(row).join('')}</div>`).join('') || '<p class="empty" style="padding:14px">No category matches.</p>';
+        $('[data-az]').innerHTML = 'ABCDEGHIKLMNPQRSTVXY'.split('').map(L => `<button data-jump="${L}" ${letters[L] ? '' : 'disabled'}>${L}</button>`).join('');
+      } else {
+        box.innerHTML = (mode === 'menu' ? `<div class="lhead"><button class="ck2${sel.size && sel.size === list.length ? ' on' : ''}" data-ck-all aria-label="Select all shown">${sel.size && sel.size === list.length ? ic('check', 11) : ''}</button><span></span><span>Name</span><span class="r">30 days</span><span class="r">Spent</span><span></span></div>`
+          : `<div class="lhead"><span></span><span>Name</span><span class="r">30 days</span><span class="r">Spent</span><span></span></div>`)
+          + (list.map(row).join('') || '<p class="empty" style="padding:14px">No category matches. Press Enter in the top line to add it.</p>');
+      }
+      const foot = $('[data-foot]');
+      const unused = live().filter(c => c.uses === 0).length;
+      if (sel.size) {
+        foot.className = 'lfoot bulk';
+        foot.innerHTML = `<b>${sel.size} selected</b><span class="sp"></span><button class="btn" data-bulk-archive>${ic('archive', 14)}Archive</button><button class="btn" data-bulk-merge>${ic('merge', 14)}Merge into…</button><button class="btn" data-bulk-clear>Clear</button>`;
+      } else {
+        foot.className = 'lfoot';
+        foot.innerHTML = `<span>${live().length} categories${unused ? ` · ${unused} unused in 30 days` : ''}</span><span class="sp"></span>${notice ? `<span>${notice}</span>` : ''}${lastArchived.length ? `<button class="btn sm" data-undo>${ic('undo', 14)}Undo</button>` : ''}${mode === 'menu' && unused ? `<button class="btn sm" data-sel-unused>Select unused</button>` : ''}`;
+      }
+      const r = box.querySelector('[data-rename]'); if (r) { r.focus(); r.select(); }
+    };
+
+    const closeFloats = () => { menu.hidden = true; pop.hidden = true; host.querySelectorAll('[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false')); };
+    const place = (el, anchor, alignRight) => {
+      el.hidden = false;
+      const h = host.getBoundingClientRect(), a = anchor.getBoundingClientRect();
+      let top = a.bottom - h.top + 4; if (top + el.offsetHeight > h.height - 8) top = Math.max(8, a.top - h.top - el.offsetHeight - 4);
+      let left = alignRight ? a.right - h.left - el.offsetWidth : a.left - h.left; left = Math.max(8, Math.min(left, h.width - el.offsetWidth - 8));
+      el.style.top = `${top}px`; el.style.left = `${left}px`;
+    };
+    const openLook = (target, anchor) => {
+      pop.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center">${glyph(target)}<b style="font-size:13.5px">${esc(target.name || 'New category')}</b></div>
+        <div class="swatches">${SWATCHES.map(s => `<button style="--c:${s}" class="${s === target.color ? 'on' : ''}" data-color="${s}" aria-label="Color ${s}"></button>`).join('')}</div>
+        <div class="icons">${ICONS.map(i => `<button class="${i === target.icon ? 'on' : ''}" data-icon="${i}" aria-label="${i} icon">${ic(i, 16)}</button>`).join('')}</div>`;
+      pop._target = target; place(pop, anchor, false);
+    };
+    const openMenu = (c, anchor) => {
+      anchor.setAttribute('aria-expanded', 'true');
+      menu.innerHTML = `
+        <button role="menuitem" data-m="rename">${ic('pencil', 14)}Rename</button>
+        <button role="menuitem" data-m="look">${ic('palette', 14)}Color &amp; icon</button>
+        <button role="menuitem" data-m="merge">${ic('merge', 14)}Merge into…</button>
+        <hr><button role="menuitem" class="danger" data-m="archive">${ic('archive', 14)}Archive</button>`;
+      menu._cat = c; menu._anchor = anchor; place(menu, anchor, true);
+    };
+    const openMerge = (ids, anchor) => {
+      const others = live().filter(c => !ids.includes(c.id)).sort((a, b) => b.uses - a.uses);
+      menu.innerHTML = `<span class="lbl" style="padding:4px 10px">Merge ${ids.length === 1 ? esc(cats[ids[0]].name) : ids.length + ' categories'} into</span><div class="sublist">${others.map(c => `<button data-merge-into="${c.id}">${glyph(c, 'sm')}${esc(c.name)}</button>`).join('')}</div>`;
+      menu._merge = ids; place(menu, anchor, true);
+    };
+    const archive = ids => { ids.forEach(id => { cats[id].archived = true; }); lastArchived = ids; sel.clear(); notice = `Archived ${ids.length}. Old spendings keep the name.`; draw(); };
+    const addNow = () => {
+      const name = add.value.trim();
+      if (!name) { add.focus(); return; }
+      const dup = live().find(c => fold(c.name) === fold(name));
+      if (dup) { notice = `“${esc(dup.name)}” already exists.`; q.value = dup.name; draw(); return; }
+      const c = { id: cats.length, name, group: '', icon: addLook.icon, color: addLook.color, uses: 0, ago: 0, spent: 0, created: cats.length, fresh: true };
+      cats.push(c); add.value = ''; addLook = nextLook(cats); notice = `Added ${esc(name)}.`; lastArchived = []; q.value = ''; draw(); box.scrollTop = 0;
+    };
+
+    host.addEventListener('click', e => {
+      const t = e.target;
+      if (t.closest('[data-pop]')) {
+        const col = t.closest('[data-color]'), icn = t.closest('[data-icon]'); const target = pop._target;
+        if (col) target.color = col.dataset.color; if (icn) target.icon = icn.dataset.icon;
+        if (col || icn) { const anchorId = target === addLook ? null : target.id; draw(); openLook(target, anchorId === null ? $('[data-look-new]') : box.querySelector(`[data-id="${anchorId}"] [data-look]`) || $('[data-look-new]')); }
+        return;
+      }
+      if (t.closest('[data-menu]')) {
+        const into = t.closest('[data-merge-into]');
+        if (into) { const target = cats[+into.dataset.mergeInto]; const ids = menu._merge; const moved = ids.reduce((s, id) => s + cats[id].uses, 0); target.uses += moved; target.spent += ids.reduce((s, id) => s + cats[id].spent, 0); ids.forEach(id => { cats[id].archived = true; }); lastArchived = ids; sel.clear(); notice = `Merged into ${esc(target.name)}: ${moved} spendings moved.`; closeFloats(); draw(); return; }
+        const m = t.closest('[data-m]'); if (!m) return; const c = menu._cat;
+        if (m.dataset.m === 'rename') { closeFloats(); renaming = c.id; draw(); }
+        if (m.dataset.m === 'look') { const a = box.querySelector(`[data-id="${c.id}"] [data-look]`); closeFloats(); openLook(c, a); }
+        if (m.dataset.m === 'merge') { openMerge([c.id], menu._anchor); }
+        if (m.dataset.m === 'archive') { closeFloats(); archive([c.id]); }
+        return;
+      }
+      closeFloats();
+      if (t.closest('[data-look-new]')) { openLook(addLook, t.closest('[data-look-new]')); return; }
+      if (t.closest('[data-add-btn]')) { addNow(); return; }
+      const s = t.closest('[data-sort]'); if (s) { sort = s.dataset.sort; draw(); return; }
+      const j = t.closest('[data-jump]'); if (j) { const h = box.querySelector(`[data-letter="${j.dataset.jump}"]`); if (h) box.scrollTop = h.offsetTop; return; }
+      if (t.closest('[data-undo]')) { lastArchived.forEach(id => { cats[id].archived = false; }); lastArchived = []; notice = ''; draw(); return; }
+      if (t.closest('[data-sel-unused]')) { live().filter(c => c.uses === 0).forEach(c => sel.add(c.id)); draw(); return; }
+      if (t.closest('[data-bulk-clear]')) { sel.clear(); draw(); return; }
+      if (t.closest('[data-bulk-archive]')) { archive([...sel]); return; }
+      if (t.closest('[data-bulk-merge]')) { openMerge([...sel], t.closest('[data-bulk-merge]')); return; }
+      if (t.closest('[data-ck-all]')) { const list = sorted(); if (sel.size === list.length) sel.clear(); else list.forEach(c => sel.add(c.id)); draw(); return; }
+      const r = t.closest('[data-id]'); if (!r) return; const c = cats[+r.dataset.id];
+      if (t.closest('[data-ck]')) { sel.has(c.id) ? sel.delete(c.id) : sel.add(c.id); draw(); return; }
+      if (t.closest('[data-kebab]')) { openMenu(c, t.closest('[data-kebab]')); return; }
+      if (t.closest('[data-look]')) { openLook(c, t.closest('[data-look]')); return; }
+      const act = t.closest('[data-act]');
+      if (act) { if (act.dataset.act === 'rename') { renaming = c.id; draw(); } if (act.dataset.act === 'look') openLook(c, act); if (act.dataset.act === 'archive') archive([c.id]); }
+    });
+    host.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { if (renaming !== null) { renaming = null; draw(); } closeFloats(); }
+      if (e.key === 'Enter' && e.target === add) addNow();
+      if (e.key === 'Enter' && e.target.matches('[data-rename]')) e.target.blur();
+    });
+    host.addEventListener('focusout', e => {
+      if (!e.target.matches('[data-rename]') || renaming === null) return;
+      const v = e.target.value.trim(); if (v) cats[renaming].name = v; renaming = null; setTimeout(draw);
+    });
+    q.addEventListener('input', () => { notice = ''; draw(); });
+    box.addEventListener('scroll', closeFloats);
+    draw();
+  }
+  document.querySelectorAll('[data-list]').forEach(makeList);
+})();
+</script>

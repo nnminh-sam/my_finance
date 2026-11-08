@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { format } from 'date-fns';
-import { User, Mail, Calendar, Tag, Plus, ChevronLeft, ChevronRight, Sun, Moon, Monitor, Trash2, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone, Wallet, SlidersHorizontal, CalendarClock, LogOut, Lock, Copy, Check, Camera, Pencil, RefreshCw, Bot } from 'lucide-react';
+import { User, Mail, Calendar, Tag, ChevronLeft, ChevronRight, Sun, Moon, Monitor, Wallet, SlidersHorizontal, CalendarClock, LogOut, Lock, Copy, Check, Camera, Pencil, RefreshCw, Bot } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
@@ -12,7 +12,8 @@ import { errorMessage } from '../services/auth';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { getRangeIncome } from '../lib/income';
 import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodOf } from '../lib/periods';
-import type { CategoryData } from '../types';
+import { CategoryManager } from './CategoryManager';
+import type { CategoryManagerState } from './CategoryManager';
 import { EditorActions } from './ProfileSection';
 import { BudgetPeriodSection, describeBudgetPeriod } from './BudgetPeriodSection';
 import type { BudgetPeriodEditorState } from './BudgetPeriodSection';
@@ -20,10 +21,6 @@ import { IncomeSources } from './IncomeSources';
 import type { IncomeEditorState } from './IncomeSources';
 import { McpAccessSection } from './McpAccessSection';
 import '../styles/UserProfile.css';
-
-const ICONS = { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone };
-const SWATCHES = ['#f43f5e', '#f97316', '#eab308', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b'];
-const MAX_CATEGORIES = 50;
 
 const TABS = [
   { id: 'account', label: 'Account', icon: User },
@@ -72,31 +69,6 @@ function useSectionEditor<T>() {
   return { state, dirty, open, change, cancel, save };
 }
 
-function validateCategories(categories: CategoryData[]): CategoryData[] {
-  const normalized = categories.map(category => ({ ...category, name: category.name.trim() }));
-  const names = new Set<string>();
-  if (normalized.length > MAX_CATEGORIES) throw new Error(`You can save up to ${MAX_CATEGORIES} categories.`);
-  for (const category of normalized) {
-    if (!category.name || category.name.length > 100) throw new Error('Give the category a name of 1–100 characters.');
-    const name = category.name.toLowerCase();
-    if (names.has(name)) throw new Error(`Another category is already called “${category.name}”.`);
-    names.add(name);
-    if (!/^#[0-9a-f]{6}$/i.test(category.color) || !Object.hasOwn(ICONS, category.icon)) {
-      throw new Error('Choose a valid color and icon.');
-    }
-  }
-  return normalized;
-}
-
-function CategoryGlyph({ category, size = 18 }: { category: Pick<CategoryData, 'color' | 'icon'>; size?: number }) {
-  const Icon = ICONS[category.icon as keyof typeof ICONS] || CircleDollarSign;
-  return (
-    <span className="profile-glyph" style={{ color: category.color, background: `color-mix(in srgb, ${category.color} 15%, transparent)` }} aria-hidden="true">
-      <Icon size={size} />
-    </span>
-  );
-}
-
 export function UserProfile() {
   const { settings, updateSettings } = useSettings();
   const { user, logout } = useAuth();
@@ -108,8 +80,7 @@ export function UserProfile() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement | null>>>({});
   const avatar = useSectionEditor<string>();
-  const category = useSectionEditor<CategoryData & { isNew: boolean }>();
-  const [confirmRemoveCategory, setConfirmRemoveCategory] = useState(false);
+  const [categoryEditor, setCategoryEditor] = useState<CategoryManagerState>({ dirty: false, busy: false });
   const [copied, setCopied] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const loggingOut = useRef(false);
@@ -118,15 +89,15 @@ export function UserProfile() {
   const [incomeEditor, setIncomeEditor] = useState<IncomeEditorState>({ dirty: false, busy: false });
   const [budgetEditor, setBudgetEditor] = useState<BudgetPeriodEditorState>({ dirty: false, busy: false });
   const [mcpTokenCount, setMcpTokenCount] = useState<number | undefined>(undefined);
-  const categoryDirty = category.state !== null && (category.state.draft.isNew || category.dirty);
-  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryDirty, paycycle: budgetEditor.dirty, mcp: false, preferences: false };
+  const unsaved: Record<TabId, boolean> = { account: avatar.dirty, income: incomeEditor.dirty, categories: categoryEditor.dirty, paycycle: budgetEditor.dirty, mcp: false, preferences: false };
   const dirty = Object.values(unsaved).some(Boolean);
-  const pending = Boolean(avatar.state?.busy || category.state?.busy || incomeEditor.busy || budgetEditor.busy);
+  const pending = Boolean(avatar.state?.busy || categoryEditor.busy || incomeEditor.busy || budgetEditor.busy);
   const initials = (user?.name || user?.email || '').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
   // The income figure follows Show by: the calendar month, or the pay period that contains today.
   const incomePeriod = viewPeriodOf(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, format(new Date(), 'yyyy-MM-dd'));
   const monthIncome = getRangeIncome(incomePeriod.start, incomePeriod.end, incomes).totalIncome;
-  const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: settings.categories.length, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
+  const activeCategories = settings.categories.filter(item => !item.archived).length;
+  const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: activeCategories, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
 
   useUnsavedChanges(!isLoggingOut && (dirty || pending));
 
@@ -184,28 +155,6 @@ export function UserProfile() {
     }
   };
 
-  const openCategory = (next: CategoryData | null) => {
-    if (category.state?.busy) return;
-    if (categoryDirty && !window.confirm('Discard unsaved category changes?')) return;
-    setConfirmRemoveCategory(false);
-    if (next) category.open({ ...next, isNew: false });
-    else category.open({ id: crypto.randomUUID(), name: '', color: '#10b981', icon: 'CircleDollarSign', isNew: true });
-  };
-
-  const changeCategory = (patch: Partial<Pick<CategoryData, 'name' | 'color' | 'icon'>>) => {
-    if (category.state) category.change({ ...category.state.draft, ...patch });
-  };
-
-  const saveCategory = () => category.save(async ({ isNew, ...draft }) => {
-    const next = isNew ? [...settings.categories, draft] : settings.categories.map(item => item.id === draft.id ? draft : item);
-    await updateSettings({ categories: validateCategories(next) });
-  });
-
-  const removeCategory = () => category.save(async ({ id }) => {
-    await updateSettings({ categories: settings.categories.filter(item => item.id !== id) });
-    setConfirmRemoveCategory(false);
-  });
-
   const handleLogout = async () => {
     if (loggingOut.current || pending) return;
     if (dirty && !window.confirm('Discard unsaved profile changes and sign out?')) return;
@@ -228,8 +177,6 @@ export function UserProfile() {
     </button>
   );
 
-  const editing = category.state?.draft;
-
   const openMobileSection = (next: TabId) => {
     selectTab(next);
     setMobileSection(next);
@@ -237,7 +184,6 @@ export function UserProfile() {
   };
   const closeMobileSection = () => {
     if (mobileSection && unsaved[mobileSection] && !window.confirm('Discard unsaved changes in this section?')) return;
-    if (mobileSection === 'categories' && category.state) category.cancel();
     if (mobileSection === 'account' && avatar.state) avatar.cancel();
     setMobileSection(null);
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -247,7 +193,7 @@ export function UserProfile() {
     { title: 'Account', rows: [{ id: 'account', label: 'Personal info' }] },
     { title: 'Money', rows: [
       { id: 'income', label: 'Income sources', value: incomes.length },
-      { id: 'categories', label: 'Categories', value: settings.categories.length },
+      { id: 'categories', label: 'Categories', value: activeCategories },
       { id: 'paycycle', label: 'Pay cycle', value: describeBudgetPeriod(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, incomes) },
     ] },
     { title: 'App', rows: [
@@ -416,75 +362,10 @@ export function UserProfile() {
 
           <section id="profile-panel-categories" role="tabpanel" aria-labelledby="profile-tab-categories" className="profile-panel" hidden={tab !== 'categories'}>
             <div className="profile-panel-head">
-              <div><h2>Categories</h2><p>Used to label spendings. Renaming keeps past spendings linked. Removing a category hides it from new spendings and keeps past ones.</p></div>
-              <span className="profile-pill">{settings.categories.length} / {MAX_CATEGORIES}</span>
+              <div><h2>Categories</h2></div>
+              <span className="profile-pill">{activeCategories}</span>
             </div>
-            <div className="profile-card">
-              <div className="profile-category-grid">
-                {settings.categories.map(item => {
-                  const shown = editing?.id === item.id ? editing : item;
-                  return (
-                    <button key={item.id} type="button" className="profile-category-tile" aria-expanded={editing?.id === item.id} aria-controls="profile-category-editor" onClick={() => openCategory(item)}>
-                      <CategoryGlyph category={shown} />
-                      <span>{shown.name || 'Untitled'}</span>
-                    </button>
-                  );
-                })}
-                {editing?.isNew && (
-                  <button type="button" className="profile-category-tile" aria-expanded="true" aria-controls="profile-category-editor">
-                    <CategoryGlyph category={editing} />
-                    <span>{editing.name || 'New category'}</span>
-                  </button>
-                )}
-                {!editing?.isNew && (
-                  <button type="button" className="profile-category-tile profile-category-add" disabled={settings.categories.length >= MAX_CATEGORIES} onClick={() => openCategory(null)}>
-                    <Plus size={18} aria-hidden="true" />Add category
-                  </button>
-                )}
-              </div>
-              {category.state && editing && (
-                <form id="profile-category-editor" className="profile-category-editor" noValidate aria-label={editing.isNew ? 'Add category' : `Edit ${category.state.snapshot.name}`} aria-busy={category.state.busy} onSubmit={event => { event.preventDefault(); void saveCategory(); }}>
-                  <fieldset disabled={category.state.busy}>
-                    <label className="profile-field-full">Name
-                      <input type="text" value={editing.name} maxLength={100} autoFocus placeholder="e.g. Groceries" aria-invalid={Boolean(category.state.error)} onChange={event => changeCategory({ name: event.target.value })} />
-                    </label>
-                    <div className="profile-field" role="group" aria-labelledby="profile-category-color-label">
-                      <span id="profile-category-color-label">Color</span>
-                      <div className="profile-swatches">
-                        {SWATCHES.map(color => (
-                          <button key={color} type="button" className="profile-swatch" style={{ background: color }} aria-label={`Color ${color}`} aria-pressed={editing.color.toLowerCase() === color} onClick={() => changeCategory({ color })} />
-                        ))}
-                        <label className="profile-swatch profile-swatch-custom" title="Custom color">
-                          <span className="sr-only">Custom color</span>
-                          <input type="color" value={editing.color} onChange={event => changeCategory({ color: event.target.value })} />
-                        </label>
-                      </div>
-                    </div>
-                    <div className="profile-field" role="group" aria-labelledby="profile-category-icon-label">
-                      <span id="profile-category-icon-label">Icon</span>
-                      <div className="profile-icon-grid">
-                        {Object.entries(ICONS).map(([name, Icon]) => (
-                          <button key={name} type="button" aria-label={`${name} icon`} aria-pressed={editing.icon === name} onClick={() => changeCategory({ icon: name })}><Icon size={18} aria-hidden="true" /></button>
-                        ))}
-                      </div>
-                    </div>
-                  </fieldset>
-                  {category.state.error && <p role="alert" className="profile-error profile-field-full">{category.state.error}</p>}
-                  <div className="profile-editor-footer profile-field-full">
-                    {editing.isNew ? <span /> : confirmRemoveCategory ? (
-                      <div className="profile-actions">
-                        <span className="profile-hint">Remove “{category.state.snapshot.name}”? Past spendings keep it.</span>
-                        <button type="button" className="profile-button" disabled={category.state.busy} onClick={() => setConfirmRemoveCategory(false)}>Keep</button>
-                        <button type="button" className="profile-button profile-button-danger" disabled={category.state.busy} onClick={() => { void removeCategory(); }}>Remove</button>
-                      </div>
-                    ) : (
-                      <button type="button" className="profile-button profile-button-danger" disabled={category.state.busy} onClick={() => setConfirmRemoveCategory(true)}><Trash2 size={16} aria-hidden="true" />Remove category</button>
-                    )}
-                    <EditorActions busy={category.state.busy} onCancel={() => { setConfirmRemoveCategory(false); category.cancel(); }} />
-                  </div>
-                </form>
-              )}
-            </div>
+            <CategoryManager disabled={isLoggingOut} onEditorStateChange={setCategoryEditor} />
           </section>
 
           <section id="profile-panel-paycycle" role="tabpanel" aria-labelledby="profile-tab-paycycle" className="profile-panel" hidden={tab !== 'paycycle'}>

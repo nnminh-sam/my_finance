@@ -124,6 +124,7 @@ class MemoryFinanceStore implements FinanceStore {
   deletePlanException = this.planStore.deletePlanException.bind(this.planStore);
   materializePlans = this.planStore.materializePlans.bind(this.planStore);
   completePlanOccurrence = this.planStore.completePlanOccurrence.bind(this.planStore);
+  mergeCategory = this.planStore.mergeCategory.bind(this.planStore);
   settings = new Map<string, FinanceSettings>();
   spendings = new Map<string, Map<string, Spending>>();
   incomes = new Map<string, Map<string, Income>>();

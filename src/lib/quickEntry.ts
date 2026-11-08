@@ -40,8 +40,6 @@ export interface QuickEntry {
   time: string;
   repeat: RepeatDraft;
   income: IncomeEntry;
-  /** The Plan tab: always save as a plan (needs a future date/time or a repeat). */
-  plan: boolean;
   /** Commitment vs estimate; null = decide from the category. */
   sure: boolean | null;
 }
@@ -85,7 +83,6 @@ export function createQuickEntry(categories: readonly Pick<CategoryData, 'id'>[]
     time: nowTime(now),
     repeat: defaultRepeat(date),
     income: { source: 'Salary', name: '', frequency: 'monthly', startDate: date, endDate: '' },
-    plan: false,
     sure: null,
   };
 }
@@ -137,9 +134,9 @@ export function defaultSure(categoryName: string): boolean {
   return /bill|rent|home|subscri|internet|phone|electric|insurance|tuition|loan|debt/i.test(categoryName);
 }
 
-/** A spending entry becomes a plan when the Plan tab is on, it repeats, or its date and time are still ahead. */
+/** A spending entry becomes a plan when it repeats or its date and time are still ahead. */
 export function isPlanEntry(entry: QuickEntry, now = new Date()): boolean {
-  return entry.mode === 'spending' && (entry.plan || entry.repeat.on || entryStamp(entry) > nowStamp(now));
+  return entry.mode === 'spending' && (entry.repeat.on || entryStamp(entry) > nowStamp(now));
 }
 
 /** Validates an entry with the same rules as the full form. A blank description becomes the category name. */
@@ -170,9 +167,6 @@ export function prepareEntry(entry: QuickEntry, categories: readonly CategoryDat
   const input = validateExpenseDraft({ ...draft, isRepeat: false }, categories);
   // Editing an existing spending never turns it into a plan, even when it is dated ahead.
   if (asSpending || !isPlanEntry(entry, now)) return { kind: 'spending', input };
-  if (!entry.repeat.on && entryStamp(entry) <= nowStamp(now)) {
-    throw new Error('A plan needs a future date or time, or Repeat turned on.');
-  }
   const r = entry.repeat;
   if (r.on && r.frequency === 'weekly' && r.daysOfWeek.length === 0) throw new Error('Pick at least one day for a weekly repeat.');
   if (r.on && (!Number.isInteger(r.interval) || r.interval < 1 || r.interval > 365)) throw new Error('Repeat every 1 to 365 days.');

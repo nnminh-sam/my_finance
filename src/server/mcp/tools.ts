@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { HttpError } from "../auth/http";
 import type { User } from "../auth/store";
-import { CATEGORY_ICONS, INCOME_FREQUENCIES, type Category } from "../finance/model";
+import { CATEGORY_ICONS, INCOME_FREQUENCIES, MAX_CATEGORIES, type Category } from "../finance/model";
 import type { FinanceStore } from "../finance/store";
 import { loadBudgetPeriod, loadPlanPeriodSummary } from "../finance/periodSummary";
 import { incomeInput, planExceptionInput, planInput, settingsPatch, spendingInput, uuid } from "../finance/validation";
@@ -99,7 +99,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         },
         categories: {
           type: "array",
-          description: "Complete replacement array of categories (up to 50).",
+          description: `Complete replacement array of categories (up to ${MAX_CATEGORIES}). Keep archived ones (archived: true) so past spendings keep their name.`,
           items: {
             type: "object",
             properties: {
@@ -107,6 +107,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
               name: { type: "string" },
               color: { type: "string", description: "#RRGGBB hex color" },
               icon: { type: "string", enum: [...CATEGORY_ICONS] },
+              archived: { type: "boolean", description: "Hidden from pickers; past spendings keep it." },
             },
             required: ["id", "name", "color", "icon"],
           },
@@ -707,9 +708,11 @@ export async function executeMcpTool(
         const catId = typeof args.id === "string" && args.id.trim() ? args.id.trim() : catName;
         const color = typeof args.color === "string" ? args.color : "#10b981";
         const icon = typeof args.icon === "string" ? args.icon : "CircleDollarSign";
-        const newCat: Category = { id: catId, name: catName, color, icon };
-
         const existingIndex = current.categories.findIndex(c => c.id === catId);
+        // Updating an archived category keeps it archived.
+        const newCat: Category = current.categories[existingIndex]?.archived
+          ? { id: catId, name: catName, color, icon, archived: true }
+          : { id: catId, name: catName, color, icon };
         const nextCategories = existingIndex >= 0
           ? current.categories.map((c, idx) => (idx === existingIndex ? newCat : c))
           : [...current.categories, newCat];

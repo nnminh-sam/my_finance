@@ -20,6 +20,8 @@ interface FinanceContextValue {
   reload: () => Promise<void>;
   fetchWeeksSpendings: (startDate: string, endDate: string) => Promise<Spending[]>;
   updateSettings: (updates: FinanceSettingsUpdate) => Promise<void>;
+  /** Moves spendings and plans from `from` to `into` and archives `from`. Resolves to how many spendings and plans moved. */
+  mergeCategory: (from: string, into: string) => Promise<{ spendings: number; plans: number }>;
   createSpending: (input: SpendingInput) => Promise<Spending>;
   updateSpending: (id: string, input: SpendingInput) => Promise<void>;
   deleteSpending: (id: string) => Promise<void>;
@@ -152,6 +154,16 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     if (currentAccount()) setSettings(saved);
   }), [serialize, currentAccount]);
 
+  const mergeCategory = useCallback((from: string, into: string) => serialize(async () => {
+    const result = await api.mergeCategory(from, into);
+    if (currentAccount()) {
+      setSettings(result.settings);
+      setSpendings(records => records.map(record => record.category === from ? { ...record, category: into } : record));
+      setPlans(records => records.map(record => record.category === from ? { ...record, category: into } : record));
+    }
+    return { spendings: result.spendings, plans: result.plans };
+  }), [serialize, currentAccount]);
+
   const createSpending = useCallback((input: SpendingInput) => serialize(async () => {
     const saved = await api.createSpending(input);
     if (currentAccount()) setSpendings(records => [...records.filter(record => record.id !== saved.id), saved]);
@@ -254,7 +266,7 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     <FinanceContext.Provider value={{
       settings, spendings, incomes, plans, loading, hasLoaded, error,
       projectedBetween, createPlan, updatePlan, splitPlan, deletePlan, setPlanException, clearPlanException, completePlanOccurrence,
-      reload, fetchWeeksSpendings, updateSettings, createSpending, updateSpending, deleteSpending,
+      reload, fetchWeeksSpendings, updateSettings, mergeCategory, createSpending, updateSpending, deleteSpending,
       createIncome, updateIncome, deleteIncome
     }}>
       {children}

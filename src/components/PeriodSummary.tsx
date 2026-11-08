@@ -69,7 +69,6 @@ export interface MiniCalendarSpec {
   end: string;
   focusStart: string; // the page in view; days outside it are muted
   focusEnd: string;
-  marks: Record<string, 'spent' | 'planned'>; // a dot for days with spending or plans
   onPick?: (date: string) => void;
 }
 
@@ -97,7 +96,6 @@ function MiniCalendar({ spec, today }: { spec: MiniCalendarSpec; today: string }
               'period-mini-day',
               (date < spec.focusStart || date > spec.focusEnd) && 'period-mini-muted',
               date === today && 'period-mini-today',
-              spec.marks[date] && `period-mini-${spec.marks[date]}`,
             )}
             aria-label={`Open ${date}`}
             aria-current={date === today ? 'date' : undefined}
