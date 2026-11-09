@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { format, parseISO } from 'date-fns';
 import { X } from 'lucide-react';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useDialog } from '../contexts/DialogContext';
 import { IncomeSources } from './IncomeSources';
 import type { IncomeEditorState } from './IncomeSources';
 import '../styles/UserProfile.css';
@@ -22,6 +23,7 @@ export function MonthlyIncomeModal({ month, onClose }: MonthlyIncomeModalProps) 
   const editorStateRef = useRef(editorState);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const id = useId();
+  const { confirm } = useDialog();
   const monthLabel = format(parseISO(`${initial.month}-01`), 'MMMM yyyy');
 
   const onEditorStateChange = useCallback((state: IncomeEditorState) => {
@@ -44,10 +46,17 @@ export function MonthlyIncomeModal({ month, onClose }: MonthlyIncomeModalProps) 
     };
   }, [initial]);
 
-  const requestClose = () => {
+  const requestClose = async () => {
     const { dirty, busy } = editorStateRef.current;
     if (busy) return;
-    if (dirty && !window.confirm('Discard unsaved income changes?')) return;
+    if (dirty && !(await confirm({
+      title: 'Discard changes?',
+      message: 'Your unsaved income changes will be lost.',
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+      destructive: true,
+    }))) return;
+    if (editorStateRef.current.busy) return;
     onClose();
   };
 
@@ -57,11 +66,11 @@ export function MonthlyIncomeModal({ month, onClose }: MonthlyIncomeModalProps) 
       className="monthly-income-modal"
       aria-labelledby={`${id}-title`}
       aria-busy={editorState.busy}
-      onCancel={event => { event.preventDefault(); requestClose(); }}
+      onCancel={event => { event.preventDefault(); void requestClose(); }}
     >
       <div className="monthly-income-modal-header">
         <h2 id={`${id}-title`}>Income for {monthLabel}</h2>
-        <button type="button" className="monthly-income-modal-close" aria-label="Close income dialog" disabled={editorState.busy} onClick={requestClose}>
+        <button type="button" className="monthly-income-modal-close" aria-label="Close income dialog" disabled={editorState.busy} onClick={() => { void requestClose(); }}>
           <X size={20} aria-hidden="true" />
         </button>
       </div>

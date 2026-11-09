@@ -5,6 +5,7 @@ import { Briefcase, CalendarClock, ChevronLeft, ChevronRight, CircleDollarSign, 
 import { addMonths, format, parseISO } from 'date-fns';
 import { errorMessage } from '../services/auth';
 import { useFinance } from '../contexts/FinanceContext';
+import { useDialog } from '../contexts/DialogContext';
 import { describeIncomeSchedule, getMonthIncome, INCOME_FREQUENCY_LABELS, INCOME_SOURCE_SUGGESTIONS, incomeMonth } from '../lib/income';
 import { createIncomeDraft, describeIncomeDraft, isIncomeDraftDirty, validateIncomeDraft } from '../lib/incomeDraft';
 import type { IncomeDraft } from '../lib/incomeDraft';
@@ -52,6 +53,7 @@ function defaultStartDate(month: string): string {
 
 export function IncomeSources({ disabled, onEditorStateChange, initialMonth, initiallyAdding = false, restrictToMonth = false }: Props) {
   const { incomes, createIncome, updateIncome, deleteIncome } = useFinance();
+  const { confirm } = useDialog();
   const [selectedMonth, setSelectedMonth] = useState(() => initialMonth ?? incomeMonth(new Date()));
   const [editor, setEditor] = useState<Editor | null>(() => {
     if (!initiallyAdding) return null;
@@ -81,10 +83,17 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
     onEditorStateChange({ dirty, busy });
   }, [dirty, busy, onEditorStateChange]);
 
-  const canDiscard = () => !dirty || window.confirm('Discard unsaved income changes?');
+  const canDiscard = async () => !dirty || await confirm({
+    title: 'Discard changes?',
+    message: 'Your unsaved income changes will be lost.',
+    confirmLabel: 'Discard',
+    cancelLabel: 'Keep editing',
+    destructive: true,
+  });
+  const isBusy = () => disabled || requestLock.current;
 
-  const openEditor = (income?: Income) => {
-    if (disabled || requestLock.current || !canDiscard()) return;
+  const openEditor = async (income?: Income) => {
+    if (isBusy() || !(await canDiscard()) || isBusy()) return;
     const draft = createIncomeDraft(defaultStartDate(selectedMonth), income);
     setEditor({ draft, snapshot: { ...draft } });
     setCustomSource(draft.source.trim() !== '' && !knownSourceFor(draft.source));
@@ -92,8 +101,8 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
     setNotice(null);
   };
 
-  const cancel = () => {
-    if (disabled || requestLock.current || !canDiscard()) return;
+  const cancel = async () => {
+    if (isBusy() || !(await canDiscard()) || isBusy()) return;
     setEditor(null);
     setError(null);
   };
@@ -151,7 +160,13 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
 
   const remove = async (income: Income) => {
     if (disabled || requestLock.current || editor) return;
-    if (!window.confirm(`Delete “${incomeLabel(income)}” (${money(income.amount)}, ${describeIncomeSchedule(income).toLowerCase()})? It is removed from every month. This cannot be undone.`)) return;
+    const confirmed = await confirm({
+      title: 'Delete income?',
+      message: `“${incomeLabel(income)}” (${money(income.amount)}, ${describeIncomeSchedule(income).toLowerCase()}) is removed from every month. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!confirmed || disabled || requestLock.current) return;
     requestLock.current = true;
     setOperation('delete');
     setDeletingId(income.id);
