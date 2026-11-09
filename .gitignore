@@ -10,3 +10,4 @@ next-env.d.ts
 *.log
 .mcp.json
 .DS_Store
+.claude/settings.local.json
