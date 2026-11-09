@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { format } from 'date-fns';
+import { useDialog } from '../contexts/DialogContext';
 import { getSpendingsForDate, getTotalForDate, formatCompactSpending } from '../lib/spendings';
 import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodIncome } from '../lib/periods';
 import {
@@ -80,6 +81,7 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
   const { settings } = useSettings();
   const { spendings, incomes, plans, deleteSpending, projectedBetween, setPlanException, clearPlanException, completePlanOccurrence } = useFinance();
   const router = useRouter();
+  const { confirm } = useDialog();
   const daySpendings = getSpendingsForDate(date, spendings);
   const totalSpent = getTotalForDate(date, spendings);
   const dayKey = format(date, 'yyyy-MM-dd');
@@ -133,7 +135,14 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
   const busy = deletingId !== null || planBusy;
 
   const removeExpense = async (spending: Spending) => {
-    if (mutationLock.current || !window.confirm(`Delete “${spending.description}” (${spending.amount.toLocaleString('vi-VN')} ₫)? This cannot be undone.`)) return;
+    if (mutationLock.current) return;
+    const confirmed = await confirm({
+      title: 'Delete expense?',
+      message: `“${spending.description}” (${spending.amount.toLocaleString('vi-VN')} ₫) will be deleted. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!confirmed || mutationLock.current) return;
     mutationLock.current = true;
     setDeletingId(spending.id);
     setError(null);

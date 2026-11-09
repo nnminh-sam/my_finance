@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { errorMessage } from '../services/auth';
 import { useFinance } from '../contexts/FinanceContext';
+import { useDialog } from '../contexts/DialogContext';
 import { addDays, describePlanSchedule, planOccurrences, type PlanFrequency } from '../lib/plans';
 import { DEFAULT_BUDGET_PERIOD, periodOf, type BudgetPeriod } from '../lib/periods';
 import {
@@ -43,6 +44,7 @@ const UNIT: Partial<Record<PlanFrequency, string>> = { daily: 'days', weekly: 'w
 
 export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, period = null, today: serverToday, readOnly = false }: Props) {
   const { plans, incomes, settings, projectedBetween, createPlan, updatePlan, splitPlan, deletePlan } = useFinance();
+  const { confirm } = useDialog();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [operation, setOperation] = useState<'save' | 'delete' | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -102,18 +104,25 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
     setEditor({ draft, snapshot: { ...draft, daysOfWeek: [...draft.daysOfWeek] } });
   }, [initialEdit, plans, today, categories]);
 
-  const canDiscard = () => !dirty || window.confirm('Discard unsaved plan changes?');
+  const canDiscard = async () => !dirty || await confirm({
+    title: 'Discard changes?',
+    message: 'Your unsaved plan changes will be lost.',
+    confirmLabel: 'Discard',
+    cancelLabel: 'Keep editing',
+    destructive: true,
+  });
+  const isBusy = () => disabled || requestLock.current;
 
-  const openEditor = (plan?: Plan) => {
-    if (disabled || requestLock.current || !canDiscard()) return;
+  const openEditor = async (plan?: Plan) => {
+    if (isBusy() || !(await canDiscard()) || isBusy()) return;
     const draft = createPlanDraft(today, active[0]?.id ?? '', plan);
     setEditor({ draft, snapshot: { ...draft, daysOfWeek: [...draft.daysOfWeek] } });
     setError(null);
     setNotice(null);
   };
 
-  const cancel = () => {
-    if (disabled || requestLock.current || !canDiscard()) return;
+  const cancel = async () => {
+    if (isBusy() || !(await canDiscard()) || isBusy()) return;
     setEditor(null);
     setError(null);
   };
@@ -180,7 +189,13 @@ export function PlannedSpendings({ disabled, onEditorStateChange, initialEdit, p
 
   const remove = async (plan: Plan) => {
     if (disabled || requestLock.current || editor) return;
-    if (!window.confirm(`Stop planning “${plan.description || 'this plan'}” (${money(plan.amount)}, ${describePlanSchedule(plan).toLowerCase()})? Upcoming planned days disappear; spendings that already happened are kept.`)) return;
+    const confirmed = await confirm({
+      title: 'Stop planning?',
+      message: `“${plan.description || 'This plan'}” (${money(plan.amount)}, ${describePlanSchedule(plan).toLowerCase()}): upcoming planned days disappear; spendings that already happened are kept.`,
+      confirmLabel: 'Stop planning',
+      destructive: true,
+    });
+    if (!confirmed || disabled || requestLock.current) return;
     requestLock.current = true;
     setOperation('delete');
     setDeletingId(plan.id);

@@ -55,36 +55,6 @@ export function Toast({ toast, onHide, top = false }: { toast: ToastState | null
   );
 }
 
-export interface AlertButton { label: string; destructive?: boolean; onPress: () => void }
-
-/** A native-style alert: title, message and a row of buttons. */
-export function MobileAlert({ title, message, buttons, onDismiss, vertical = false }: { title: string; message?: ReactNode; buttons: AlertButton[]; onDismiss: () => void; vertical?: boolean }) {
-  const first = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    first.current?.focus();
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); onDismiss(); } };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onDismiss]);
-  return (
-    <div className="m-alert-layer" onClick={onDismiss}>
-      <div className="m-alert" role="alertdialog" aria-modal="true" aria-label={title} onClick={event => event.stopPropagation()}>
-        <div className="m-alert-body">
-          <b>{title}</b>
-          {message && <p>{message}</p>}
-        </div>
-        <div className={'m-alert-actions' + (vertical ? ' is-vertical' : '')}>
-          {buttons.map((button, i) => (
-            <button key={button.label} ref={i === 0 ? first : undefined} type="button" className={button.destructive ? 'is-destructive' : undefined} onClick={button.onPress}>
-              {button.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** Plain-language explanation behind an ⓘ button on a chart card. */
 export function InfoCard({ title, info, children, right }: { title: string; info?: string; children: ReactNode; right?: ReactNode }) {
   const [open, setOpen] = useState(false);

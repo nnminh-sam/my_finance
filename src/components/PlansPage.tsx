@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { parseISO } from 'date-fns';
 import { useFinance } from '../contexts/FinanceContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useDialog } from '../contexts/DialogContext';
 import { errorMessage } from '../services/auth';
 import { createFinanceApi } from '../services/finance';
 import { adjacentPeriodDate, isPastPeriod, parsePeriodParam } from '../lib/periods';
@@ -32,6 +33,7 @@ export function PlansPage() {
   const router = useRouter();
   const [planEditor, setPlanEditor] = useState<PlanEditorState>({ dirty: false, busy: false });
   useUnsavedChanges(planEditor.dirty || planEditor.busy);
+  const { confirm } = useDialog();
   const onPlanEditor = useCallback((state: PlanEditorState) => setPlanEditor(state), []);
 
   // A bad or missing ?period= means the current period.
@@ -60,8 +62,14 @@ export function PlansPage() {
   // The editor deep link waits for the period, so a past period never opens it.
   const initialEdit = useMemo(() => (editId && summary && !past ? { id: editId, from: from ?? undefined } : null), [editId, from, summary, past]);
   // Neighbouring periods come from the summary's own boundaries, so the page and the server agree.
-  const goTo = (direction: 'previous' | 'next') => {
-    if (planEditor.dirty && !window.confirm('Discard unsaved plan changes?')) return;
+  const goTo = async (direction: 'previous' | 'next') => {
+    if (planEditor.dirty && !(await confirm({
+      title: 'Discard changes?',
+      message: 'Your unsaved plan changes will be lost.',
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+      destructive: true,
+    }))) return;
     if (summary) router.replace(`/plans?period=${adjacentPeriodDate(summary.period, direction)}`);
   };
   const periodLabel = period ? `${dayLabel(period.start)} – ${dayLabel(period.end)}` : null;

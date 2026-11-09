@@ -18,11 +18,13 @@ import { fmtVND } from '../../lib/analytics';
 import { errorMessage } from '../../services/auth';
 import type { Spending } from '../../types';
 import type { PlanOccurrence } from '../../lib/plans';
-import { CategoryIcon, MobileAlert, Toast, categoryMeta, haptic, useToast } from './MobileUi';
+import { CategoryIcon, Toast, categoryMeta, haptic, useToast } from './MobileUi';
 import { QuickEntryDock } from '../quickEntry/QuickEntryDock';
 import { useQuickEntry } from '../quickEntry/useQuickEntry';
 import type { SaveResult } from '../quickEntry/useQuickEntry';
-import type { AlertButton } from './MobileUi';
+import { SystemAlert } from '../SystemAlert';
+import { useDialog } from '../../contexts/DialogContext';
+import type { AlertButton } from '../SystemAlert';
 import '../../styles/Mobile.css';
 
 const WEEK = { weekStartsOn: 1 as const };
@@ -77,6 +79,7 @@ export function MobileWeek() {
   const qe = useQuickEntry(format(selected, 'yyyy-MM-dd'));
   const [pulse, setPulse] = useState(false);
   useUnsavedChanges(qe.dirty);
+  const { prompt } = useDialog();
 
   useEffect(() => {
     if (keypadPulse === 0) return;
@@ -174,9 +177,15 @@ export function MobileWeek() {
         },
       },
       {
-        label: 'Change amount', onPress: () => {
+        label: 'Change amount', onPress: async () => {
           setAlert(null);
-          const typed = window.prompt(`Amount for ${label} on ${format(selected, 'EEE d MMM')}`, String(occurrence.amount));
+          const typed = await prompt({
+            title: `Amount for ${label}`,
+            message: `Only ${format(selected, 'EEE d MMM')} changes; other days keep the usual amount.`,
+            defaultValue: String(occurrence.amount),
+            inputMode: 'numeric',
+            confirmLabel: 'Save',
+          });
           if (typed === null) return;
           const amount = Number(typed.replace(/[\s,._]/g, ''));
           if (!Number.isFinite(amount) || amount <= 0 || amount > 1e12) { showToast('Enter an amount above 0 ₫'); return; }
@@ -339,7 +348,7 @@ export function MobileWeek() {
       )}
 
       <Toast toast={toast} onHide={hideToast} top={keypadOpen} />
-      {alert && <MobileAlert title={alert.title} message={alert.message} buttons={alert.buttons} vertical={alert.buttons.length > 2} onDismiss={() => setAlert(null)} />}
+      {alert && <SystemAlert title={alert.title} message={alert.message} buttons={alert.buttons} vertical={alert.buttons.length > 2} onDismiss={() => setAlert(null)} />}
     </div>
   );
 }

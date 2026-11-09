@@ -10,6 +10,7 @@ import { useFinance } from '../contexts/FinanceContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { errorMessage } from '../services/auth';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useDialog } from '../contexts/DialogContext';
 import { getRangeIncome } from '../lib/income';
 import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodOf } from '../lib/periods';
 import { CategoryManager } from './CategoryManager';
@@ -99,6 +100,7 @@ export function UserProfile() {
   const activeCategories = settings.categories.filter(item => !item.archived).length;
   const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: activeCategories, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
 
+  const { confirm } = useDialog();
   useUnsavedChanges(!isLoggingOut && (dirty || pending));
 
   // Sections are linkable as /profile#income and so on.
@@ -157,7 +159,14 @@ export function UserProfile() {
 
   const handleLogout = async () => {
     if (loggingOut.current || pending) return;
-    if (dirty && !window.confirm('Discard unsaved profile changes and sign out?')) return;
+    if (dirty && !(await confirm({
+      title: 'Sign out?',
+      message: 'Your unsaved profile changes will be lost.',
+      confirmLabel: 'Discard & sign out',
+      cancelLabel: 'Keep editing',
+      destructive: true,
+    }))) return;
+    if (loggingOut.current) return;
     loggingOut.current = true;
     setIsLoggingOut(true);
     setLogoutError(null);
@@ -182,8 +191,14 @@ export function UserProfile() {
     setMobileSection(next);
     document.querySelector('.user-profile')?.scrollTo({ top: 0 });
   };
-  const closeMobileSection = () => {
-    if (mobileSection && unsaved[mobileSection] && !window.confirm('Discard unsaved changes in this section?')) return;
+  const closeMobileSection = async () => {
+    if (mobileSection && unsaved[mobileSection] && !(await confirm({
+      title: 'Discard changes?',
+      message: 'Your unsaved changes in this section will be lost.',
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+      destructive: true,
+    }))) return;
     if (mobileSection === 'account' && avatar.state) avatar.cancel();
     setMobileSection(null);
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -238,7 +253,7 @@ export function UserProfile() {
         {logoutError && <p role="alert" className="profile-error">{logoutError}</p>}
       </div>
       {mobileSection && (
-        <button type="button" className="profile-m-back" onClick={closeMobileSection}>
+        <button type="button" className="profile-m-back" onClick={() => { void closeMobileSection(); }}>
           <ChevronLeft size={18} aria-hidden="true" />Profile
         </button>
       )}

@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { AuthProvider } from '../contexts/AuthContext';
+import { DialogProvider } from '../contexts/DialogContext';
 import { initializeTheme, ThemeProvider } from '../contexts/ThemeContext';
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -21,9 +22,11 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
-        {children}
-      </AuthProvider>
+      <DialogProvider>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </DialogProvider>
     </ThemeProvider>
   );
 }
