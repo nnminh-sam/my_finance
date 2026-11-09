@@ -287,9 +287,10 @@ footer.doc-foot{color:var(--muted);font-size:.85rem;margin-top:30px}
 <header class="doc-head">
   <p class="eyebrow">Design &amp; positioning research · MyFinance</p>
   <h1>A calm family money book, not another super app</h1>
-  <p class="sub">What users of MoMo and Money Lover complain about, what MyFinance should promise in return, how premium apps make that feel calm, and a 4-week plan.</p>
+  <p class="sub">Read <a href="#start">Start here</a> (2 min), do the 15-minute task, stop. Everything below the plan is evidence you can skip.</p>
   <ul class="meta">
-    <li><b>Updated</b>2026-11-08</li>
+    <li><b>Read time</b>Start here 2 min · plan 5 min · full doc 20 min</li>
+    <li><b>Updated</b>2026-11-09</li>
     <li><b>Questions</b>Why doesn't the calendar feel premium? What should a personal/family app do that MoMo-style apps don't?</li>
     <li><b>Scope</b><code>develop/feat/context-menu</code> @ <code>2174118</code></li>
     <li><b>Apps studied</b>Copilot Money · Monarch · YNAB · Mercury · Dash.fi · Money Lover</li>
@@ -299,6 +300,27 @@ footer.doc-foot{color:var(--muted);font-size:.85rem;margin-top:30px}
 <!-- The outline is chosen per document (references/writing-guide.md §1).
      One top-level <section id="..."><h2>…</h2>…</section> per part, in reading order.
      If the doc cites anything, the last section is <section id="sources"> with <ol class="sources">. -->
+<section id="start">
+  <h2>Start here: one 15-minute task</h2>
+  <div class="verdict">
+    <span class="label">Do this now · 15 min</span>
+    <p>Open <code>src/styles/CalendarView.css</code> lines 421–436 and make the planned estimates quiet: <code>color: var(--text-muted)</code>, <code>font-style: normal</code>, no dashed border, keep the <code>~</code>. This is the biggest visual win for the least work. <a class="cite" href="#src-11">S11</a></p>
+  </div>
+  <div class="stats">
+    <div class="stat bad"><span class="v">43%</span><span class="k">of Money Lover's 1–2★ reviews: "you locked my history"</span></div>
+    <div class="stat bad"><span class="v">6 jobs</span><span class="k">done by one blue on the calendar</span></div>
+    <div class="stat bad"><span class="v">20 / 30</span><span class="k">days show loud blue estimates</span></div>
+    <div class="stat ok"><span class="v">~5 h</span><span class="k">to fix the calm look (week 1)</span></div>
+  </div>
+  <h3 id="three-lines">The whole report in 3 lines</h3>
+  <ol class="steps">
+    <li><strong>Who we are:</strong> a calm family money book. Not a MoMo copy: no payments, no loans, no paywalled history.</li>
+    <li><strong>What looks cheap:</strong> the layout is fine. Too much blue and loud estimates make it look like a template.</li>
+    <li class="ok"><strong>What to do:</strong> 4 weeks, one theme each: Calm → Clear answer → Trust → Family. See <a href="#next">the plan</a>.</li>
+  </ol>
+  <div class="callout info"><strong>How to read this page:</strong> sections 1–4 are decisions and tasks. From <a href="#answer">"Why the calendar looks app-like"</a> down is evidence. Open it only when you need a reason.</div>
+</section>
+
 <section id="position">
   <h2>Where MyFinance fits: fix what the big apps get wrong</h2>
   <div class="verdict">
@@ -350,6 +372,10 @@ footer.doc-foot{color:var(--muted);font-size:.85rem;margin-top:30px}
   </figure>
 
   <h3 id="voices">In users' own words</h3>
+  <p>8 real reviews, each paired with the MyFinance answer. Open when you need the exact wording.</p>
+  <details class="more">
+  <summary>Show 8 reviews (MoMo, Money Lover)</summary>
+  <div class="body">
   <div class="tbl">
     <p class="cap">Selected 1–2★ reviews, Vietnamese App Store (verbatim, translated) <a class="cite" href="#src-16">S16</a><a class="cite" href="#src-17">S17</a></p>
     <table>
@@ -364,6 +390,8 @@ footer.doc-foot{color:var(--muted);font-size:.85rem;margin-top:30px}
       <tr><td>MoMo · 2026-10-21</td><td><em>"Màn hình giao dịch dư thừa thông tin chi tiêu nhạy cảm"</em> (the transaction screen shows sensitive spending details)</td><td>Privacy mode that blurs amounts</td></tr>
     </table>
   </div>
+  </div>
+  </details>
 
   <h3 id="promises">Six promises MyFinance can make</h3>
   <div class="grid2">
@@ -377,8 +405,80 @@ footer.doc-foot{color:var(--muted);font-size:.85rem;margin-top:30px}
   <div class="callout info"><strong>How design fits in:</strong> the premium-design work in the rest of this report is how these promises <em>feel</em>. Calm colours, fewer borders and one clear number say "nothing here is trying to sell you something". <span class="tag infer">INFERRED</span> (positioning judgement)</div>
 </section>
 
+<section id="next">
+  <h2>What to do next: a 4-week plan</h2>
+  <p>One theme per week. Do the tasks top to bottom; each has a time estimate and a "done when" check. <span class="tag infer">INFERRED</span> (times are estimates from reading the code, not measured)</p>
+  <div class="callout warn"><strong>Do not build:</strong> bank sync, payments, AI chat, loans. Those are what users of the big apps complain about.</div>
+  <ol class="steps">
+    <li><strong>Week 1 · Calm · ~5–6 h</strong> (promise 6)
+      <ul>
+        <li>☐ 15 min: grey estimates (<a href="#plan">change 1</a>), the <a href="#start">Start here</a> task</li>
+        <li>☐ 1 h: <code>/mock</code> the calendar in 3 palettes (navy like Copilot, ink + jade like Dash.fi, warm white like Monarch). Pick one.</li>
+        <li>☐ 1 h: spend bar instead of blue fill (change 2)</li>
+        <li>☐ 2–3 h: semantic colour tokens (change 3)</li>
+        <li>☐ 30 min: tinted darks (change 4)</li>
+      </ul>
+      <em>Done when:</em> the calendar uses at most 3 non-grey colours, each with one meaning.</li>
+    <li class="ok"><strong>Week 2 · One clear answer · ~2 days</strong> (promise 4)
+      <ul>
+        <li>☐ 2 h: "Safe to spend today" as the big number at the top of the sidebar. The value already exists: <code>142.836 ₫ a day for 27 days</code> <a class="cite" href="#src-14">S14</a></li>
+        <li>☐ 1 day: "Coming up · next 7 days" strip: plans, payday, subscriptions, bill and pay-later due dates (like Rocket Money)</li>
+        <li>☐ 3 h: turn the "Spending evenly…" sentence into a small pace chart</li>
+      </ul>
+      <em>Done when:</em> "how much can I spend today, and what's due this week?" takes under 2 seconds to answer.</li>
+    <li class="ok"><strong>Week 3 · Trust · ~2–3 days</strong> (promises 1 and 2)
+      <ul>
+        <li>☐ 1 day: <em>Export everything</em> (CSV for spreadsheets, JSON for full backup)</li>
+        <li>☐ 1 day: "Import from CSV" for people leaving Money Lover</li>
+        <li>☐ 2 h: privacy toggle that blurs amounts</li>
+        <li>☐ 30 min: "Our promises" paragraph in Profile: no ads, no paywalled history, updates never rewrite your data</li>
+      </ul>
+      <em>Done when:</em> a new user gets all their data out in one tap.</li>
+    <li><strong>Week 4 · Family v1 · ~3–4 days</strong> (promise 3)
+      <ul>
+        <li>☐ 1 h: <code>/mock</code> the family screens first</li>
+        <li>☐ 1 day: <code>households</code> + <code>household_members</code> tables; add <code>household_id</code>, <code>paid_by</code>, <code>private</code> to spendings and plans</li>
+        <li>☐ 1 day: invite one person by link</li>
+        <li>☐ 1 day: "paid by" on each item + monthly "who spent what" split</li>
+      </ul>
+      <em>Done when:</em> two phones see the same calendar and each item shows who paid. <span class="tag infer">INFERRED</span> (schema sketch; today rows only have <code>user_id</code> <a class="cite" href="#src-18">S18</a>)</li>
+    <li><strong>Later · Vietnamese money</strong> (promise 5): cash and gold holdings, savings pots, transfers between your own wallets that are not spending, a <em>family obligations</em> view (weddings, funerals, money for parents), goals with progress, "cover overspending" like YNAB.</li>
+  </ol>
+  <div class="callout info"><strong>How to know it worked:</strong> after week 4, use it with one family member for a full pay cycle. Success is (a) neither of you asks "who paid for this?", (b) nothing due in the cycle surprised you, and (c) you never felt the app wanted something from you.</div>
+</section>
+
+<section id="plan">
+  <h2>Calendar fixes, in order</h2>
+  <p>Ranked by impact per hour. Changes 1–4 = about 4–5 h and do most of the work. Running total: 15 min → 1¼ h → 4 h → 4½ h.</p>
+
+  <figure class="fig">
+    <div class="grid2">
+      <div class="card bad"><h4>Day cell today</h4>Blue fill up to 60% · bold italic blue <code>~50.000 ₫</code> · dashed blue box per estimate · sky-blue glow on today</div>
+      <div class="card ok"><h4>Day cell proposed</h4>Card stays neutral · real total in white, medium weight · a thin 2px spend bar at the bottom shows intensity · estimates in muted grey, regular (not italic), no box · today = small filled date badge</div>
+    </div>
+    <figcaption>The proposal keeps every number but moves "how much" from a full background fill to a thin bar, and moves forecasts to grey. Current behaviour from <a class="cite" href="#src-10">S10</a><a class="cite" href="#src-11">S11</a>.</figcaption>
+  </figure>
+
+  <div class="tbl">
+    <p class="cap">Ranked changes</p>
+    <table>
+      <tr><th>#</th><th>Change</th><th>Files</th><th>Impact</th><th>Effort</th></tr>
+      <tr><td>1</td><td><strong>Quiet the estimates.</strong> Planned totals and rows in <code>--text-muted</code>, normal style (keep the <code>~</code>), no dashed border; maybe a 1px dotted underline.</td><td><code>CalendarView.css:421-436</code></td><td><span class="sev high">High</span></td><td>15 min</td></tr>
+      <tr><td>2</td><td><strong>Replace the heat fill with a spend bar.</strong> Keep cards neutral; draw a 2–3px bar at the bottom whose width is <code>total / peak</code>. Or cap the fill at ~12% opacity.</td><td><code>lib/heatmap.ts</code>, <code>CalendarView.tsx:742-764</code> <a class="cite" href="#src-12">S12</a></td><td><span class="sev high">High</span></td><td>1 h</td></tr>
+      <tr><td>3</td><td><strong>Add a semantic token layer.</strong> Split <code>--primary</code> into <code>--accent</code> (actions), <code>--money-left</code>, <code>--money-spent</code>, <code>--money-income</code>, <code>--forecast</code>, <code>--today</code>, each with a light and dark value, as YNAB does. <a class="cite" href="#src-5">S5</a></td><td><code>globals.css</code>, then replace the 143 uses</td><td><span class="sev high">High</span></td><td>2–3 h</td></tr>
+      <tr><td>4</td><td><strong>Tint the darks.</strong> Move <code>--bg-main</code>/<code>--bg-card</code> from zinc to a slightly blue or green ink (e.g. <code>#0b0d12</code> / <code>#13161d</code>), text to ~92% white, borders to 6–8% white. <a class="cite" href="#src-2">S2</a></td><td><code>globals.css:4-9</code></td><td><span class="sev med">Medium</span></td><td>30 min</td></tr>
+      <tr><td>5</td><td><strong>Mute the accent.</strong> Swap <code>#3b82f6</code> for a deeper, less saturated brand colour (indigo, teal or a jade like Dash.fi's <code>#2B605C</code>). Keep green and red only for income and over-budget. <a class="cite" href="#src-6">S6</a></td><td><code>globals.css:11-15</code></td><td><span class="sev med">Medium</span></td><td>30 min + review</td></tr>
+      <tr><td>6</td><td><strong>One money type style.</strong> A <code>.money</code> class (tabular, lining, weight 500, the <code>₫</code> smaller and muted) and 3 sizes: hero, row, small. <a class="cite" href="#src-3">S3</a><a class="cite" href="#src-6">S6</a></td><td><code>globals.css</code> + components</td><td><span class="sev med">Medium</span></td><td>2 h</td></tr>
+      <tr><td>7</td><td><strong>Lighter empty states.</strong> No border on empty or out-of-period days; drop "No expenses" text or show it on hover only.</td><td><code>CalendarView.css</code></td><td><span class="sev med">Medium</span></td><td>30 min</td></tr>
+      <tr><td>8</td><td><strong>A display face for headlines and hero numbers.</strong> Keep Inter for UI; consider Inter Display or a geometric face for the big balance. Mercury uses a custom display face. <a class="cite" href="#src-3">S3</a></td><td><code>globals.css:1</code></td><td><span class="sev low">Low</span></td><td>1 h</td></tr>
+    </table>
+  </div>
+  <div class="callout warn"><strong>Risk:</strong> step 3 touches 143 places. Do it in two passes: first add the new tokens as aliases of <code>--primary</code> (no visual change), then change their values one by one.</div>
+</section>
+
 <section id="answer">
   <h2>Why the calendar looks "app-like", not "private bank"</h2>
+  <div class="callout info"><strong>Evidence starts here.</strong> You don't need anything below to do the plan. Come back when you want the reason behind a change.</div>
   <div class="verdict">
     <span class="label">Short answer</span>
     <p>The layout is sound. What breaks the premium feel is <strong>visual noise</strong>: one saturated blue does five different jobs, every future day repeats the same blue italic dashed estimate, and the dark surfaces are neutral grey-black. Award-winning finance apps do the opposite. They show a summary first, keep colour for meaning, and let the numbers carry the design. <a class="cite" href="#src-2">S2</a><a class="cite" href="#src-3">S3</a><a class="cite" href="#src-6">S6</a></p>
@@ -390,19 +490,6 @@ footer.doc-foot{color:var(--muted);font-size:.85rem;margin-top:30px}
     <li><strong>Premium apps tint their darks and mute their accents.</strong> Copilot never uses pure black and tints surfaces navy. Mercury avoids "loud blues for trust". MyFinance uses neutral zinc <code>#09090b</code> / <code>#18181b</code> with Tailwind's default <code>#3b82f6</code>. <a class="cite" href="#src-2">S2</a><a class="cite" href="#src-3">S3</a><a class="cite" href="#src-9">S9</a></li>
     <li><strong>The fixes are mostly CSS and tokens.</strong> The top five changes touch <code>globals.css</code>, <code>CalendarView.css</code> and <code>lib/heatmap.ts</code>, with no change to data or layout. See <a href="#plan">the ranked plan</a>. <span class="tag infer">INFERRED</span> (effort estimated from reading the files, not from building it)</li>
   </ol>
-</section>
-
-<section id="next">
-  <h2>What to do next: a 4-week plan</h2>
-  <p>Each week ships one of <a href="#promises">the six promises</a>. Weeks 1–3 use data you already have. Week 4 is the first schema change. Do not build bank sync, payments, an AI chat or loans. Those are exactly what users of the big apps are unhappy about.</p>
-  <ol class="steps">
-    <li><strong>Week 1 · Calm (promise 6).</strong> Day 1: run <code>/mock</code> on the calendar with 3 palettes: navy-tinted dark like Copilot, ink + jade like Dash.fi, warm off-white like Monarch. Pick one. Then make steps 1–4 of <a href="#plan">the ranked list</a>: grey estimates, a spend bar instead of the blue fill, semantic tokens, tinted darks. <em>Done when</em> the calendar uses at most 3 non-grey colours, each with one meaning.</li>
-    <li class="ok"><strong>Week 2 · One clear answer + what's coming (promise 4).</strong> Put "safe to spend today" at the top of the sidebar. It already exists as <code>142.836 ₫ a day for 27 days</code> <a class="cite" href="#src-14">S14</a>. Add a "Coming up · next 7 days" strip with plans, payday, subscriptions and bill or pay-later due dates, like Rocket Money's home. Turn the "Spending evenly…" sentence into a small pace chart. <em>Done when</em> "how much can I spend today, and what's due this week?" is answered in under 2 seconds.</li>
-    <li class="ok"><strong>Week 3 · Trust (promises 1 and 2).</strong> Add <em>Export everything</em> (CSV for spreadsheets, JSON for a full backup) and an "Import from CSV" path for people leaving Money Lover. Add a privacy toggle that blurs amounts. Write a one-paragraph "Our promises" page in Profile: no ads, no paywalled history, updates never rewrite your data. <em>Done when</em> a new user can get all their data out in one tap.</li>
-    <li><strong>Week 4 · Family v1 (promise 3).</strong> Mock it first. Add a <code>households</code> table and a <code>household_members</code> table. Give spendings and plans a <code>household_id</code>, a <code>paid_by</code> user and a <code>private</code> flag. Invite one person by link. Add a monthly "who spent what" split on the summary. <em>Done when</em> two phones see the same calendar and each item shows who paid. <span class="tag infer">INFERRED</span> (schema sketch; today rows only have <code>user_id</code> <a class="cite" href="#src-18">S18</a>)</li>
-    <li><strong>Later · Vietnamese money (promise 5).</strong> Cash and gold holdings, savings pots, transfers between your own wallets that are not spending, and a <em>family obligations</em> view (weddings, funerals, money for parents) with yearly totals. Goals with progress (Monarch, YNAB) fit here too.</li>
-  </ol>
-  <div class="callout info"><strong>How to know it worked:</strong> after week 4, use it with one family member for a full pay cycle. Success is (a) neither of you asks "who paid for this?", (b) nothing due in the cycle surprised you, and (c) you never felt the app wanted something from you.</div>
 </section>
 
 <section id="apps">
@@ -484,8 +571,8 @@ footer.doc-foot{color:var(--muted);font-size:.85rem;margin-top:30px}
       <tr><th>Feature</th><th>Who</th><th>The worry it answers</th><th>MyFinance today</th><th>Copy?</th></tr>
       <tr class="hl"><td>"Left / can spend" hero number</td><td>Copilot, Money Lover</td><td>"Can I afford this today?"</td><td>Has the number (<code>a day for N days</code>) but as small text <a class="cite" href="#src-14">S14</a></td><td class="good">✓ week 2</td></tr>
       <tr class="hl"><td>Spending vs even-pace chart</td><td>Copilot</td><td>"Am I ahead or behind?"</td><td>Pace exists as a sentence <a class="cite" href="#src-14">S14</a></td><td class="good">✓ week 2</td></tr>
-      <tr class="hl"><td>Coming up next 7 days</td><td>Rocket Money</td><td>"What will hit me soon?"</td><td>Plans exist, no forward strip</td><td class="good">✓ week 3</td></tr>
-      <tr><td>Cover overspending</td><td>YNAB</td><td>"I went over, now what?"</td><td>Overspend computed in <code>lib/runway.ts</code>, no action</td><td class="good">✓ week 4</td></tr>
+      <tr class="hl"><td>Coming up next 7 days</td><td>Rocket Money</td><td>"What will hit me soon?"</td><td>Plans exist, no forward strip</td><td class="good">✓ week 2</td></tr>
+      <tr><td>Cover overspending</td><td>YNAB</td><td>"I went over, now what?"</td><td>Overspend computed in <code>lib/runway.ts</code>, no action</td><td class="good">✓ later</td></tr>
       <tr><td>Cost to be me (fixed costs vs income)</td><td>YNAB</td><td>"What does my life cost?"</td><td>Plans per period could give this</td><td class="good">✓ small</td></tr>
       <tr><td>Goals with progress</td><td>Monarch, YNAB, Money Lover</td><td>"Am I getting closer?"</td><td>None</td><td class="good">✓ later</td></tr>
       <tr><td>Sankey cash flow</td><td>Monarch</td><td>"Where did it all go?"</td><td>Analytics has charts, no flow</td><td>maybe, in Analytics</td></tr>
@@ -574,35 +661,6 @@ footer.doc-foot{color:var(--muted);font-size:.85rem;margin-top:30px}
 
   <h3 id="d-empty">Empty and filler states take full-size cards</h3>
   <p>"No expenses" weekends and the greyed days of neighbouring periods each get a full card with a border. <a class="cite" href="#src-13">S13</a> This adds 35 bordered boxes on one screen. Premium apps use fewer borders and let spacing separate items. <span class="tag infer">INFERRED</span> (design judgement)</p>
-</section>
-
-<section id="plan">
-  <h2>What to change, in order</h2>
-  <p>Ranked by impact per hour. Steps 1–4 alone should change the feel of the page. Make them in a mockup first (<code>/mock</code>) and compare side by side.</p>
-
-  <figure class="fig">
-    <div class="grid2">
-      <div class="card bad"><h4>Day cell today</h4>Blue fill up to 60% · bold italic blue <code>~50.000 ₫</code> · dashed blue box per estimate · sky-blue glow on today</div>
-      <div class="card ok"><h4>Day cell proposed</h4>Card stays neutral · real total in white, medium weight · a thin 2px spend bar at the bottom shows intensity · estimates in muted grey, regular (not italic), no box · today = small filled date badge</div>
-    </div>
-    <figcaption>The proposal keeps every number but moves "how much" from a full background fill to a thin bar, and moves forecasts to grey. Current behaviour from <a class="cite" href="#src-10">S10</a><a class="cite" href="#src-11">S11</a>.</figcaption>
-  </figure>
-
-  <div class="tbl">
-    <p class="cap">Ranked changes</p>
-    <table>
-      <tr><th>#</th><th>Change</th><th>Files</th><th>Impact</th><th>Effort</th></tr>
-      <tr><td>1</td><td><strong>Quiet the estimates.</strong> Planned totals and rows in <code>--text-muted</code>, normal style (keep the <code>~</code>), no dashed border; maybe a 1px dotted underline.</td><td><code>CalendarView.css:421-436</code></td><td><span class="sev high">High</span></td><td>15 min</td></tr>
-      <tr><td>2</td><td><strong>Replace the heat fill with a spend bar.</strong> Keep cards neutral; draw a 2–3px bar at the bottom whose width is <code>total / peak</code>. Or cap the fill at ~12% opacity.</td><td><code>lib/heatmap.ts</code>, <code>CalendarView.tsx:742-764</code> <a class="cite" href="#src-12">S12</a></td><td><span class="sev high">High</span></td><td>1 h</td></tr>
-      <tr><td>3</td><td><strong>Add a semantic token layer.</strong> Split <code>--primary</code> into <code>--accent</code> (actions), <code>--money-left</code>, <code>--money-spent</code>, <code>--money-income</code>, <code>--forecast</code>, <code>--today</code>, each with a light and dark value, as YNAB does. <a class="cite" href="#src-5">S5</a></td><td><code>globals.css</code>, then replace the 143 uses</td><td><span class="sev high">High</span></td><td>2–3 h</td></tr>
-      <tr><td>4</td><td><strong>Tint the darks.</strong> Move <code>--bg-main</code>/<code>--bg-card</code> from zinc to a slightly blue or green ink (e.g. <code>#0b0d12</code> / <code>#13161d</code>), text to ~92% white, borders to 6–8% white. <a class="cite" href="#src-2">S2</a></td><td><code>globals.css:4-9</code></td><td><span class="sev med">Medium</span></td><td>30 min</td></tr>
-      <tr><td>5</td><td><strong>Mute the accent.</strong> Swap <code>#3b82f6</code> for a deeper, less saturated brand colour (indigo, teal or a jade like Dash.fi's <code>#2B605C</code>). Keep green and red only for income and over-budget. <a class="cite" href="#src-6">S6</a></td><td><code>globals.css:11-15</code></td><td><span class="sev med">Medium</span></td><td>30 min + review</td></tr>
-      <tr><td>6</td><td><strong>One money type style.</strong> A <code>.money</code> class (tabular, lining, weight 500, the <code>₫</code> smaller and muted) and 3 sizes: hero, row, small. <a class="cite" href="#src-3">S3</a><a class="cite" href="#src-6">S6</a></td><td><code>globals.css</code> + components</td><td><span class="sev med">Medium</span></td><td>2 h</td></tr>
-      <tr><td>7</td><td><strong>Lighter empty states.</strong> No border on empty or out-of-period days; drop "No expenses" text or show it on hover only.</td><td><code>CalendarView.css</code></td><td><span class="sev med">Medium</span></td><td>30 min</td></tr>
-      <tr><td>8</td><td><strong>A display face for headlines and hero numbers.</strong> Keep Inter for UI; consider Inter Display or a geometric face for the big balance. Mercury uses a custom display face. <a class="cite" href="#src-3">S3</a></td><td><code>globals.css:1</code></td><td><span class="sev low">Low</span></td><td>1 h</td></tr>
-    </table>
-  </div>
-  <div class="callout warn"><strong>Risk:</strong> step 3 touches 143 places. Do it in two passes: first add the new tokens as aliases of <code>--primary</code> (no visual change), then change their values one by one.</div>
 </section>
 
 <section id="limits">
