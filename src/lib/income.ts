@@ -227,31 +227,89 @@ export interface MonthIncomeItem {
   total: number;
 }
 
-/** Total income received within [start, end] (inclusive YYYY-MM-DD), split into recurring and one-time income. */
-export function getRangeIncome(start: string, end: string, incomes: readonly Income[]) {
+/** A real income payment from the ledger (kind income): written from a schedule once its payday passed. */
+export interface IncomeRecord {
+  amount: number;
+  date: string; // YYYY-MM-DD, the paid day
+  incomeId?: string | null; // null once its schedule is deleted
+}
+
+/**
+ * Income within [start, end] (inclusive YYYY-MM-DD), split into recurring and one-time income, and into
+ * received (paid up to `today`) and expected (paid after it).
+ *
+ * With `received` (the ledger's income rows), the past comes from those rows: an edited amount, a moved
+ * date or a deleted payment counts as it is stored, and editing or deleting a schedule never changes it.
+ * Only paydays after `today` are projected from the schedules. Without it, every payday is projected from
+ * the schedules (the server's MCP summaries still use this path).
+ */
+export function getRangeIncome(
+  start: string,
+  end: string,
+  incomes: readonly Income[],
+  received?: readonly IncomeRecord[],
+  today: string = format(new Date(), 'yyyy-MM-dd'),
+) {
   const items: MonthIncomeItem[] = [];
   let recurringCents = 0;
   let oneTimeCents = 0;
+  let receivedCents = 0;
+  const tomorrow = dateString(toUtc(today) + DAY_MS);
+  const futureStart = start > tomorrow ? start : tomorrow;
+  const byId = new Map(incomes.map(income => [income.id, income]));
+  const recordsOf = new Map<string, { count: number; cents: number }>();
+
+  if (received) {
+    for (const record of received) {
+      if (record.date < start || record.date > end) continue;
+      const cents = Math.round(record.amount * 100);
+      receivedCents += cents;
+      const schedule = record.incomeId ? byId.get(record.incomeId) : undefined;
+      // A payment whose schedule was deleted has no frequency left; it counts as one-time.
+      if (schedule && schedule.frequency !== 'once') recurringCents += cents;
+      else oneTimeCents += cents;
+      if (schedule) {
+        const entry = recordsOf.get(schedule.id) ?? { count: 0, cents: 0 };
+        recordsOf.set(schedule.id, { count: entry.count + 1, cents: entry.cents + cents });
+      }
+    }
+  }
+
   for (const income of incomes) {
-    const occurrences = countIncomeOccurrences(income, start, end);
+    const perPayday = Math.round(income.amount * 100);
+    const past = received
+      ? recordsOf.get(income.id) ?? { count: 0, cents: 0 }
+      : (() => {
+        const count = today < start ? 0 : countIncomeOccurrences(income, start, end < today ? end : today);
+        return { count, cents: count * perPayday };
+      })();
+    if (!received) receivedCents += past.cents;
+    const futureCount = futureStart > end ? 0 : countIncomeOccurrences(income, futureStart, end);
+    const futureCents = futureCount * perPayday;
+    if (!received) {
+      if (income.frequency === 'once') oneTimeCents += past.cents;
+      else recurringCents += past.cents;
+    }
+    if (income.frequency === 'once') oneTimeCents += futureCents;
+    else recurringCents += futureCents;
+    const occurrences = past.count + futureCount;
     if (occurrences === 0) continue;
-    const cents = Math.round(income.amount * 100) * occurrences;
-    if (income.frequency === 'once') oneTimeCents += cents;
-    else recurringCents += cents;
-    items.push({ income, occurrences, total: cents / 100 });
+    items.push({ income, occurrences, total: (past.cents + futureCents) / 100 });
   }
   return {
     recurringIncome: recurringCents / 100,
     oneTimeIncome: oneTimeCents / 100,
     totalIncome: (recurringCents + oneTimeCents) / 100,
+    receivedIncome: receivedCents / 100,
+    expectedIncome: (recurringCents + oneTimeCents - receivedCents) / 100,
     items,
   };
 }
 
 /** Total income received in a calendar month (YYYY-MM), split into recurring and one-time income. */
-export function getMonthIncome(month: string, incomes: readonly Income[]) {
+export function getMonthIncome(month: string, incomes: readonly Income[], received?: readonly IncomeRecord[], today?: string) {
   const { start, end } = monthRange(month);
-  return getRangeIncome(start, end, incomes);
+  return getRangeIncome(start, end, incomes, received, today);
 }
 
 export function describeIncomeSchedule(income: IncomeSchedule): string {
@@ -262,4 +320,30 @@ export function describeIncomeSchedule(income: IncomeSchedule): string {
   if (income.frequency === 'semimonthly' && income.semimonthlyDays) label = `Twice a month (${income.semimonthlyDays.join(' and ')})`;
   if (incomeWeekendShift(income)) label += ', Friday if weekend';
   return income.endDate ? `${label} · ${income.startDate} to ${income.endDate}` : `${label} · from ${income.startDate}`;
+}
+
+/** A payday that has not come yet, projected from an income schedule. */
+export interface ExpectedPayday {
+  incomeId: string;
+  source: string;
+  name: string;
+  amount: number;
+  date: string; // YYYY-MM-DD, the day it will be paid (after any weekend shift)
+}
+
+/** Paydays within [from, to] (inclusive YYYY-MM-DD) that are paid after `today`, sorted by date. Earlier ones are ledger rows. */
+export function expectedPaydays(
+  incomes: readonly Income[],
+  from: string,
+  to: string,
+  today: string = format(new Date(), 'yyyy-MM-dd'),
+): ExpectedPayday[] {
+  const tomorrow = dateString(toUtc(today) + DAY_MS);
+  const start = from > tomorrow ? from : tomorrow;
+  if (start > to) return [];
+  return incomes
+    .flatMap(income => incomePaydays(income, start, to).map(({ paid }) => ({
+      incomeId: income.id, source: income.source, name: income.name, amount: income.amount, date: paid,
+    })))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.source.localeCompare(b.source));
 }

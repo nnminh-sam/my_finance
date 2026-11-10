@@ -5,8 +5,11 @@ import { format } from 'date-fns';
 import { useDialog } from '../contexts/DialogContext';
 import { getSpendingsForDate, getTotalForDate, formatCompactSpending } from '../lib/spendings';
 import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodIncome } from '../lib/periods';
+import { expectedPaydays } from '../lib/income';
+import { IncomeRecordSheet } from './IncomeRecordSheet';
 import {
   ArrowDown,
+  ArrowDownLeft,
   ArrowUp,
   Briefcase,
   Car,
@@ -36,7 +39,7 @@ import { useRouter } from 'next/navigation';
 import { pages } from '../lib/pages';
 import { useSettings } from '../contexts/SettingsContext';
 import { useFinance } from '../contexts/FinanceContext';
-import type { Spending } from '../types';
+import type { Spending, Transaction } from '../types';
 import { errorMessage } from '../services/auth';
 import '../styles/ExpenseForm.css';
 
@@ -79,14 +82,25 @@ export const DayDetails: React.FC<DayDetailsProps> = (props) => (
 
 const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpense, onEditExpense }) => {
   const { settings } = useSettings();
-  const { spendings, incomes, plans, deleteSpending, projectedBetween, setPlanException, clearPlanException, completePlanOccurrence } = useFinance();
+  const { spendings, incomes, received, plans, deleteSpending, deleteReceived, projectedBetween, setPlanException, clearPlanException, completePlanOccurrence } = useFinance();
   const router = useRouter();
   const { confirm } = useDialog();
   const daySpendings = getSpendingsForDate(date, spendings);
   const totalSpent = getTotalForDate(date, spendings);
   const dayKey = format(date, 'yyyy-MM-dd');
-  // Income follows Show by: the calendar month, or the pay period that contains the day.
-  const { totalIncome } = viewPeriodIncome(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, dayKey);
+  // Money received on this day, and paydays on it that have not come yet.
+  const dayReceived = received.filter(record => record.date === dayKey).sort((a, b) => a.time.localeCompare(b.time));
+  const totalReceived = dayReceived.reduce((sum, record) => sum + record.amount, 0);
+  const dayExpected = expectedPaydays(incomes, dayKey, dayKey);
+  // The period line follows Show by: the calendar month, or the pay period that contains the day.
+  const showBy = settings.showBy ?? DEFAULT_SHOW_BY;
+  const periodIncome = viewPeriodIncome(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, showBy, incomes, dayKey, received);
+  // One list in time order: a payment is recorded at the start of its day, so it comes first.
+  const dayRows: ({ kind: 'expense'; item: Spending } | { kind: 'income'; item: Transaction })[] = [
+    ...dayReceived.map(item => ({ kind: 'income' as const, item })),
+    ...daySpendings.map(item => ({ kind: 'expense' as const, item })),
+  ].sort((a, b) => a.item.time.localeCompare(b.item.time));
+  const [editingReceived, setEditingReceived] = useState<Transaction | null>(null);
   const planned = projectedBetween(dayKey, dayKey);
   const plannedTotal = planned.reduce((sum, item) => sum + item.amount, 0);
   // Skipped days are hidden from projections, so list them here to allow undoing.
@@ -158,6 +172,31 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
     }
   };
 
+  const removeReceived = async (record: Transaction) => {
+    if (mutationLock.current) return;
+    const label = record.description || record.category;
+    const confirmed = await confirm({
+      title: 'Delete this payment?',
+      message: `${label} (${record.amount.toLocaleString('vi-VN')} ₫) will be removed. The schedule keeps its other paydays.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!confirmed || mutationLock.current) return;
+    mutationLock.current = true;
+    setDeletingId(record.id);
+    setError(null);
+    setNotice('');
+    try {
+      await deleteReceived(record.id);
+      setNotice(`${label} deleted.`);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      mutationLock.current = false;
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="day-details animate-slide-up hide-scrollbar">
       <div className="day-details-inner">
@@ -202,12 +241,12 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
 
             <div className="day-summary-col">
               <div className="day-summary-label-row">
-                <span className="day-summary-label">Total Income</span>
+                <span className="day-summary-label">Received</span>
                 <ArrowUp size={14} className="day-summary-arrow is-income" aria-hidden="true" />
               </div>
               <div className="day-summary-value is-income">
-                <span className="hide-mobile">{totalIncome.toLocaleString('vi-VN')} ₫</span>
-                <span className="show-mobile">{formatCompactSpending(totalIncome)}</span>
+                <span className="hide-mobile">{totalReceived > 0 ? '+' : ''}{totalReceived.toLocaleString('vi-VN')} ₫</span>
+                <span className="show-mobile">{totalReceived > 0 ? '+' : ''}{formatCompactSpending(totalReceived)}</span>
               </div>
             </div>
 
@@ -224,6 +263,13 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
               </div>
             )}
           </div>
+          <p className="day-summary-period">
+            <ArrowDownLeft size={13} aria-hidden="true" />
+            <span>{showBy === 'pay_cycle' ? 'This pay cycle' : format(date, 'MMMM')}</span>
+            <b>+{periodIncome.receivedIncome.toLocaleString('vi-VN')} ₫</b>
+            <span>received</span>
+            {periodIncome.expectedIncome > 0 && <span className="is-expected">· ~{periodIncome.expectedIncome.toLocaleString('vi-VN')} ₫ expected</span>}
+          </p>
         </section>
 
         {error && <p className="expense-error" role="alert">{error}</p>}
@@ -233,13 +279,60 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
         <section className="day-tx-section" aria-busy={busy}>
           <h3 className="day-tx-section-label">Transactions</h3>
 
-          {daySpendings.length === 0 ? (
+          {dayRows.length === 0 ? (
             <div className="day-tx-card day-tx-empty glass">
-              No spending recorded for this day.
+              Nothing in or out on this day.
             </div>
           ) : (
             <div className="day-tx-card glass">
-              {daySpendings.map((spending) => {
+              {dayRows.map((row) => {
+                if (row.kind === 'income') {
+                  const record = row.item;
+                  const label = record.description || record.category;
+                  return (
+                    <div
+                      key={record.id}
+                      className="day-tx-row is-income"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Edit payment ${label}`}
+                      onClick={() => { if (!busy) setEditingReceived(record); }}
+                      onKeyDown={(event) => {
+                        if ((event.key === 'Enter' || event.key === ' ') && !busy) {
+                          event.preventDefault();
+                          setEditingReceived(record);
+                        }
+                      }}
+                    >
+                      <div className="day-tx-icon-circle is-income" aria-hidden="true"><ArrowDownLeft size={18} /></div>
+                      <div className="day-tx-info">
+                        <span className="day-tx-title">{label}</span>
+                        <div className="day-tx-sub">
+                          <span className="day-tx-repeat-badge is-income">{record.category}</span>
+                        </div>
+                      </div>
+                      <div className="day-tx-right">
+                        <span className="day-tx-amount is-income">
+                          <span className="hide-mobile">+{record.amount.toLocaleString('vi-VN')} ₫</span>
+                          <span className="show-mobile">+{formatCompactSpending(record.amount)}</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="day-tx-delete-btn"
+                          aria-label={`Delete payment ${label}`}
+                          disabled={busy}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void removeReceived(record);
+                          }}
+                        >
+                          <Trash2 size={15} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                const spending = row.item;
                 const category = settings.categories.find(item => item.id === spending.category);
                 const categoryColor = category?.color ?? 'var(--primary)';
                 const IconComp = (category && ICONS[category.icon as keyof typeof ICONS]) || CircleDollarSign;
@@ -310,11 +403,35 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
           )}
         </section>
 
-        {(planned.length > 0 || skipped.length > 0) && (
+        {(planned.length > 0 || skipped.length > 0 || dayExpected.length > 0) && (
           <section className="day-tx-section" aria-busy={busy} aria-labelledby="day-planned-heading">
             <h3 id="day-planned-heading" className="day-tx-section-label">Planned</h3>
             <p className="day-planned-help">Each one becomes a real transaction once its time passes. Skip it or change the amount if this day is different.</p>
             <div className="day-tx-card glass">
+              {dayExpected.map((payday) => (
+                <div key={`payday-${payday.incomeId}`} className="day-tx-row is-planned is-income">
+                  <div className="day-tx-icon-circle is-income" aria-hidden="true"><ArrowDownLeft size={18} /></div>
+                  <div className="day-tx-info">
+                    <span className="day-tx-title">{payday.name ? `${payday.source} · ${payday.name}` : payday.source}</span>
+                    <div className="day-tx-sub">
+                      <span className="day-tx-repeat-badge is-income" title="Income expected, not received yet">
+                        <CalendarRange size={11} aria-hidden="true" />
+                        <span>Expected payday</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="day-tx-right">
+                    <span className="day-tx-amount is-income is-expected">
+                      <span className="hide-mobile">~+{payday.amount.toLocaleString('vi-VN')} ₫</span>
+                      <span className="show-mobile">~+{formatCompactSpending(payday.amount)}</span>
+                    </span>
+                    <button type="button" className="day-planned-btn" disabled={busy} aria-label={`Edit the ${payday.source} income schedule`}
+                      onClick={() => router.push(`${pages.profile.path}#income`)}>
+                      <Settings2 size={13} aria-hidden="true" /><span className="hide-mobile">Schedule</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
               {planned.map((occurrence) => {
                 const category = settings.categories.find(item => item.id === occurrence.category);
                 const categoryColor = category?.color ?? 'var(--primary)';
@@ -403,6 +520,13 @@ const DayDetailsContent: React.FC<DayDetailsProps> = ({ date, onBack, onAddExpen
           </section>
         )}
       </div>
+      {editingReceived && (
+        <IncomeRecordSheet
+          record={editingReceived}
+          onClose={() => setEditingReceived(null)}
+          onDone={(message) => { setEditingReceived(null); setError(null); setNotice(message); }}
+        />
+      )}
     </div>
   );
 };

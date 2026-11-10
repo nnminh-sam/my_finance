@@ -1,7 +1,7 @@
 import { authenticatedFetch } from './auth';
 import type { BudgetPeriodSetting, ShowBy } from '../lib/periods';
 import type { PlanPeriodSummary } from '../lib/periodSummary';
-import type { Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, RepeatRule, RepeatRuleInput, Spending, UserSettings } from '../types';
+import type { Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, RepeatRule, RepeatRuleInput, Spending, Transaction, TransactionInput, TransactionKind, UserSettings } from '../types';
 
 export type FinanceSettings = Pick<UserSettings, 'avatar' | 'categories'> & { timezone?: string; budgetPeriod?: BudgetPeriodSetting; showBy?: ShowBy };
 /** A settings change: a budgetPeriod patch may name only the keys it changes (null clears the paycheck income). */
@@ -55,6 +55,33 @@ export function createFinanceApi(fetcher: Fetcher = authenticatedFetch) {
         }
       } while (cursor);
       return [...records.values()];
+    },
+    /** Real money movements of one kind (or both), optionally within a date range. */
+    async getTransactions(query?: { kind?: TransactionKind; startDate?: string; endDate?: string }): Promise<Transaction[]> {
+      const records = new Map<string, Transaction>();
+      const visited = new Set<string>();
+      let cursor: string | null = null;
+      do {
+        const params = new URLSearchParams({ limit: '500' });
+        if (query?.kind) params.set('kind', query.kind);
+        if (query?.startDate) params.set('startDate', query.startDate);
+        if (query?.endDate) params.set('endDate', query.endDate);
+        if (cursor) params.set('cursor', cursor);
+        const page = await request<{ transactions: Transaction[]; nextCursor: string | null }>(`/transactions?${params}`);
+        for (const transaction of page.transactions) records.set(transaction.id, transaction);
+        cursor = page.nextCursor;
+        if (cursor) {
+          if (visited.has(cursor)) throw new Error('The server returned a repeated finance page. Please reload.');
+          visited.add(cursor);
+        }
+      } while (cursor);
+      return [...records.values()];
+    },
+    async updateTransaction(id: string, input: TransactionInput): Promise<Transaction> {
+      return (await request<{ transaction: Transaction }>(`/transactions/${encodeURIComponent(id)}`, json('PUT', input))).transaction;
+    },
+    async deleteTransaction(id: string): Promise<void> {
+      await request<void>(`/transactions/${encodeURIComponent(id)}`, { method: 'DELETE' });
     },
     async getIncomes(): Promise<Income[]> {
       const records = new Map<string, Income>();

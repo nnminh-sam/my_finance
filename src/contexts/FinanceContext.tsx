@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { errorMessage, getAuthState } from '../services/auth';
 import { createFinanceApi } from '../services/finance';
 import type { FinanceSettings, FinanceSettingsUpdate, SpendingInput } from '../services/finance';
-import type { Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, Spending } from '../types';
+import type { Income, IncomeInput, Plan, PlanExceptionInput, PlanInput, Spending, Transaction, TransactionInput } from '../types';
 import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY } from '../lib/periods';
 import { isValidTimeZone, projectPlans, type PlanOccurrence } from '../lib/plans';
 
@@ -13,6 +13,8 @@ interface FinanceContextValue {
   settings: FinanceSettings;
   spendings: Spending[];
   incomes: Income[];
+  /** Income actually received: ledger rows of kind income, written from the schedules once each payday passed. */
+  received: Transaction[];
   plans: Plan[];
   loading: boolean;
   hasLoaded: boolean;
@@ -28,6 +30,10 @@ interface FinanceContextValue {
   createIncome: (input: IncomeInput) => Promise<void>;
   updateIncome: (id: string, input: IncomeInput) => Promise<void>;
   deleteIncome: (id: string) => Promise<void>;
+  /** Corrects one received payment (late, different amount); its schedule and other paydays stay as they are. */
+  updateReceived: (id: string, input: TransactionInput) => Promise<void>;
+  /** Removes one received payment; it is not written again. */
+  deleteReceived: (id: string) => Promise<void>;
   /** Planned occurrences in [from, to] (YYYY-MM-DD) that are not real spendings yet. */
   projectedBetween: (from: string, to: string) => PlanOccurrence[];
   createPlan: (input: PlanInput) => Promise<Plan>;
@@ -50,6 +56,7 @@ export function FinanceProvider({ userId, children }: { userId: string; children
   const [settings, setSettings] = useState<FinanceSettings>(emptySettings);
   const [spendings, setSpendings] = useState<Spending[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
+  const [received, setReceived] = useState<Transaction[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const watermarks = useRef<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -103,9 +110,11 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     reloadFlight.current = serialize(async () => {
       if (!loaded.current) setLoading(true);
       try {
+        // Incomes load first: listing them writes every passed payday, which the income rows then include.
         const [loadedSettings, nextIncomes, nextPlans] = await Promise.all([
           api.getSettings(), api.getIncomes(), api.getPlans(),
         ]);
+        const nextReceived = await api.getTransactions({ kind: 'income' });
         if (!currentAccount()) return;
         // Plans become real at their local time, so the server needs this device's zone.
         let nextSettings = loadedSettings;
@@ -124,6 +133,7 @@ export function FinanceProvider({ userId, children }: { userId: string; children
         if (!currentAccount()) return;
         setSettings(nextSettings);
         setIncomes(nextIncomes);
+        setReceived(nextReceived);
         setPlans(nextPlans);
         loaded.current = true;
         setHasLoaded(true);
@@ -180,20 +190,42 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     if (currentAccount()) setSpendings(records => records.filter(record => record.id !== id));
   }), [serialize, currentAccount]);
 
+  // A schedule change can write past paydays (a new income) or rewrite a one-time payment, so the
+  // received rows are reloaded after each one. A failed reload keeps the old rows until the next load.
+  const refreshReceived = useCallback(async () => {
+    const fresh = await api.getTransactions({ kind: 'income' }).catch(() => null);
+    if (fresh && currentAccount()) setReceived(fresh);
+  }, [currentAccount]);
+
   const createIncome = useCallback((input: IncomeInput) => serialize(async () => {
     const saved = await api.createIncome(input);
-    if (currentAccount()) setIncomes(records => [...records.filter(record => record.id !== saved.id), saved]);
-  }), [serialize, currentAccount]);
+    if (!currentAccount()) return;
+    setIncomes(records => [...records.filter(record => record.id !== saved.id), saved]);
+    await refreshReceived();
+  }), [serialize, currentAccount, refreshReceived]);
 
   const updateIncome = useCallback((id: string, input: IncomeInput) => serialize(async () => {
     const saved = await api.updateIncome(id, input);
-    if (currentAccount()) setIncomes(records => [...records.filter(record => record.id !== saved.id), saved]);
+    if (!currentAccount()) return;
+    setIncomes(records => [...records.filter(record => record.id !== saved.id), saved]);
+    await refreshReceived();
+  }), [serialize, currentAccount, refreshReceived]);
+
+  const updateReceived = useCallback((id: string, input: TransactionInput) => serialize(async () => {
+    const saved = await api.updateTransaction(id, input);
+    if (currentAccount()) setReceived(records => records.map(record => record.id === saved.id ? saved : record));
+  }), [serialize, currentAccount]);
+
+  const deleteReceived = useCallback((id: string) => serialize(async () => {
+    await api.deleteTransaction(id);
+    if (currentAccount()) setReceived(records => records.filter(record => record.id !== id));
   }), [serialize, currentAccount]);
 
   const deleteIncome = useCallback((id: string) => serialize(async () => {
     await api.deleteIncome(id);
     if (!currentAccount()) return;
     setIncomes(records => records.filter(record => record.id !== id));
+    await refreshReceived();
     // The server resets the budget period when its paycheck income is deleted. If the refresh fails,
     // apply the same reset locally so the page never shows a paycheck period without an income.
     const fresh = await api.getSettings().catch(() => null);
@@ -202,7 +234,7 @@ export function FinanceProvider({ userId, children }: { userId: string; children
     else setSettings(current => current.budgetPeriod?.mode === 'paycheck' && current.budgetPeriod.paycheckIncomeId === id
       ? { ...current, budgetPeriod: { ...current.budgetPeriod, mode: 'calendar', paycheckIncomeId: null } }
       : current);
-  }), [serialize, currentAccount]);
+  }), [serialize, currentAccount, refreshReceived]);
 
   const realPlanKeys = useMemo(() => new Set(
     spendings.filter(spending => spending.planId && spending.planDate).map(spending => `${spending.planId}|${spending.planDate}`),
@@ -264,10 +296,10 @@ export function FinanceProvider({ userId, children }: { userId: string; children
 
   return (
     <FinanceContext.Provider value={{
-      settings, spendings, incomes, plans, loading, hasLoaded, error,
+      settings, spendings, incomes, received, plans, loading, hasLoaded, error,
       projectedBetween, createPlan, updatePlan, splitPlan, deletePlan, setPlanException, clearPlanException, completePlanOccurrence,
       reload, fetchWeeksSpendings, updateSettings, mergeCategory, createSpending, updateSpending, deleteSpending,
-      createIncome, updateIncome, deleteIncome
+      createIncome, updateIncome, deleteIncome, updateReceived, deleteReceived
     }}>
       {children}
     </FinanceContext.Provider>

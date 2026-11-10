@@ -458,3 +458,35 @@
   }
 }
 :root { --calendar-side-width: 320px; }
+
+/* Income on its day: a green line under the spend total ("~" and faded when the payday is still to come).
+   Phones show only a dot by the date: filled when received, a ring when expected. Never part of the heat fill. */
+.calendar-day-income {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  margin-top: 2px;
+  animation: calendarFillLeftToRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.calendar-day-income-amount {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--success);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.calendar-day-income-amount.is-expected { opacity: 0.6; font-weight: 600; }
+.calendar-day-income-dot {
+  display: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  flex: none;
+}
+.calendar-day-income-dot.is-expected { background: transparent; box-shadow: inset 0 0 0 1.5px var(--success); opacity: 0.75; }
+@media (max-width: 768px) {
+  .calendar-day-income { display: none; }
+  .calendar-day-income-dot { display: inline-block; }
+}

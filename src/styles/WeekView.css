@@ -304,3 +304,9 @@
   color: var(--primary);
   font-style: italic;
 }
+
+/* Income on its day: green and signed "+"; an expected payday is faded and prefixed "~". */
+.week-feed-tx-badge.is-income { background-color: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.week-feed-tx-row.is-income .week-feed-tx-amount { color: var(--success); }
+.week-feed-tx-row.is-income.is-planned .week-feed-tx-badge { border-color: var(--success); }
+.week-feed-tx-row.is-income.is-planned .week-feed-tx-amount { color: var(--success); opacity: .7; }

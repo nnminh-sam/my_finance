@@ -36,7 +36,7 @@ import { twMerge } from "tailwind-merge";
 import { useSettings } from "../contexts/SettingsContext";
 import { getHeatmapColor } from "../lib/heatmap";
 import Link from "next/link";
-import { getRangeIncome } from "../lib/income";
+import { expectedPaydays, getRangeIncome } from "../lib/income";
 import { dismissPayCycleHint, shouldShowPayCycleHint } from "../lib/legacyPayday";
 import { DEFAULT_BUDGET_PERIOD, periodOf, periodRangeLabel, periodsBetween, type BudgetPeriod, type BudgetPeriodSetting } from "../lib/periods";
 import { addDays } from "../lib/plans";
@@ -74,7 +74,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onDateClick,
 }) => {
   const { settings } = useSettings();
-  const { spendings, incomes, hasLoaded, fetchWeeksSpendings, projectedBetween } = useFinance();
+  const { spendings, incomes, received, hasLoaded, fetchWeeksSpendings, projectedBetween } = useFinance();
   const { activeDate: shellActiveDate, calendarBasis: basis } = useFinanceShell();
   const { user } = useAuth();
   const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
@@ -368,6 +368,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   // The page in view is the period the overview sums. Resolving its key (the page's first day) keeps this
   // right for one render while pages are rebuilt for another basis.
   const todayKey = todayString();
+  const receivedByDate = useMemo(() => {
+    const byDate = new Map<string, number>();
+    for (const record of received) byDate.set(record.date, (byDate.get(record.date) ?? 0) + record.amount);
+    return byDate;
+  }, [received]);
+  const expectedByDate = useMemo(() => {
+    const byDate = new Map<string, number>();
+    if (!allDays.length) return byDate;
+    const items = expectedPaydays(incomes, format(allDays[0], 'yyyy-MM-dd'), format(allDays[allDays.length - 1], 'yyyy-MM-dd'), todayKey);
+    for (const item of items) byDate.set(item.date, (byDate.get(item.date) ?? 0) + item.amount);
+    return byDate;
+  }, [allDays, incomes, todayKey]);
   const period = useMemo(() => resolvePage(activePageKey), [resolvePage, activePageKey]);
   // The active day: the day the header navigated to when it is on this page, else today or the page's first day.
   const shellDay = shellActiveDate ? format(shellActiveDate, "yyyy-MM-dd") : null;
@@ -379,7 +391,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     [period],
   );
 
-  const { recurringIncome, oneTimeIncome, totalIncome } = getRangeIncome(period.start, period.end, incomes);
+  const { recurringIncome, oneTimeIncome, totalIncome } = getRangeIncome(period.start, period.end, incomes, received);
 
   const totalSpending = periodDays.reduce((sum, day) => sum + getTotalForDate(day, spendings), 0);
   // Planned occurrences in this period are projected by date range, so a period
@@ -746,6 +758,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     const topSpendings = showDetails ? getTopSpendingsForDate(day, 5, spendings) : [];
                     const plannedItems = showTotals ? plannedByDate.get(dayKey) ?? [] : [];
                     const plannedTotal = plannedItems.reduce((sum, item) => sum + item.amount, 0);
+                    // Money in stays out of the heat fill, so payday never reads as the most expensive day.
+                    const incomeIn = showTotals ? receivedByDate.get(dayKey) ?? 0 : 0;
+                    const incomeExpected = showTotals ? expectedByDate.get(dayKey) ?? 0 : 0;
 
                     return (
                       <div
@@ -798,7 +813,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                               ~{plannedTotal.toLocaleString("vi-VN")} ₫
                             </span>
                           )}
+                          {(incomeIn > 0 || incomeExpected > 0) && (
+                            <span
+                              className={cn("calendar-day-income-dot", incomeIn === 0 && "is-expected")}
+                              title={incomeIn > 0 ? "Money received" : "Payday expected"}
+                            />
+                          )}
                         </div>
+
+                        {(incomeIn > 0 || incomeExpected > 0) && (
+                          <div className="calendar-day-income">
+                            {incomeIn > 0 && (
+                              <span className="calendar-day-income-amount" title="Received">
+                                +{incomeIn.toLocaleString("vi-VN")} ₫
+                              </span>
+                            )}
+                            {incomeExpected > 0 && (
+                              <span className="calendar-day-income-amount is-expected" title="Payday expected, not received yet">
+                                ~+{incomeExpected.toLocaleString("vi-VN")} ₫
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {showTotals && total > 0 && (
                           <div className="calendar-day-total-mobile">

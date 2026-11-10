@@ -52,7 +52,7 @@ function defaultStartDate(month: string): string {
 }
 
 export function IncomeSources({ disabled, onEditorStateChange, initialMonth, initiallyAdding = false, restrictToMonth = false }: Props) {
-  const { incomes, createIncome, updateIncome, deleteIncome } = useFinance();
+  const { incomes, received, createIncome, updateIncome, deleteIncome } = useFinance();
   const { confirm } = useDialog();
   const [selectedMonth, setSelectedMonth] = useState(() => initialMonth ?? incomeMonth(new Date()));
   const [editor, setEditor] = useState<Editor | null>(() => {
@@ -70,7 +70,7 @@ export function IncomeSources({ disabled, onEditorStateChange, initialMonth, ini
   const dirty = editor !== null && isIncomeDraftDirty(editor.draft, editor.snapshot);
   const busy = operation !== null;
   const blocked = disabled || busy;
-  const breakdown = getMonthIncome(selectedMonth, incomes);
+  const breakdown = getMonthIncome(selectedMonth, incomes, received);
   const monthLabel = format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy');
   const contribution = new Map(breakdown.items.map(item => [item.income.id, item]));
   // Income received in the viewed month first, then the rest; each group by source and name.
