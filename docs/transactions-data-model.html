@@ -1,0 +1,1063 @@
+<!doctype html>
+<html lang="en" data-haise="doc" data-haise-version="2.1.0">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One ledger for money in and out</title>
+<script>
+/* haise: apply the saved theme before first paint (no flash) */
+(function(){try{var t=localStorage.getItem('haise.theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
+<style id="haise-shell-css">
+/* ===== haise-doc shell v2.1.0 — do not edit per document ===== */
+:root{
+  --bg:#f7f6f2; --panel:#ffffff; --ink:#1d1d1b; --muted:#5f5e58; --line:#dedcd3;
+  --accent:#1f5fa8; --accent-soft:#e6eef8; --ok:#1e7a46; --ok-soft:#e3f2e8;
+  --bad:#b3261e; --bad-soft:#fbe7e5; --warn:#8a5a00; --warn-soft:#fdf1d8;
+  --info:#5b4a9e; --info-soft:#eeeaf8;
+  --code:#f0eee7; --hit:#ffe58a; --hit-cur:#ffb84d;
+  --c1:#1f5fa8; --c2:#b5541b; --c3:#1e7a46; --c4:#6b4fa0; --c5:#8a5a00;
+  --topbar-h:54px; --nav-w:292px;
+  --fig-label:"Figure"; --tbl-label:"Table";
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#171716; --panel:#212120; --ink:#ecebe6; --muted:#a6a49c; --line:#3a3936;
+    --accent:#7fb0ea; --accent-soft:#1f2c3b; --ok:#7fcf9c; --ok-soft:#1d3226;
+    --bad:#f0928a; --bad-soft:#3b2120; --warn:#e9c06a; --warn-soft:#3a2f17;
+    --info:#b9a2e6; --info-soft:#2a2338;
+    --code:#2b2b29; --hit:#6b5a12; --hit-cur:#a8671a;
+    --c1:#7fb0ea; --c2:#f0a070; --c3:#7fcf9c; --c4:#b9a2e6; --c5:#e9c06a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#171716; --panel:#212120; --ink:#ecebe6; --muted:#a6a49c; --line:#3a3936;
+  --accent:#7fb0ea; --accent-soft:#1f2c3b; --ok:#7fcf9c; --ok-soft:#1d3226;
+  --bad:#f0928a; --bad-soft:#3b2120; --warn:#e9c06a; --warn-soft:#3a2f17;
+  --info:#b9a2e6; --info-soft:#2a2338;
+  --code:#2b2b29; --hit:#6b5a12; --hit-cur:#a8671a;
+  --c1:#7fb0ea; --c2:#f0a070; --c3:#7fcf9c; --c4:#b9a2e6; --c5:#e9c06a;
+}
+:root:lang(vi){ --fig-label:"Hình"; --tbl-label:"Bảng"; }
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.7 "Segoe UI","Hiragino Sans","Noto Sans JP","Noto Sans",system-ui,sans-serif}
+a{color:var(--accent)}
+[id]{scroll-margin-top:calc(var(--topbar-h) + 14px)}
+
+/* --- progress + top bar --- */
+.progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--accent);z-index:60}
+.topbar{position:sticky;top:0;z-index:50;height:var(--topbar-h);display:flex;align-items:center;gap:10px;
+  padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.topbar .doc-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto}
+.iconbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;
+  border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;font-size:16px;line-height:1}
+.iconbtn:hover{background:var(--code)}
+.iconbtn svg{width:18px;height:18px;margin:0}
+.search{flex:0 1 420px;display:flex;align-items:center;gap:6px;min-width:0}
+.search .box{position:relative;flex:1;min-width:0}
+.search input{width:100%;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);
+  padding:0 10px 0 32px;font:inherit;font-size:.92rem}
+.search input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.search .box svg{position:absolute;left:9px;top:9px;width:16px;height:16px;margin:0;color:var(--muted)}
+.search .count{font-size:.8rem;color:var(--muted);min-width:64px;text-align:center;white-space:nowrap}
+.search .iconbtn{width:30px;height:30px;font-size:13px}
+
+/* --- sidebar (table of contents) --- */
+.sidebar{position:fixed;top:var(--topbar-h);bottom:0;left:0;width:var(--nav-w);overflow-y:auto;z-index:40;
+  background:var(--panel);border-right:1px solid var(--line);padding:16px 10px 48px;transition:transform .2s ease}
+.sidebar h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 8px 8px}
+.toc ol{list-style:none;margin:0;padding:0}
+.toc ol ol{padding-left:14px;margin:2px 0 6px;border-left:1px solid var(--line);margin-left:12px}
+.toc a{display:flex;gap:6px;align-items:baseline;padding:4px 8px;border-radius:6px;color:var(--ink);
+  text-decoration:none;font-size:.9rem;line-height:1.4}
+.toc ol ol a{font-size:.84rem;color:var(--muted)}
+.toc a:hover{background:var(--code)}
+.toc a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.toc .num{color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
+.toc .badge{margin-left:auto;flex:none;font-size:.7rem;font-weight:700;padding:0 6px;border-radius:999px;
+  background:var(--hit);color:var(--ink)}
+.toc .badge:empty{display:none}
+.backdrop{display:none}
+.page{margin-left:var(--nav-w);transition:margin .2s ease}
+body.nav-collapsed .sidebar{transform:translateX(-100%)}
+body.nav-collapsed .page{margin-left:0}
+@media (max-width:960px){
+  .page{margin-left:0}
+  .sidebar{transform:translateX(-100%);box-shadow:4px 0 24px rgba(0,0,0,.18)}
+  body.nav-open .sidebar{transform:none}
+  body.nav-open .backdrop{display:block;position:fixed;inset:var(--topbar-h) 0 0 0;background:rgba(0,0,0,.35);z-index:35}
+  .topbar .doc-title{display:none}
+  .search{flex:1 1 auto}
+}
+
+/* --- document body --- */
+.wrap{max-width:920px;margin:0 auto;padding:28px 16px 96px}
+.doc-head{margin:0 0 24px}
+.doc-head .eyebrow{margin:0 0 4px;font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.doc-head h1{font-size:1.8rem;line-height:1.3;margin:0 0 8px}
+.doc-head .sub{color:var(--muted);margin:0 0 14px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
+.meta li{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:.85rem;min-width:0}
+.meta li b{color:var(--muted);font-weight:600;margin-right:4px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin:0 0 22px}
+section > h2{font-size:1.32rem;margin:0 0 12px;line-height:1.35}
+h3{font-size:1.07rem;margin:22px 0 8px}
+h4{font-size:1rem;margin:16px 0 6px}
+h2 .num,h3 .num{color:var(--muted);font-weight:600;margin-right:.4em;font-variant-numeric:tabular-nums}
+p{margin:8px 0}
+ul,ol{padding-left:22px}
+li{margin:3px 0}
+code,.mono{font-family:Consolas,"Cascadia Mono",Menlo,monospace;font-size:.88em;background:var(--code);padding:1px 5px;border-radius:4px}
+pre{background:var(--code);border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:.85rem;line-height:1.5;margin:10px 0}
+pre code{background:none;padding:0}
+p code,li code,td code,.card code{overflow-wrap:anywhere}
+.tbl{overflow-x:auto;margin:10px 0}
+table{width:100%;border-collapse:collapse;font-size:.93rem}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:var(--code);font-weight:600}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tr.hl td{background:var(--warn-soft)}
+.small{font-size:.86rem;color:var(--muted)}
+.good{color:var(--ok);font-weight:600} .badv{color:var(--bad);font-weight:600}
+hr{border:none;border-top:1px solid var(--line);margin:18px 0}
+
+/* translated keyword + original */
+strong.kw{font-weight:700}
+.orig{color:var(--muted);font-size:.94em;white-space:nowrap}
+
+/* verdict / callouts / tags */
+.verdict{border:2px solid var(--accent);background:var(--accent-soft);border-radius:12px;padding:14px 18px;margin:4px 0 14px}
+.verdict .label{display:block;font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.verdict p{margin:4px 0;font-size:1.06rem}
+.callout{border-left:4px solid var(--accent);background:var(--accent-soft);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0}
+.callout.ok{border-color:var(--ok);background:var(--ok-soft)}
+.callout.bad{border-color:var(--bad);background:var(--bad-soft)}
+.callout.warn{border-color:var(--warn);background:var(--warn-soft)}
+.callout.info{border-color:var(--info);background:var(--info-soft)}
+.callout > :first-child{margin-top:0} .callout > :last-child{margin-bottom:0}
+.tag{display:inline-block;font-size:.72rem;font-weight:700;padding:0 7px;border-radius:999px;border:1px solid currentColor;
+  margin-left:4px;vertical-align:1px;white-space:nowrap;line-height:1.6}
+.tag.sure{color:var(--ok)} .tag.infer{color:var(--warn)} .tag.open{color:var(--bad)}
+.sev{display:inline-block;font-size:.72rem;font-weight:700;padding:0 7px;border-radius:4px;white-space:nowrap}
+.sev.high{background:var(--bad-soft);color:var(--bad)} .sev.med{background:var(--warn-soft);color:var(--warn)} .sev.low{background:var(--code);color:var(--muted)}
+
+/* findings list */
+ol.findings{counter-reset:f;list-style:none;padding:0;margin:8px 0}
+ol.findings > li{counter-increment:f;position:relative;padding:8px 10px 8px 44px;border-bottom:1px dashed var(--line)}
+ol.findings > li:last-child{border-bottom:none}
+ol.findings > li::before{content:counter(f);position:absolute;left:8px;top:8px;width:26px;height:26px;border-radius:50%;
+  background:var(--accent);color:var(--panel);font-weight:700;font-size:.85rem;display:flex;align-items:center;justify-content:center}
+
+/* cards, grids, stat tiles, steps */
+.grid2,.grid3{display:grid;gap:14px;margin:10px 0}
+.grid2{grid-template-columns:1fr 1fr} .grid3{grid-template-columns:repeat(3,1fr)}
+.grid2>*,.grid3>*{min-width:0}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--panel)}
+.card h4{margin:0 0 6px}
+.card.ok{border-color:var(--ok)} .card.bad{border-color:var(--bad)} .card.warn{border-color:var(--warn)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:12px 0}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.stat .v{display:block;font-size:1.6rem;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.stat .k{display:block;font-size:.82rem;color:var(--muted)}
+.stat.ok .v{color:var(--ok)} .stat.bad .v{color:var(--bad)} .stat.warn .v{color:var(--warn)}
+ol.steps{list-style:none;padding:0;margin:10px 0;counter-reset:s}
+ol.steps > li{counter-increment:s;position:relative;padding:0 0 14px 40px;border-left:2px solid var(--line);margin-left:13px}
+ol.steps > li:last-child{border-left-color:transparent}
+ol.steps > li::before{content:counter(s);position:absolute;left:-14px;top:0;width:26px;height:26px;border-radius:50%;
+  background:var(--panel);border:2px solid var(--accent);color:var(--accent);font-weight:700;font-size:.82rem;
+  display:flex;align-items:center;justify-content:center}
+ol.steps > li.bad::before{border-color:var(--bad);color:var(--bad)}
+ol.steps > li.ok::before{border-color:var(--ok);color:var(--ok)}
+
+/* collapsible deep dives */
+details.more{border:1px solid var(--line);border-radius:10px;margin:12px 0;background:var(--panel)}
+details.more > summary{cursor:pointer;padding:9px 14px;font-weight:600;list-style:none}
+details.more > summary::-webkit-details-marker{display:none}
+details.more > summary::before{content:"▸";display:inline-block;width:1.1em;color:var(--muted);transition:transform .15s}
+details.more[open] > summary::before{transform:rotate(90deg)}
+details.more > .body{padding:2px 16px 12px}
+
+/* figures (diagrams, charts) */
+figure.fig{margin:16px 0;padding:12px 12px 8px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+figure.fig svg{max-width:100%;height:auto;display:block;margin:4px auto}
+figure.fig svg text{font-family:"Segoe UI","Noto Sans JP",sans-serif}
+main{counter-reset:fig tbl}
+figure.fig > figcaption{font-size:.86rem;color:var(--muted);margin-top:6px}
+figure.fig > figcaption::before{counter-increment:fig;content:var(--fig-label) " " counter(fig) " — ";font-weight:700;color:var(--ink)}
+.tbl > .cap{font-size:.86rem;color:var(--muted);margin:0 0 4px}
+.tbl > .cap::before{counter-increment:tbl;content:var(--tbl-label) " " counter(tbl) " — ";font-weight:700;color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:.82rem;color:var(--muted);margin:4px 0 0}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+figure.fig img{max-width:100%;height:auto;display:block}
+
+/* zoom viewer: click a figure image or diagram to open it full screen */
+.zoomable{cursor:zoom-in;transition:outline-color .15s}
+.zoomable:hover,.zoomable:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+.zoom-ov{position:fixed;inset:0;z-index:100;display:none;overflow:hidden;touch-action:none;cursor:grab;
+  background:color-mix(in srgb,var(--bg) 94%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.zoom-ov.on{display:block}
+.zoom-ov.drag{cursor:grabbing}
+.zoom-ov .zoom-item{position:absolute;left:0;top:0;max-width:none!important;max-height:none!important;margin:0!important;
+  border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 10px 40px rgb(0 0 0 / .3);
+  user-select:none;-webkit-user-drag:none;cursor:inherit}
+.zoom-bar{position:absolute;top:12px;right:12px;z-index:1;display:flex;align-items:center;gap:6px;padding:4px;
+  border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.zoom-bar .iconbtn{min-width:34px;height:34px;font-size:.95rem}
+.zoom-pct{min-width:52px;text-align:center;font-size:.82rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.zoom-cap{position:absolute;left:50%;bottom:12px;z-index:1;transform:translateX(-50%);width:max-content;max-width:min(920px,calc(100vw - 32px));
+  padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--muted);font-size:.85rem;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.zoom-cap:empty{display:none}
+.zoom-cap b{color:var(--ink)}
+
+/* citations */
+a.cite{font-size:.72em;font-weight:700;vertical-align:super;line-height:0;text-decoration:none;
+  padding:0 3px;border-radius:4px;background:var(--accent-soft);margin-left:1px;white-space:nowrap}
+a.cite:hover{text-decoration:underline}
+a.cite.broken{background:var(--bad-soft);color:var(--bad)}
+a.cite:target{outline:2px solid var(--accent)}
+ol.sources{list-style:none;padding:0;margin:8px 0}
+ol.sources > li{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 10px}
+ol.sources > li:target{outline:2px solid var(--accent)}
+.src-head{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}
+.src-id{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.src-title{font-weight:600}
+.src-type{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:0 6px;border-radius:4px;
+  background:var(--code);color:var(--muted)}
+.src-loc{font-size:.86rem;margin:4px 0;overflow-wrap:anywhere}
+blockquote.src-quote{margin:6px 0;padding:6px 12px;border-left:3px solid var(--line);background:var(--bg);font-size:.88rem;border-radius:0 6px 6px 0}
+blockquote.src-quote .tr{display:block;color:var(--muted);margin-top:4px}
+.src-note{font-size:.84rem;color:var(--muted)}
+.backrefs{font-size:.8rem;color:var(--muted);margin-top:4px}
+.backrefs a{margin-right:6px}
+
+/* search hits */
+mark.hit{background:var(--hit);color:inherit;border-radius:2px;padding:0 1px}
+mark.hit.cur{background:var(--hit-cur);outline:2px solid var(--warn)}
+
+footer.doc-foot{color:var(--muted);font-size:.85rem;margin-top:30px}
+@media (max-width:700px){
+  .grid2,.grid3{grid-template-columns:1fr}
+  section{padding:18px 16px}
+  .doc-head h1{font-size:1.5rem}
+}
+@media print{
+  .topbar,.sidebar,.backdrop,.progress,.zoom-ov{display:none!important}
+  .page{margin:0!important}
+  section{break-inside:avoid-page;border-color:#ccc}
+  details.more{border:none} details.more > .body{display:block}
+  mark.hit{background:none}
+}
+</style>
+</head>
+<body>
+<div class="progress" id="haise-progress"></div>
+
+<header class="topbar no-search">
+  <button class="iconbtn" id="haise-nav-btn" type="button" aria-controls="haise-sidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <div class="doc-title">One ledger for money in and out</div>
+  <div class="search" role="search">
+    <div class="box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="haise-q" type="search" autocomplete="off" spellcheck="false">
+    </div>
+    <span class="count" id="haise-count" aria-live="polite"></span>
+    <button class="iconbtn" id="haise-prev" type="button">▲</button>
+    <button class="iconbtn" id="haise-next" type="button">▼</button>
+  </div>
+  <button class="iconbtn" id="haise-reload" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+  </button>
+  <button class="iconbtn" id="haise-theme" type="button"></button>
+</header>
+
+<aside class="sidebar no-search" id="haise-sidebar">
+  <h2 id="haise-toc-label"></h2>
+  <nav class="toc" id="haise-toc"></nav>
+</aside>
+<div class="backdrop" id="haise-backdrop"></div>
+
+<div class="page">
+<main id="content" class="wrap">
+<!-- ===================== DOCUMENT CONTENT START ===================== -->
+<header class="doc-head">
+  <p class="eyebrow">Data model preview · before the fix</p>
+  <h1>One ledger for money in and out</h1>
+  <p class="sub">Entity diagrams of today’s schema and the proposed single transactions table, so you can review the shape before any migration is written.</p>
+  <ul class="meta">
+    <li><b>Updated</b>2026-11-10</li>
+    <li><b>Scope</b>my_finance @ ba5f190</li><li><b>Status</b>proposal, not built</li>
+  </ul>
+</header>
+
+<!-- The outline is chosen per document (references/writing-guide.md §1).
+     One top-level <section id="..."><h2>…</h2>…</section> per part, in reading order.
+     If the doc cites anything, the last section is <section id="sources"> with <ol class="sources">. -->
+
+<section id="answer">
+  <h2>What changes, in one picture</h2>
+  <div class="verdict">
+    <span class="label">Short answer</span>
+    <p>Spending has two layers: a <strong>rule</strong> (<code>finance_plans</code>) and the <strong>facts</strong> it writes (<code>finance_spendings</code>). Income has only the rule (<code>finance_incomes</code>). The fix gives both kinds one fact table, <code>finance_transactions</code>, with a <code>kind</code> column. The income rule then writes past paydays into it, the same way plans already do. <a class="cite" href="#src-1">S1</a><a class="cite" href="#src-2">S2</a><a class="cite" href="#src-3">S3</a></p>
+  </div>
+  <ol class="findings">
+    <li><strong>Why the received money is missing on its day:</strong> no row records "income received on this date", and the day views read spendings only. <a class="cite" href="#src-5">S5</a><a class="cite" href="#src-6">S6</a><a class="cite" href="#src-7">S7</a> <span class="tag sure">VERIFIED</span></li>
+    <li><strong>Do not merge the two current tables row for row.</strong> <code>finance_incomes</code> is a schedule (from date X, every month). It is not a list of received payments. <a class="cite" href="#src-2">S2</a> <span class="tag sure">VERIFIED</span></li>
+    <li><strong>Phase 1 (recommended):</strong> <code>finance_spendings</code> becomes <code>finance_transactions</code> + <code>kind</code>. <code>finance_incomes</code> stays as the income rule and gains <code>materialized_through</code>. About 3–4 days. <span class="tag infer">INFERRED</span> (estimate from reading the code)</li>
+    <li><strong>Phase 2 (optional):</strong> income rules move into <code>finance_plans</code> with <code>kind</code>. This needs 2 more frequencies and 2 schedule options on plans. About 3–5 more days. <a class="cite" href="#src-11">S11</a> <span class="tag infer">INFERRED</span></li>
+    <li><strong>Side effect you gain:</strong> editing or deleting a salary stops rewriting past months. <a class="cite" href="#src-8">S8</a><a class="cite" href="#src-9">S9</a> <span class="tag sure">VERIFIED</span> (current behaviour)</li>
+  </ol>
+  <div class="stats">
+    <div class="stat bad"><span class="v">1</span><span class="k">fact table today (expense only)</span></div>
+    <div class="stat ok"><span class="v">1</span><span class="k">fact table after (expense + income)</span></div>
+    <div class="stat"><span class="v">2 → 1</span><span class="k">rule tables, only if you do Phase 2</span></div>
+  </div>
+</section>
+
+<section id="today">
+  <h2>Today: income has a rule but no record</h2>
+  <p>Read the diagram top to bottom. The top row holds <strong>rules</strong> (what should happen). The bottom row holds <strong>facts</strong> (what happened). Spending has both rows. Income stops at the top. <a class="cite" href="#src-1">S1</a><a class="cite" href="#src-2">S2</a><a class="cite" href="#src-3">S3</a><a class="cite" href="#src-4">S4</a></p>
+  <figure class="fig">
+  <svg viewBox="0 0 900 580" role="img" aria-label="Current entity diagram: spending has a rule and a fact table, income only has a rule"><defs><marker id="arr-now" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker><marker id="arr-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--bad)"/></marker></defs><g><text x="20" y="22" text-anchor="start" font-size="12" fill="var(--muted)">Every table also has user_id → auth_users (ON DELETE CASCADE). Not drawn.</text>
+<text x="20" y="58" text-anchor="start" font-size="11" fill="var(--muted)" font-weight="700">RULES · what should happen</text>
+<text x="20" y="318" text-anchor="start" font-size="11" fill="var(--muted)" font-weight="700">FACTS · what actually happened</text>
+<rect x="20" y="70" width="250" height="182" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="20" y1="102" x2="270" y2="102" stroke="var(--line)"/>
+<text x="32" y="91" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_plans</text>
+<text x="258" y="91" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">RULE</text>
+<text x="32" y="122" font-size="12.5" fill="var(--ink)" font-weight="600">id  PK</text>
+<text x="32" y="142" font-size="12.5" fill="var(--ink)">amount · category · description</text>
+<text x="32" y="162" font-size="12.5" fill="var(--ink)">frequency  once … monthly (5 values)</text>
+<text x="32" y="182" font-size="12.5" fill="var(--ink)">interval · days_of_week</text>
+<text x="32" y="202" font-size="12.5" fill="var(--ink)">start_date · end_date</text>
+<text x="32" y="222" font-size="12.5" fill="var(--ink)">materialized_through</text>
+<text x="32" y="242" font-size="12.5" fill="var(--ink)">sure  commitment vs estimate</text>
+<rect x="325" y="70" width="250" height="142" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="325" y1="102" x2="575" y2="102" stroke="var(--line)"/>
+<text x="337" y="91" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_settings</text>
+<text x="563" y="91" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">1 PER USER</text>
+<text x="337" y="122" font-size="12.5" fill="var(--ink)" font-weight="600">user_id  PK</text>
+<text x="337" y="142" font-size="12.5" fill="var(--ink)">categories  jsonb (spending only)</text>
+<text x="337" y="162" font-size="12.5" fill="var(--ink)">budget_period_mode</text>
+<text x="337" y="182" font-size="12.5" fill="var(--info)">paycheck_income_id  FK</text>
+<text x="337" y="202" font-size="12.5" fill="var(--ink)">show_by</text>
+<rect x="630" y="70" width="250" height="162" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="630" y1="102" x2="880" y2="102" stroke="var(--line)"/>
+<text x="642" y="91" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_incomes</text>
+<text x="868" y="91" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">RULE</text>
+<text x="642" y="122" font-size="12.5" fill="var(--ink)" font-weight="600">id  PK</text>
+<text x="642" y="142" font-size="12.5" fill="var(--ink)">source  free text, no category</text>
+<text x="642" y="162" font-size="12.5" fill="var(--ink)">amount  per payday</text>
+<text x="642" y="182" font-size="12.5" fill="var(--ink)">frequency  once … yearly (6 values)</text>
+<text x="642" y="202" font-size="12.5" fill="var(--ink)">start_date · end_date</text>
+<text x="642" y="222" font-size="12.5" fill="var(--ink)">interval · weekend_shift · 2 days</text>
+<rect x="20" y="330" width="250" height="162" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="20" y1="362" x2="270" y2="362" stroke="var(--line)"/>
+<text x="32" y="351" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_spendings</text>
+<text x="258" y="351" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">FACT</text>
+<text x="32" y="382" font-size="12.5" fill="var(--ink)" font-weight="600">id  PK</text>
+<text x="32" y="402" font-size="12.5" fill="var(--ink)">amount · category · description</text>
+<text x="32" y="422" font-size="12.5" fill="var(--ink)">date · time</text>
+<text x="32" y="442" font-size="12.5" fill="var(--info)">plan_id  FK → finance_plans</text>
+<text x="32" y="462" font-size="12.5" fill="var(--ink)">plan_date  unique with plan_id</text>
+<text x="32" y="482" font-size="12.5" fill="var(--muted)">repeat_rule_id  FK (legacy)</text>
+<rect x="325" y="330" width="250" height="102" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="325" y1="362" x2="575" y2="362" stroke="var(--line)"/>
+<text x="337" y="351" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_plan_exceptions</text>
+<text x="337" y="382" font-size="12.5" fill="var(--ink)" font-weight="600">plan_id + date  PK</text>
+<text x="337" y="402" font-size="12.5" fill="var(--ink)">kind  skip | override</text>
+<text x="337" y="422" font-size="12.5" fill="var(--ink)">amount · description</text>
+<rect x="630" y="330" width="250" height="142" rx="10" fill="var(--bad-soft)" stroke="var(--bad)" stroke-width="1.5" stroke-dasharray="6 4"/>
+<line x1="630" y1="362" x2="880" y2="362" stroke="var(--bad)" stroke-dasharray="6 4"/>
+<text x="642" y="351" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">no table</text>
+<text x="868" y="351" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">MISSING</text>
+<text x="642" y="382" font-size="12.5" fill="var(--bad)">income received on a day</text>
+<text x="642" y="402" font-size="12.5" fill="var(--bad)">is never stored.</text>
+<text x="642" y="422" font-size="12.5" fill="var(--bad)">Totals are recomputed from</text>
+<text x="642" y="442" font-size="12.5" fill="var(--bad)">the rule on every render</text>
+<text x="642" y="462" font-size="12.5" fill="var(--bad)">(getRangeIncome)</text>
+<line x1="145" y1="330" x2="145" y2="254" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-now)"/>
+<text x="155" y="270" text-anchor="start" font-size="12" fill="var(--muted)">plan_id  n : 1</text>
+<text x="155" y="286" text-anchor="start" font-size="12" fill="var(--muted)">written when</text>
+<text x="155" y="302" text-anchor="start" font-size="12" fill="var(--muted)">time passes</text>
+<line x1="360" y1="330" x2="272" y2="232" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-now)"/>
+<text x="318" y="300" text-anchor="end" font-size="12" fill="var(--muted)">plan_id</text>
+<line x1="575" y1="178" x2="628" y2="178" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-now)"/>
+<text x="602" y="170" text-anchor="middle" font-size="11" fill="var(--info)">FK</text>
+<line x1="755" y1="232" x2="755" y2="328" stroke="var(--bad)" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arr-bad)"/>
+<text x="765" y="285" text-anchor="start" font-size="12" fill="var(--bad)" font-weight="600">never written</text>
+<rect x="20" y="520" width="420" height="40" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-dasharray="5 4"/>
+<text x="34" y="545" font-size="12.5" fill="var(--muted)"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="600">finance_repeat_rules</tspan>  legacy, copied into plans by 008</text>
+<rect x="460" y="520" width="420" height="40" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-dasharray="5 4"/>
+<text x="474" y="545" font-size="12.5" fill="var(--muted)"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="600">finance_income_entries</tspan>  legacy, copied by 005</text></g></svg>
+  <figcaption>Current schema at <code>ba5f190</code>. The red box is the missing income fact layer. <code>paycheck_income_id</code> ties the budget period to an income rule. <a class="cite" href="#src-1">S1</a><a class="cite" href="#src-2">S2</a><a class="cite" href="#src-3">S3</a><a class="cite" href="#src-4">S4</a><a class="cite" href="#src-13">S13</a></figcaption>
+  </figure>
+  <div class="tbl">
+    <p class="cap">Plain name → table</p>
+    <table>
+      <tr><th>Plain name</th><th>Table</th><th>Kind</th></tr>
+      <tr><td>A planned or repeating spending</td><td><code>finance_plans</code></td><td>rule</td></tr>
+      <tr><td>A skipped or changed future occurrence</td><td><code>finance_plan_exceptions</code></td><td>rule override</td></tr>
+      <tr><td>Money that was actually spent</td><td><code>finance_spendings</code></td><td>fact</td></tr>
+      <tr><td>A salary, freelance job or gift, once or repeating</td><td><code>finance_incomes</code></td><td>rule</td></tr>
+      <tr class="hl"><td>Money that was actually received</td><td>none</td><td>missing</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="bug">
+  <h2>Why the received money is missing on its day</h2>
+  <div class="callout bad"><strong>The bug in one sentence:</strong> income only reaches the period total, because every day cell and day list reads <code>finance_spendings</code> and nothing else.</div>
+  <figure class="fig">
+  <svg viewBox="0 0 900 250" role="img" aria-label="Income reaches only the period total; the day views read spendings only"><defs><marker id="arr-flow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs><g><text x="20" y="24" text-anchor="start" font-size="11" fill="var(--muted)" font-weight="700">PERIOD HEADER (DayDetails)</text>
+<rect x="20" y="36" width="230" height="64" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/><text x="135.0" y="63" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--ink)">finance_incomes rule</text><text x="135.0" y="83" text-anchor="middle" font-size="12" fill="var(--muted)">e.g. once · 2026-11-05</text>
+<rect x="320" y="36" width="250" height="64" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/><text x="445.0" y="63" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--ink)">getRangeIncome(period)</text><text x="445.0" y="83" text-anchor="middle" font-size="12" fill="var(--muted)">count paydays × amount</text>
+<rect x="640" y="36" width="240" height="64" rx="10" fill="var(--ok-soft)" stroke="var(--ok)" stroke-width="1.5"/><text x="760.0" y="63" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--ink)">Total Income</text><text x="760.0" y="83" text-anchor="middle" font-size="12" fill="var(--ok)">whole month or pay cycle ✓</text>
+<line x1="250" y1="68" x2="318" y2="68" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-flow)"/>
+<line x1="570" y1="68" x2="638" y2="68" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-flow)"/>
+<text x="20" y="152" text-anchor="start" font-size="11" fill="var(--muted)" font-weight="700">DAY CELL / DAY LIST (Calendar, Week, Day, mobile)</text>
+<rect x="20" y="164" width="230" height="64" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/><text x="135.0" y="191" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--ink)">spendings in memory</text><text x="135.0" y="211" text-anchor="middle" font-size="12" fill="var(--muted)">finance_spendings rows only</text>
+<rect x="320" y="164" width="250" height="64" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/><text x="445.0" y="191" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--ink)">getSpendingsForDate(day)</text><text x="445.0" y="211" text-anchor="middle" font-size="12" fill="var(--muted)">filter spending.date === day</text>
+<rect x="640" y="164" width="240" height="64" rx="10" fill="var(--bad-soft)" stroke="var(--bad)" stroke-width="1.5" stroke-dasharray="6 4"/><text x="760.0" y="191" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--ink)">Day shows spendings only</text><text x="760.0" y="211" text-anchor="middle" font-size="12" fill="var(--bad)">the 2026-11-05 income: absent ✗</text>
+<line x1="250" y1="196" x2="318" y2="196" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-flow)"/>
+<line x1="570" y1="196" x2="638" y2="196" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-flow)"/></g></svg>
+  <figcaption>Two paths through the same screen. The 2026-11-05 amount is an example, not real data. <a class="cite" href="#src-5">S5</a><a class="cite" href="#src-6">S6</a><a class="cite" href="#src-7">S7</a></figcaption>
+  </figure>
+  <p><code>getRangeIncome</code> multiplies the number of paydays in a range by the <em>current</em> amount. <a class="cite" href="#src-5">S5</a> <code>DayDetails</code> calls it for the whole view period, not for the day. <a class="cite" href="#src-6">S6</a> <code>getSpendingsForDate</code> filters the spendings list by date, so income can never appear there. <a class="cite" href="#src-7">S7</a></p>
+  <div class="grid2">
+    <div class="card bad"><h4>Also caused by the same gap</h4>Changing a salary amount updates the one <code>finance_incomes</code> row, and every past month is recalculated with the new amount. <a class="cite" href="#src-8">S8</a></div>
+    <div class="card bad"><h4>And this</h4>Deleting an income deletes the rule, so every past payday it produced disappears from all totals. <a class="cite" href="#src-9">S9</a></div>
+  </div>
+</section>
+
+<section id="phase1">
+  <h2>Phase 1: one ledger, income rule stays (recommended)</h2>
+  <p>One new fact table. Old spendings move in with <code>kind = 'expense'</code> and keep their ids. Past paydays are written in as <code>kind = 'income'</code>. The income rule keeps every pay-schedule option it has today.</p>
+  <figure class="fig">
+  <svg viewBox="0 0 900 540" role="img" aria-label="Phase 1 entity diagram: one finance_transactions table with kind, fed by plans and incomes"><defs><marker id="arr-p1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker><marker id="arr-p1n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker></defs><g><text x="20" y="22" text-anchor="start" font-size="12" fill="var(--muted)">Green = new. finance_plan_exceptions and auth_users unchanged, not drawn.</text>
+<text x="20" y="58" text-anchor="start" font-size="11" fill="var(--muted)" font-weight="700">RULES</text>
+<text x="20" y="330" text-anchor="start" font-size="11" fill="var(--muted)" font-weight="700">FACTS · one ledger</text>
+<rect x="20" y="70" width="250" height="142" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="20" y1="102" x2="270" y2="102" stroke="var(--line)"/>
+<text x="32" y="91" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_plans</text>
+<text x="258" y="91" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">RULE · EXPENSE</text>
+<text x="32" y="122" font-size="12.5" fill="var(--ink)" font-weight="600">id  PK</text>
+<text x="32" y="142" font-size="12.5" fill="var(--ink)">amount · category · description</text>
+<text x="32" y="162" font-size="12.5" fill="var(--ink)">frequency · interval · days</text>
+<text x="32" y="182" font-size="12.5" fill="var(--ink)">start_date · end_date</text>
+<text x="32" y="202" font-size="12.5" fill="var(--ink)">materialized_through</text>
+<rect x="325" y="70" width="250" height="122" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="325" y1="102" x2="575" y2="102" stroke="var(--line)"/>
+<text x="337" y="91" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_settings</text>
+<text x="563" y="91" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">1 PER USER</text>
+<text x="337" y="122" font-size="12.5" fill="var(--ink)" font-weight="600">user_id  PK</text>
+<text x="337" y="142" font-size="12.5" fill="var(--ink)">categories  (+ income ones?)</text>
+<text x="337" y="162" font-size="12.5" fill="var(--ink)">budget_period_mode</text>
+<text x="337" y="182" font-size="12.5" fill="var(--info)">paycheck_income_id  FK</text>
+<rect x="630" y="70" width="250" height="142" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="630" y1="102" x2="880" y2="102" stroke="var(--line)"/>
+<text x="642" y="91" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_incomes</text>
+<text x="868" y="91" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">RULE · INCOME</text>
+<text x="642" y="122" font-size="12.5" fill="var(--ink)" font-weight="600">id  PK</text>
+<text x="642" y="142" font-size="12.5" fill="var(--ink)">source · name · amount</text>
+<text x="642" y="162" font-size="12.5" fill="var(--ink)">frequency + pay schedule</text>
+<text x="642" y="182" font-size="12.5" fill="var(--ink)">start_date · end_date</text>
+<text x="642" y="202" font-size="12.5" fill="var(--ok)" font-weight="600">+ materialized_through</text>
+<rect x="120" y="342" width="660" height="142" rx="10" fill="var(--ok-soft)" stroke="var(--ok)" stroke-width="1.5"/>
+<line x1="120" y1="374" x2="780" y2="374" stroke="var(--ok)"/>
+<text x="132" y="363" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_transactions</text>
+<text x="768" y="363" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">FACT · REPLACES finance_spendings</text>
+<text x="132" y="394" font-size="12.5" fill="var(--ink)"></text>
+<text x="132" y="414" font-size="12.5" fill="var(--ink)"></text>
+<text x="132" y="434" font-size="12.5" fill="var(--ink)"></text>
+<text x="132" y="454" font-size="12.5" fill="var(--ink)"></text>
+<text x="132" y="474" font-size="12.5" fill="var(--ink)"></text>
+<text x="134" y="394" font-size="12.5" fill="var(--ink)" font-weight="600">id  PK  (same ids as old spendings)</text>
+<text x="134" y="414" font-size="12.5" fill="var(--ok)" font-weight="600">+ kind  expense | income</text>
+<text x="134" y="434" font-size="12.5" fill="var(--ink)">amount  &gt; 0, kind gives the sign</text>
+<text x="134" y="454" font-size="12.5" fill="var(--ink)">category · description</text>
+<text x="134" y="474" font-size="12.5" fill="var(--ink)">date · time</text>
+<text x="460" y="394" font-size="12.5" fill="var(--info)">plan_id  FK + plan_date</text>
+<text x="460" y="414" font-size="12.5" fill="var(--ok)" font-weight="600">+ income_id  FK + income_date</text>
+<text x="460" y="434" font-size="12.5" fill="var(--ink)">unique (plan_id, plan_date)</text>
+<text x="460" y="454" font-size="12.5" fill="var(--ok)" font-weight="600">+ unique (income_id, income_date)</text>
+<text x="460" y="474" font-size="12.5" fill="var(--muted)">later: household_id · paid_by</text>
+<line x1="446" y1="382" x2="446" y2="476" stroke="var(--ok)" stroke-dasharray="3 4"/>
+<line x1="200" y1="342" x2="160" y2="214" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-p1)"/>
+<text x="168" y="280" text-anchor="end" font-size="12" fill="var(--muted)">plan_id</text>
+<text x="168" y="296" text-anchor="end" font-size="12" fill="var(--muted)">kind = expense</text>
+<line x1="700" y1="342" x2="745" y2="214" stroke="var(--ok)" stroke-width="1.8" marker-end="url(#arr-p1n)"/>
+<text x="730" y="300" text-anchor="start" font-size="12" fill="var(--ok)" font-weight="600">income_id</text>
+<text x="730" y="316" text-anchor="start" font-size="12" fill="var(--ok)">kind = income</text>
+<line x1="575" y1="178" x2="628" y2="178" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-p1)"/>
+<text x="602" y="170" text-anchor="middle" font-size="11" fill="var(--info)">FK</text>
+<text x="450" y="520" text-anchor="middle" font-size="12" fill="var(--muted)">Old finance_spendings stays read-only for one release, then is dropped.</text></g></svg>
+  <figcaption>Proposed Phase 1. Two arrows feed the ledger: plans write expenses (as today), incomes write income (new). <code>paycheck_income_id</code> keeps working unchanged. <a class="cite" href="#src-3">S3</a><a class="cite" href="#src-4">S4</a><a class="cite" href="#src-10">S10</a> <span class="tag infer">INFERRED</span> (proposal)</figcaption>
+  </figure>
+  <div class="tbl">
+    <p class="cap">Columns of <code>finance_transactions</code></p>
+    <table>
+      <tr><th>Column</th><th>From</th><th>Note</th></tr>
+      <tr><td><code>id, user_id, amount, description, category, date, time</code></td><td><code>finance_spendings</code></td><td>Same ids, so nothing that points at a spending breaks.</td></tr>
+      <tr class="hl"><td><code>kind</code></td><td>new</td><td><code>CHECK (kind IN ('expense','income'))</code>. Add <code>'transfer'</code> later, for moves between your own wallets.</td></tr>
+      <tr><td><code>plan_id, plan_date</code></td><td><code>finance_spendings</code></td><td>Keeps the unique index that stops double-writes. <a class="cite" href="#src-3">S3</a><a class="cite" href="#src-10">S10</a></td></tr>
+      <tr class="hl"><td><code>income_id, income_date</code></td><td>new</td><td><code>income_date</code> = nominal payday. <code>date</code> = paid day after the weekend shift. Unique together.</td></tr>
+      <tr><td><code>repeat_rule_id</code></td><td><code>finance_spendings</code></td><td>Legacy. Copy as is, drop in a later cleanup. <a class="cite" href="#src-13">S13</a></td></tr>
+    </table>
+  </div>
+  <div class="callout warn"><strong>Main risk:</strong> any code that sums <code>amount</code> over all rows would add income into spending totals. Keep <code>/spendings</code> and the MCP spending tools filtered to <code>kind = 'expense'</code>, and add <code>/transactions</code> next to them. <span class="tag infer">INFERRED</span></div>
+</section>
+
+<section id="lifecycle">
+  <h2>How a payday becomes a record</h2>
+  <p>The income rule works like a plan: occurrences before <code>materialized_through</code> are rows, later ones are computed. <a class="cite" href="#src-10">S10</a> Period income then becomes <em>received</em> (rows) plus <em>expected</em> (projection).</p>
+  <figure class="fig">
+  <svg viewBox="0 0 900 190" role="img" aria-label="Monthly salary timeline: past paydays are stored rows, future paydays are projected"><defs></defs><g><line x1="40" y1="110" x2="870" y2="110" stroke="var(--line)" stroke-width="2"/>
+<line x1="560" y1="40" x2="560" y2="170" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4"/>
+<text x="560" y="32" text-anchor="middle" font-size="12" fill="var(--accent)" font-weight="600">now = materialized_through (2026-11-10)</text>
+<text x="300" y="62" text-anchor="middle" font-size="12" fill="var(--ok)" font-weight="600">rows in finance_transactions (kind = income)</text>
+<text x="715" y="62" text-anchor="middle" font-size="12" fill="var(--muted)" font-weight="600">projected from the rule, not stored</text>
+<circle cx="110" cy="110" r="9" fill="var(--ok)"/>
+<text x="110" y="140" text-anchor="middle" font-size="12" fill="var(--ink)">2026-07-24</text>
+<circle cx="230" cy="110" r="9" fill="var(--ok)"/>
+<text x="230" y="140" text-anchor="middle" font-size="12" fill="var(--ink)">2026-08-25</text>
+<circle cx="350" cy="110" r="9" fill="var(--ok)"/>
+<text x="350" y="140" text-anchor="middle" font-size="12" fill="var(--ink)">2026-09-25</text>
+<circle cx="470" cy="110" r="9" fill="var(--ok)"/>
+<text x="470" y="140" text-anchor="middle" font-size="12" fill="var(--ink)" font-weight="600">2026-10-23</text>
+<text x="470" y="158" text-anchor="middle" font-size="11" fill="var(--muted)">income_date 10-25 (Sun)</text>
+<text x="470" y="174" text-anchor="middle" font-size="11" fill="var(--muted)">date 10-23 (Fri, shifted)</text>
+<circle cx="660" cy="110" r="9" fill="var(--panel)" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 2"/>
+<text x="660" y="140" text-anchor="middle" font-size="12" fill="var(--muted)">2026-11-25</text>
+<circle cx="780" cy="110" r="9" fill="var(--panel)" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 2"/>
+<text x="780" y="140" text-anchor="middle" font-size="12" fill="var(--muted)">2026-12-25</text></g></svg>
+  <figcaption>A monthly salary on the 25th with the weekend shift on. 2026-10-25 is a Sunday, so the row stores <code>income_date</code> 2026-10-25 and <code>date</code> 2026-10-23. <a class="cite" href="#src-10">S10</a><a class="cite" href="#src-11">S11</a> <span class="tag infer">INFERRED</span> (proposed behaviour)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li><strong>Projected:</strong> a future payday exists only as math on the rule, as today.</li>
+    <li class="ok"><strong>Recorded:</strong> once its date passes, one <code>kind = 'income'</code> row is written and shows on that day.</li>
+    <li class="ok"><strong>Corrected:</strong> a late or different salary is fixed by editing that one row. The rule and other months stay as they are.</li>
+    <li class="ok"><strong>Rule edited:</strong> a new amount applies from <code>materialized_through</code> forward only.</li>
+  </ol>
+</section>
+
+<section id="phase2">
+  <h2>Phase 2: one rule table for both kinds (optional)</h2>
+  <p>Phase 2 removes <code>finance_incomes</code> by teaching <code>finance_plans</code> the income schedule options. Do it only if you want one "Plans" screen for money in and out.</p>
+  <figure class="fig">
+  <svg viewBox="0 0 900 565" role="img" aria-label="Phase 2 entity diagram: finance_plans holds both kinds of rules"><defs><marker id="arr-p2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs><g><text x="20" y="22" text-anchor="start" font-size="12" fill="var(--muted)">Green = new or changed. One rule table and one fact table for both kinds.</text>
+<rect x="20" y="70" width="250" height="122" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="20" y1="102" x2="270" y2="102" stroke="var(--line)"/>
+<text x="32" y="91" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_settings</text>
+<text x="258" y="91" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">1 PER USER</text>
+<text x="32" y="122" font-size="12.5" fill="var(--ink)" font-weight="600">user_id  PK</text>
+<text x="32" y="142" font-size="12.5" fill="var(--ink)">budget_period_mode</text>
+<text x="32" y="162" font-size="12.5" fill="var(--ok)" font-weight="600">+ paycheck_plan_id  FK</text>
+<text x="32" y="182" font-size="12.5" fill="var(--muted)">(was paycheck_income_id)</text>
+<rect x="325" y="70" width="250" height="222" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="325" y1="102" x2="575" y2="102" stroke="var(--line)"/>
+<text x="337" y="91" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_plans</text>
+<text x="563" y="91" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">RULE</text>
+<text x="337" y="122" font-size="12.5" fill="var(--ink)" font-weight="600">id  PK</text>
+<text x="337" y="142" font-size="12.5" fill="var(--ok)" font-weight="600">+ kind  expense | income</text>
+<text x="337" y="162" font-size="12.5" fill="var(--ink)">amount · category · description</text>
+<text x="337" y="182" font-size="12.5" fill="var(--ok)" font-weight="600">+ frequency  adds semimonthly, yearly</text>
+<text x="337" y="202" font-size="12.5" fill="var(--ink)">interval · days_of_week</text>
+<text x="337" y="222" font-size="12.5" fill="var(--ok)" font-weight="600">+ semimonthly days · weekend_shift</text>
+<text x="337" y="242" font-size="12.5" fill="var(--ink)">start_date · end_date</text>
+<text x="337" y="262" font-size="12.5" fill="var(--ink)">materialized_through</text>
+<text x="337" y="282" font-size="12.5" fill="var(--ink)">sure</text>
+<rect x="630" y="70" width="250" height="122" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="630" y1="102" x2="880" y2="102" stroke="var(--line)"/>
+<text x="642" y="91" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_plan_exceptions</text>
+<text x="642" y="122" font-size="12.5" fill="var(--ink)" font-weight="600">plan_id + date  PK</text>
+<text x="642" y="142" font-size="12.5" fill="var(--ink)">kind  skip | override</text>
+<text x="642" y="162" font-size="12.5" fill="var(--muted)">now also for a late or</text>
+<text x="642" y="182" font-size="12.5" fill="var(--muted)">different salary</text>
+<rect x="120" y="370" width="660" height="122" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
+<line x1="120" y1="402" x2="780" y2="402" stroke="var(--line)"/>
+<text x="132" y="391" font-size="14" font-weight="700" fill="var(--ink)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">finance_transactions</text>
+<text x="768" y="391" text-anchor="end" font-size="11" fill="var(--muted)" letter-spacing="1">FACT</text>
+<text x="132" y="422" font-size="12.5" fill="var(--ink)"></text>
+<text x="132" y="442" font-size="12.5" fill="var(--ink)"></text>
+<text x="132" y="462" font-size="12.5" fill="var(--ink)"></text>
+<text x="132" y="482" font-size="12.5" fill="var(--ink)"></text>
+<text x="134" y="422" font-size="12.5" fill="var(--ink)">id  PK</text>
+<text x="134" y="442" font-size="12.5" fill="var(--ink)">kind  expense | income</text>
+<text x="134" y="462" font-size="12.5" fill="var(--ink)">amount · category · description</text>
+<text x="134" y="482" font-size="12.5" fill="var(--ink)">date · time</text>
+<text x="460" y="422" font-size="12.5" fill="var(--info)">plan_id  FK + plan_date</text>
+<text x="460" y="442" font-size="12.5" fill="var(--ink)">unique (plan_id, plan_date)</text>
+<text x="460" y="462" font-size="12.5" fill="var(--bad)">− income_id, income_date</text>
+<text x="460" y="482" font-size="12.5" fill="var(--muted)">later: household_id · paid_by</text>
+<line x1="450" y1="370" x2="450" y2="294" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-p2)"/>
+<text x="460" y="345" text-anchor="start" font-size="12" fill="var(--muted)">plan_id · both kinds</text>
+<line x1="270" y1="158" x2="323" y2="158" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-p2)"/>
+<line x1="630" y1="118" x2="577" y2="118" stroke="var(--muted)" stroke-width="1.8" marker-end="url(#arr-p2)"/>
+<text x="450" y="545" text-anchor="middle" font-size="12" fill="var(--muted)">finance_incomes rows move into finance_plans (kind = income), then the table is dropped.</text></g></svg>
+  <figcaption>Proposed Phase 2. <code>paycheck_income_id</code> becomes <code>paycheck_plan_id</code>. Income gets skip/override exceptions for free. <a class="cite" href="#src-3">S3</a><a class="cite" href="#src-4">S4</a> <span class="tag infer">INFERRED</span> (proposal)</figcaption>
+  </figure>
+  <div class="tbl">
+    <p class="cap">What plans would need to learn from incomes <a class="cite" href="#src-11">S11</a></p>
+    <table>
+      <tr><th>Option</th><th>Plans today</th><th>Incomes today</th></tr>
+      <tr><td><code>once, daily, weekly, monthly</code></td><td class="good">✓</td><td class="good">✓</td></tr>
+      <tr><td><code>weekdays</code></td><td class="good">✓</td><td class="badv">✗</td></tr>
+      <tr><td><code>semimonthly</code> (two days a month)</td><td class="badv">✗</td><td class="good">✓</td></tr>
+      <tr><td><code>yearly</code></td><td class="badv">✗</td><td class="good">✓</td></tr>
+      <tr><td>Weekend shift to Friday</td><td class="badv">✗</td><td class="good">✓</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="migration">
+  <h2>Migration 011: what moves where</h2>
+  <p>The migration only adds data. Old tables stay read-only for one release, which keeps the research doc's promise "Migrations add, never rewrite". <a class="cite" href="#src-12">S12</a></p>
+  <ol class="steps">
+    <li><strong>Create</strong> <code>finance_transactions</code> and copy every <code>finance_spendings</code> row with <code>kind = 'expense'</code>.</li>
+    <li><strong>Backfill income:</strong> for each <code>finance_incomes</code> rule, write one <code>kind = 'income'</code> row per payday from <code>start_date</code> up to today in the user's timezone.</li>
+    <li><strong>Set</strong> <code>finance_incomes.materialized_through</code> to now.</li>
+    <li class="ok"><strong>Check:</strong> for every user and month, the new income sum equals the old <code>getRangeIncome</code> total, and the expense sum equals the old spending sum.</li>
+    <li><strong>Switch</strong> server reads to the new table, then drop <code>finance_spendings</code> one release later.</li>
+  </ol>
+  <details class="more">
+    <summary>Code touched (by layer)</summary>
+    <div class="body">
+      <div class="tbl"><table>
+        <tr><th>Layer</th><th>Files</th></tr>
+        <tr><td>DB</td><td><code>migrations/011_transactions.sql</code> (new)</td></tr>
+        <tr><td>Server</td><td><code>src/server/finance/store.ts</code>, <code>http.ts</code>, <code>validation.ts</code>, <code>model.ts</code>, <code>periodSummary.ts</code></td></tr>
+        <tr><td>MCP (external contract)</td><td><code>src/server/mcp/tools.ts</code>, <code>resources.ts</code>, <code>data.ts</code>, <code>prompts.ts</code>. Keep the old tool names working.</td></tr>
+        <tr><td>Client logic</td><td><code>src/types.ts</code>, <code>services/finance.ts</code>, <code>contexts/FinanceContext.tsx</code>, <code>lib/income.ts</code>, <code>lib/analytics.ts</code>, <code>lib/runway.ts</code>, <code>lib/quickEntry.ts</code></td></tr>
+        <tr><td>Screens</td><td><code>CalendarView</code>, <code>DayDetails</code>, <code>WeekView</code>, <code>mobile/MobileWeek</code>, <code>mobile/MobileMonth</code>: add a green <code>+</code> income row</td></tr>
+        <tr><td>Tests</td><td>About 15 files. Largest: <code>finance-http.test.ts</code>, <code>finance-neon.test.ts</code>, <code>mcp.test.ts</code>, <code>spendings.test.ts</code>, <code>income*.test.ts</code></td></tr>
+      </table></div>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>What this changes in the design research plan</h2>
+  <p>The 4-week plan in <code>docs/finance-app-design-research.html</code> assumes spendings are the only dated records. <a class="cite" href="#src-12">S12</a></p>
+  <div class="tbl"><table>
+    <tr><th>Plan item</th><th>Effect</th></tr>
+    <tr class="hl"><td>New: Week 0 · Data model</td><td>Do Phase 1 first (~3–4 days). Weeks 3 and 4 depend on it.</td></tr>
+    <tr><td>Week 2 · "Coming up" and "Safe to spend"</td><td>Read income as received + expected, not the full rule.</td></tr>
+    <tr><td>Week 3 · Export and "Import from CSV"</td><td>One table with a type column is the usual CSV shape. Without income rows there is nothing dated to export or import.</td></tr>
+    <tr><td>Week 4 · <code>household_id</code>, <code>paid_by</code></td><td>Add them to one table instead of spendings and incomes. "Who received" then works like "who paid".</td></tr>
+    <tr><td>Later · transfers between own wallets</td><td>Becomes <code>kind = 'transfer'</code> plus a wallet column.</td></tr>
+  </table></div>
+</section>
+
+<section id="open">
+  <h2>Decisions needed before the fix</h2>
+  <ol class="findings">
+    <li><span class="tag open">OPEN</span> <strong>Record a payday automatically</strong> when its date passes (like plans), or ask the user to confirm "received"?</li>
+    <li><span class="tag open">OPEN</span> <strong>Income category:</strong> keep free-text <code>source</code>, or add income categories to <code>finance_settings.categories</code> with a kind?</li>
+    <li><span class="tag open">OPEN</span> <strong>Time of an income row:</strong> <code>00:00</code>, or a time set on the rule?</li>
+    <li><span class="tag open">OPEN</span> <strong>Phase 2</strong> now, later, or never?</li>
+    <li><span class="tag open">OPEN</span> Put <code>'transfer'</code> in the <code>kind</code> CHECK now, or add it when wallets exist?</li>
+  </ol>
+</section>
+<section id="sources">
+  <h2>Sources</h2>
+  <ol class="sources">
+<li id="src-1"><div class="src-head"><span class="src-id">S1</span><span class="src-type">Code</span><span class="src-title">finance_spendings table</span></div><div class="src-loc"><code>migrations/002_finance.sql:11-19</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">CREATE TABLE IF NOT EXISTS finance_spendings (
+  id uuid PRIMARY KEY,
+  ...
+  date date NOT NULL ...
+  time time(0) NOT NULL ...</blockquote></li>
+<li id="src-2"><div class="src-head"><span class="src-id">S2</span><span class="src-type">Code</span><span class="src-title">finance_incomes table (a schedule)</span></div><div class="src-loc"><code>migrations/005_incomes.sql:1-16</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">-- Income sources: each row is one income stream (salary, freelance, allowance, gift, ...)
+-- that occurs once or repeats daily, weekly, monthly, or yearly from start_date until end_date.</blockquote></li>
+<li id="src-3"><div class="src-head"><span class="src-id">S3</span><span class="src-type">Code</span><span class="src-title">finance_plans, exceptions and the plan link on spendings</span></div><div class="src-loc"><code>migrations/007_plans.sql:3-35</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">ALTER TABLE finance_spendings ADD COLUMN IF NOT EXISTS plan_id uuid REFERENCES finance_plans(id) ON DELETE SET NULL
+CREATE UNIQUE INDEX IF NOT EXISTS finance_spendings_plan_occurrence_idx ON finance_spendings(plan_id, plan_date)</blockquote></li>
+<li id="src-4"><div class="src-head"><span class="src-id">S4</span><span class="src-type">Code</span><span class="src-title">paycheck_income_id on settings</span></div><div class="src-loc"><code>migrations/009_pay_schedules_and_budget_period.sql:52</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS paycheck_income_id uuid REFERENCES finance_incomes(id) ON DELETE SET NULL</blockquote></li>
+<li id="src-5"><div class="src-head"><span class="src-id">S5</span><span class="src-type">Code</span><span class="src-title">getRangeIncome</span></div><div class="src-loc"><code>src/lib/income.ts:213-220</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">export function getRangeIncome(start: string, end: string, incomes: readonly Income[]) {
+  ...
+    const occurrences = countIncomeOccurrences(income, start, end);
+    ...
+    const cents = Math.round(income.amount * 100) * occurrences;</blockquote></li>
+<li id="src-6"><div class="src-head"><span class="src-id">S6</span><span class="src-type">Code</span><span class="src-title">DayDetails income header</span></div><div class="src-loc"><code>src/components/DayDetails.tsx:88-89</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">// Income follows Show by: the calendar month, or the pay period that contains the day.
+const { totalIncome } = viewPeriodIncome(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, dayKey);</blockquote></li>
+<li id="src-7"><div class="src-head"><span class="src-id">S7</span><span class="src-type">Code</span><span class="src-title">Per-day lists read spendings only</span></div><div class="src-loc"><code>src/lib/spendings.ts:4-12</code>; used at <code>src/components/WeekView.tsx:90,139</code>, <code>src/components/mobile/MobileWeek.tsx:67-68</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">export const getSpendingsForDate = (date: Date, spendings: Spending[]): Spending[] =&gt; {
+  ...
+    .filter((spending) =&gt; spending.date === dateString)</blockquote></li>
+<li id="src-8"><div class="src-head"><span class="src-id">S8</span><span class="src-type">Code</span><span class="src-title">updateIncome rewrites the rule in place</span></div><div class="src-loc"><code>src/server/finance/store.ts:272-277</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">UPDATE finance_incomes SET source = $3, name = $4, amount = $5, frequency = $6,
+  start_date = $7::date, end_date = $8::date, ...</blockquote></li>
+<li id="src-9"><div class="src-head"><span class="src-id">S9</span><span class="src-type">Code</span><span class="src-title">deleteIncome</span></div><div class="src-loc"><code>src/server/finance/store.ts:288-293</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">DELETE FROM finance_incomes WHERE user_id = $1 AND id = $2 RETURNING id</blockquote></li>
+<li id="src-10"><div class="src-head"><span class="src-id">S10</span><span class="src-type">Code</span><span class="src-title">Plan materialization (the pattern to reuse)</span></div><div class="src-loc"><code>src/server/finance/store.ts:557-564</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">// The watermark check stops a stale worker from re-creating an occurrence the user
+// already deleted; the unique (plan_id, plan_date) index absorbs concurrent workers.
+... AND p.materialized_through &lt; u.date + u.time)
+ON CONFLICT (plan_id, plan_date) DO NOTHING</blockquote></li>
+<li id="src-11"><div class="src-head"><span class="src-id">S11</span><span class="src-type">Code</span><span class="src-title">Plan vs income frequencies</span></div><div class="src-loc"><code>src/lib/plans.ts:8</code>, <code>src/server/finance/model.ts:29</code>, <code>migrations/009_pay_schedules_and_budget_period.sql:4-10</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">export const PLAN_FREQUENCIES = ['once', 'daily', 'weekdays', 'weekly', 'monthly'] as const;
+export const INCOME_FREQUENCIES = ["once", "daily", "weekly", "semimonthly", "monthly", "yearly"] as const;</blockquote></li>
+<li id="src-12"><div class="src-head"><span class="src-id">S12</span><span class="src-type">Doc</span><span class="src-title">Finance app design research: promises and 4-week plan</span></div><div class="src-loc"><code>docs/finance-app-design-research.html:399, 432, 440</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">☐ 1 day: "Import from CSV" for people leaving Money Lover
+☐ 1 day: households + household_members tables; add household_id, paid_by, private to spendings and plans
+2 · Updates never touch your data ... Migrations add, never rewrite.</blockquote></li>
+<li id="src-13"><div class="src-head"><span class="src-id">S13</span><span class="src-type">Code</span><span class="src-title">Legacy tables</span></div><div class="src-loc"><code>migrations/003_month_income.sql:1</code>, <code>migrations/004_repeat_spendings.sql:1-20</code>, <code>migrations/008_plan_commitments.sql:3</code> · branch <code>develop/feat/context-menu</code> @ <code>ba5f190</code></div><blockquote class="src-quote">CREATE TABLE IF NOT EXISTS finance_income_entries (
+CREATE TABLE IF NOT EXISTS finance_repeat_rules (
+ALTER TABLE finance_repeat_rules ADD COLUMN IF NOT EXISTS migrated_at timestamptz</blockquote></li>
+  </ol>
+</section>
+
+
+<footer class="doc-foot">Legend: <span class="tag sure">VERIFIED</span> seen directly in the cited source · <span class="tag infer">INFERRED</span> reasoned from evidence, not confirmed end-to-end · <span class="tag open">OPEN</span> unresolved, needs an answer. Press <code>/</code> to search; the ⟳ button reloads the latest version of this file.</footer>
+<!-- ===================== DOCUMENT CONTENT END ===================== -->
+</main>
+</div>
+
+<script id="haise-shell-js">
+/* ===== haise-doc shell v2.1.0 — do not edit per document ===== */
+(function(){
+  var root=document.documentElement, body=document.body;
+  var LANG=(root.lang||'en').slice(0,2).toLowerCase();
+  var I18N={
+    en:{toc:'Contents',search:'Search this document…  ( / )',none:'No matches',nav:'Show / hide contents',
+        prev:'Previous match (Shift+Enter)',next:'Next match (Enter)',citedIn:'Cited in',
+        reload:'Reload latest version (keeps your place)',
+        zoom:{hint:'Click to enlarge',zin:'Zoom in (+)',zout:'Zoom out (−)',fit:'Fit to screen (0)',one:'Actual size (1)',close:'Close (Esc)'},
+        theme:{auto:'Theme: auto',light:'Theme: light',dark:'Theme: dark'}},
+    vi:{toc:'Mục lục',search:'Tìm trong tài liệu…  ( / )',none:'Không có kết quả',nav:'Ẩn / hiện mục lục',
+        prev:'Kết quả trước (Shift+Enter)',next:'Kết quả sau (Enter)',citedIn:'Được dẫn ở',
+        reload:'Tải lại bản mới nhất (giữ vị trí đang đọc)',
+        zoom:{hint:'Nhấn để phóng to',zin:'Phóng to (+)',zout:'Thu nhỏ (−)',fit:'Vừa màn hình (0)',one:'Kích thước thật (1)',close:'Đóng (Esc)'},
+        theme:{auto:'Giao diện: tự động',light:'Giao diện: sáng',dark:'Giao diện: tối'}}
+  };
+  var T=I18N[LANG]||I18N.en;
+  var store={get:function(k){try{return localStorage.getItem(k);}catch(e){return null;}},
+             set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}}};
+  var $=function(id){return document.getElementById(id);};
+  var main=$('content');
+
+  /* ---------- theme ---------- */
+  var themeBtn=$('haise-theme'), ICON={auto:'◐',light:'☀',dark:'☾'};
+  function applyTheme(t){
+    if(t==='light'||t==='dark') root.setAttribute('data-theme',t); else root.removeAttribute('data-theme');
+    themeBtn.textContent=ICON[t]; themeBtn.title=T.theme[t]; themeBtn.setAttribute('aria-label',T.theme[t]);
+  }
+  var theme=store.get('haise.theme'); if(theme!=='light'&&theme!=='dark') theme='auto';
+  applyTheme(theme);
+  themeBtn.addEventListener('click',function(){
+    theme=theme==='auto'?'light':theme==='light'?'dark':'auto';
+    store.set('haise.theme',theme); applyTheme(theme);
+  });
+
+  /* ---------- numbering + table of contents ---------- */
+  $('haise-toc-label').textContent=T.toc;
+  var toc=$('haise-toc'), ol=document.createElement('ol'), tocLinks=[], sections=[];
+  [].forEach.call(main.querySelectorAll('section'),function(sec,i){
+    var h2=sec.querySelector(':scope > h2'); if(!h2) return;
+    if(!sec.id) sec.id='s'+(i+1);
+    var n=String(sections.length+1);
+    sections.push(sec);
+    var num=document.createElement('span'); num.className='num'; num.textContent=n+'.'; h2.insertBefore(num,h2.firstChild);
+    var li=document.createElement('li'), a=mkLink('#'+sec.id,n+'.',h2);
+    a.dataset.sec=sec.id; li.appendChild(a); tocLinks.push({el:sec,a:a});
+    var subs=sec.querySelectorAll('h3');
+    if(subs.length){
+      var sub=document.createElement('ol');
+      [].forEach.call(subs,function(h3,j){
+        if(!h3.id) h3.id=sec.id+'-'+(j+1);
+        var m=n+'.'+(j+1);
+        var s=document.createElement('span'); s.className='num'; s.textContent=m; h3.insertBefore(s,h3.firstChild);
+        var sli=document.createElement('li'), sa=mkLink('#'+h3.id,m,h3);
+        sli.appendChild(sa); sub.appendChild(sli); tocLinks.push({el:h3,a:sa});
+      });
+      li.appendChild(sub);
+    }
+    ol.appendChild(li);
+  });
+  toc.appendChild(ol);
+  function mkLink(href,n,h){
+    var a=document.createElement('a'); a.href=href;
+    var s=document.createElement('span'); s.className='num'; s.textContent=n;
+    var t=document.createElement('span'); t.className='t';
+    var clone=h.cloneNode(true); var c=clone.querySelector('.num'); if(c) c.remove();
+    [].forEach.call(clone.querySelectorAll('a.cite,.tag'),function(x){x.remove();});
+    t.textContent=clone.textContent.trim();
+    var b=document.createElement('span'); b.className='badge';
+    a.appendChild(s); a.appendChild(t); a.appendChild(b);
+    a.addEventListener('click',function(){ if(isMobile()) body.classList.remove('nav-open'); });
+    return a;
+  }
+
+  /* ---------- sidebar toggle ---------- */
+  var navBtn=$('haise-nav-btn'); navBtn.title=T.nav; navBtn.setAttribute('aria-label',T.nav);
+  var mq=window.matchMedia('(max-width:960px)');
+  function isMobile(){return mq.matches;}
+  if(store.get('haise.nav')==='collapsed') body.classList.add('nav-collapsed');
+  navBtn.addEventListener('click',function(){
+    if(isMobile()){ body.classList.toggle('nav-open'); }
+    else{ body.classList.toggle('nav-collapsed'); store.set('haise.nav',body.classList.contains('nav-collapsed')?'collapsed':'open'); }
+  });
+  $('haise-backdrop').addEventListener('click',function(){body.classList.remove('nav-open');});
+
+  /* ---------- scroll spy + progress ---------- */
+  var ticking=false, prog=$('haise-progress');
+  function onScroll(){
+    ticking=false;
+    var y=window.scrollY, H=document.documentElement.scrollHeight-window.innerHeight;
+    prog.style.width=(H>0?Math.min(100,y/H*100):0)+'%';
+    var off=parseInt(getComputedStyle(root).getPropertyValue('--topbar-h'))+30, cur=null;
+    for(var i=0;i<tocLinks.length;i++){ if(tocLinks[i].el.getBoundingClientRect().top-off<=0) cur=tocLinks[i]; }
+    if(!cur&&tocLinks.length) cur=tocLinks[0];
+    tocLinks.forEach(function(t){t.a.classList.toggle('active',t===cur);});
+    if(cur&&!isMobile()){
+      var r=cur.a.getBoundingClientRect(), sb=$('haise-sidebar').getBoundingClientRect();
+      if(r.top<sb.top+20||r.bottom>sb.bottom-20) cur.a.scrollIntoView({block:'nearest'});
+    }
+  }
+  window.addEventListener('scroll',function(){ if(!ticking){ticking=true;requestAnimationFrame(onScroll);} },{passive:true});
+  onScroll();
+
+  /* ---------- citations: tooltips + back-references ---------- */
+  var back={};
+  [].forEach.call(main.querySelectorAll('a.cite'),function(a,i){
+    var id=(a.getAttribute('href')||'').replace(/^#/,''), src=document.getElementById(id);
+    if(!a.id) a.id='cite-'+(i+1);
+    if(!src){a.classList.add('broken');return;}
+    var t=src.querySelector('.src-title'); if(t) a.title=t.textContent.trim();
+    (back[id]=back[id]||[]).push(a);
+  });
+  Object.keys(back).forEach(function(id){
+    var src=document.getElementById(id), box=src.querySelector('.backrefs');
+    if(!box){box=document.createElement('div');box.className='backrefs';src.appendChild(box);}
+    box.textContent=T.citedIn+': ';
+    back[id].forEach(function(a){
+      var sec=a.closest('section'), n=sec?sec.querySelector(':scope > h2 .num'):null;
+      var l=document.createElement('a'); l.href='#'+a.id; l.textContent='↩ §'+(n?n.textContent.replace('.',''):'?');
+      var h=sec?sec.querySelector(':scope > h2'):null; if(h) l.title=h.textContent.trim();
+      box.appendChild(l);
+    });
+  });
+
+  /* ---------- search (case- and accent-insensitive) ---------- */
+  var q=$('haise-q'), countEl=$('haise-count'), hits=[], cur=-1, opened=[], timer=null;
+  q.placeholder=T.search; q.setAttribute('aria-label',T.search);
+  $('haise-prev').title=T.prev; $('haise-prev').setAttribute('aria-label',T.prev);
+  $('haise-next').title=T.next; $('haise-next').setAttribute('aria-label',T.next);
+  function foldChar(c){
+    if(c==='đ'||c==='Đ') return 'd';
+    return c.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  }
+  function fold(s){
+    var out='', map=[];
+    for(var i=0;i<s.length;i++){ var f=foldChar(s[i]); for(var j=0;j<f.length;j++){out+=f[j];map.push(i);} }
+    return {s:out,map:map};
+  }
+  function clear(){
+    var parents=[];
+    hits.forEach(function(m){ var p=m.parentNode; if(!p) return; p.replaceChild(document.createTextNode(m.textContent),m); if(parents.indexOf(p)<0) parents.push(p); });
+    parents.forEach(function(p){p.normalize();});
+    opened.forEach(function(d){d.open=false;}); opened=[];
+    hits=[]; cur=-1;
+    tocLinks.forEach(function(t){t.a.querySelector('.badge').textContent='';});
+  }
+  function run(noJump){
+    clear();
+    var raw=q.value.trim(); if(raw.length<2){countEl.textContent='';return;}
+    var needle=fold(raw).s, nodes=[];
+    var w=document.createTreeWalker(main,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+      if(!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      var p=n.parentNode;
+      if(p.closest('script,style,svg,.no-search,textarea')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;}});
+    while(w.nextNode()) nodes.push(w.currentNode);
+    for(var k=0;k<nodes.length&&hits.length<3000;k++){
+      var node=nodes[k], text=node.nodeValue, f=fold(text), idx=f.s.indexOf(needle);
+      if(idx<0) continue;
+      var frag=document.createDocumentFragment(), last=0;
+      while(idx>=0){
+        var a=f.map[idx], b=f.map[idx+needle.length-1]+1;
+        if(a>=last){
+          frag.appendChild(document.createTextNode(text.slice(last,a)));
+          var m=document.createElement('mark'); m.className='hit'; m.textContent=text.slice(a,b);
+          frag.appendChild(m); hits.push(m); last=b;
+        }
+        idx=f.s.indexOf(needle,idx+needle.length);
+      }
+      frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag,node);
+    }
+    hits.forEach(function(m){
+      var d=m.parentNode.closest('details');
+      while(d){ if(!d.open){d.open=true;opened.push(d);} d=d.parentNode.closest('details'); }
+    });
+    tocLinks.forEach(function(t){
+      var scope=t.el.tagName==='SECTION'?t.el:null; if(!scope) return;
+      var n=scope.querySelectorAll('mark.hit').length;
+      t.a.querySelector('.badge').textContent=n?String(n):'';
+    });
+    if(!hits.length) countEl.textContent=T.none;
+    else if(noJump===true) countEl.textContent='– / '+hits.length;
+    else go(0);
+  }
+  function go(i){
+    if(!hits.length) return;
+    if(cur>=0&&hits[cur]) hits[cur].classList.remove('cur');
+    cur=(i+hits.length)%hits.length;
+    hits[cur].classList.add('cur');
+    hits[cur].scrollIntoView({block:'center',behavior:'smooth'});
+    countEl.textContent=(cur+1)+' / '+hits.length;
+  }
+  q.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(run,180);});
+  q.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault(); if(timer){clearTimeout(timer);timer=null;} if(!hits.length) run(); else go(cur+(e.shiftKey?-1:1));}
+    else if(e.key==='Escape'){q.value='';clear();countEl.textContent='';q.blur();}
+  });
+  $('haise-prev').addEventListener('click',function(){go(cur-1);});
+  $('haise-next').addEventListener('click',function(){go(cur+1);});
+
+  /* ---------- reload: re-read the file from disk, keep the reader's place ---------- */
+  var RK='haise.reload:'+location.pathname, reloadBtn=$('haise-reload');
+  reloadBtn.title=T.reload; reloadBtn.setAttribute('aria-label',T.reload);
+  function ss(k,v){try{if(v===undefined){var r=sessionStorage.getItem(k);sessionStorage.removeItem(k);return r;}sessionStorage.setItem(k,v);}catch(e){return null;}}
+  function reload(){
+    var anchor=null, top=0;
+    for(var i=tocLinks.length-1;i>=0;i--){ var r=tocLinks[i].el.getBoundingClientRect(); if(r.top<=window.innerHeight/3){anchor=tocLinks[i].el.id;top=r.top;break;} }
+    var open=[].map.call(main.querySelectorAll('details'),function(d){return d.open&&opened.indexOf(d)<0;});
+    ss(RK,JSON.stringify({y:window.scrollY,anchor:anchor,top:top,q:q.value,open:open}));
+    location.reload();
+  }
+  reloadBtn.addEventListener('click',reload);
+  (function restore(){
+    var s=ss(RK); if(!s) return;
+    try{s=JSON.parse(s);}catch(e){return;}
+    if('scrollRestoration' in history) history.scrollRestoration='manual';
+    var ds=main.querySelectorAll('details');
+    (s.open||[]).forEach(function(o,i){ if(o&&ds[i]) ds[i].open=true; });
+    if(s.q){q.value=s.q; run(true);}
+    var el=s.anchor&&document.getElementById(s.anchor);
+    var y=el?el.getBoundingClientRect().top+window.scrollY-s.top:s.y;
+    root.style.scrollBehavior='auto'; window.scrollTo(0,y); root.style.scrollBehavior='';
+    onScroll();
+  })();
+  /* ---------- zoom: click a figure image or diagram to view it large (vector stays sharp) ---------- */
+  (function zoom(){
+    var items=[].slice.call(main.querySelectorAll('figure.fig img, figure.fig svg')).filter(function(el){
+      return !el.closest('[data-nozoom]') && !(el.tagName.toLowerCase()==='svg' && el.parentElement.closest('svg'));
+    });
+    if(!items.length) return;
+    var Z=T.zoom, ov=document.createElement('div');
+    ov.className='zoom-ov'; ov.setAttribute('role','dialog'); ov.setAttribute('aria-modal','true');
+    ov.innerHTML='<div class="zoom-bar"><span class="zoom-pct"></span>'+
+      '<button class="iconbtn" type="button" data-z="out">−</button><button class="iconbtn" type="button" data-z="fit">⤢</button>'+
+      '<button class="iconbtn" type="button" data-z="one">1:1</button><button class="iconbtn" type="button" data-z="in">+</button>'+
+      '<button class="iconbtn" type="button" data-z="close">✕</button></div><div class="zoom-cap"></div>';
+    body.appendChild(ov);
+    var bar=ov.querySelector('.zoom-bar'), cap=ov.querySelector('.zoom-cap'), pct=ov.querySelector('.zoom-pct');
+    var TT={out:Z.zout,fit:Z.fit,one:Z.one,'in':Z.zin,close:Z.close};
+    [].forEach.call(bar.querySelectorAll('button'),function(b){b.title=TT[b.dataset.z];b.setAttribute('aria-label',TT[b.dataset.z]);});
+    var node=null,isSvg=false,w=1,h=1,s=1,fit=1,x=0,y=0,idx=-1,lastFocus=null,pts={},moved=false;
+    function dims(el){
+      if(el.tagName.toLowerCase()==='svg'){var vb=el.viewBox&&el.viewBox.baseVal; if(vb&&vb.width) return [vb.width,vb.height];}
+      else if(el.naturalWidth) return [el.naturalWidth,el.naturalHeight];
+      var r=el.getBoundingClientRect(); return [r.width||1,r.height||1];
+    }
+    function vw(){return ov.clientWidth;} function vh(){return ov.clientHeight;}
+    function lim(){var b=Math.max(fit,1); return [fit*0.5, b*(isSvg?10:4)];}
+    function render(){
+      node.style.width=(w*s)+'px'; node.style.height=(h*s)+'px';
+      node.style.transform='translate('+Math.round(x)+'px,'+Math.round(y)+'px)';
+      pct.textContent=Math.round(s*100)+'%';
+    }
+    function setScale(ns,cx,cy){
+      var l=lim(); ns=Math.min(l[1],Math.max(l[0],ns));
+      if(cx===undefined){cx=vw()/2;cy=vh()/2;}
+      x=cx-(cx-x)*ns/s; y=cy-(cy-y)*ns/s; s=ns; render();
+    }
+    function toFit(){
+      var top=60, bottom=(cap.textContent?cap.offsetHeight+24:16), room=vh()-top-bottom;
+      fit=Math.min((vw()-32)/w,room/h);
+      s=fit; x=(vw()-w*s)/2; y=top+(room-h*s)/2; render();
+    }
+    function open(i){
+      idx=(i+items.length)%items.length;
+      var src=items[idx]; isSvg=src.tagName.toLowerCase()==='svg';
+      if(node) node.remove();
+      node=src.cloneNode(true); node.removeAttribute('id'); node.removeAttribute('tabindex');
+      node.classList.remove('zoomable'); node.removeAttribute('style'); node.classList.add('zoom-item');
+      if(isSvg){node.removeAttribute('width');node.removeAttribute('height');node.setAttribute('preserveAspectRatio','xMidYMid meet');}
+      var d=dims(src); w=d[0]; h=d[1];
+      ov.insertBefore(node,bar);
+      var fig=src.closest('figure'), fc=fig&&fig.querySelector(':scope > figcaption');
+      var label=src.getAttribute('alt')||src.getAttribute('aria-label')||'';
+      cap.innerHTML='';
+      if(items.length>1){var n=document.createElement('b');n.textContent=(idx+1)+' / '+items.length+'  ';cap.appendChild(n);}
+      cap.appendChild(document.createTextNode([label,fc?fc.textContent.trim():''].filter(Boolean).join(' — ')));
+      if(!ov.classList.contains('on')){lastFocus=document.activeElement; ov.classList.add('on'); body.style.overflow='hidden';}
+      toFit(); bar.querySelector('[data-z="close"]').focus();
+    }
+    function close(){
+      ov.classList.remove('on'); body.style.overflow=''; pts={};
+      if(node){node.remove();node=null;} if(lastFocus&&lastFocus.focus) lastFocus.focus();
+    }
+    function act(z){
+      if(z==='close') close(); else if(z==='fit') toFit(); else if(z==='one') setScale(1);
+      else if(z==='in') setScale(s*1.4); else if(z==='out') setScale(s/1.4);
+    }
+    items.forEach(function(el,i){
+      el.classList.add('zoomable'); el.setAttribute('tabindex','0');
+      if(el.tagName.toLowerCase()==='img') el.title=Z.hint;
+      el.addEventListener('click',function(e){ if(e.target.closest&&e.target.closest('a')) return; open(i); });
+      el.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){e.preventDefault();open(i);} });
+    });
+    bar.addEventListener('click',function(e){var b=e.target.closest('button'); if(b) act(b.dataset.z);});
+    ov.addEventListener('wheel',function(e){
+      e.preventDefault(); setScale(s*Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0015)),e.clientX,e.clientY);
+    },{passive:false});
+    ov.addEventListener('pointerdown',function(e){
+      if(e.target.closest('.zoom-bar')) return;
+      try{ov.setPointerCapture(e.pointerId);}catch(_){}
+      pts[e.pointerId]={x:e.clientX,y:e.clientY,t:e.target}; if(Object.keys(pts).length===1) moved=false;
+      ov.classList.add('drag');
+    });
+    ov.addEventListener('pointermove',function(e){
+      var p=pts[e.pointerId]; if(!p) return;
+      var ids=Object.keys(pts);
+      if(ids.length===1){
+        var dx=e.clientX-p.x, dy=e.clientY-p.y; if(Math.abs(dx)+Math.abs(dy)>2) moved=true;
+        x+=dx; y+=dy; p.x=e.clientX; p.y=e.clientY; render();
+      }else if(ids.length===2){
+        var o=pts[ids[0]===String(e.pointerId)?ids[1]:ids[0]];
+        var d0=Math.hypot(p.x-o.x,p.y-o.y); p.x=e.clientX; p.y=e.clientY;
+        var d1=Math.hypot(p.x-o.x,p.y-o.y); moved=true;
+        if(d0>0) setScale(s*d1/d0,(p.x+o.x)/2,(p.y+o.y)/2);
+      }
+    });
+    function up(e){
+      var p=pts[e.pointerId]; delete pts[e.pointerId];
+      if(!Object.keys(pts).length){ ov.classList.remove('drag'); if(e.type==='pointerup'&&!moved&&p&&p.t===ov) close(); }
+    }
+    ov.addEventListener('pointerup',up); ov.addEventListener('pointercancel',up);
+    ov.addEventListener('dblclick',function(e){
+      if(!node||!node.contains(e.target)) return;
+      if(s>fit*1.05) toFit(); else setScale(isSvg?fit*2.5:Math.max(1,fit*2),e.clientX,e.clientY);
+    });
+    document.addEventListener('keydown',function(e){
+      if(!ov.classList.contains('on')) return;
+      var k=e.key, map={'Escape':'close','+':'in','=':'in','-':'out','_':'out','0':'fit','1':'one'};
+      if(map[k]) act(map[k]);
+      else if(k==='ArrowRight') open(idx+1);
+      else if(k==='ArrowLeft') open(idx-1);
+      else if(k==='Tab'){ /* keep focus inside the viewer */
+        var bs=bar.querySelectorAll('button'), f=bs[0], l=bs[bs.length-1];
+        if(e.shiftKey&&document.activeElement===f){l.focus();} else if(!e.shiftKey&&document.activeElement===l){f.focus();} else return;
+      } else return;
+      e.preventDefault(); e.stopImmediatePropagation();
+    },true);
+    window.addEventListener('resize',function(){ if(ov.classList.contains('on')) toFit(); });
+  })();
+
+  document.addEventListener('keydown',function(e){
+    var tag=(e.target.tagName||'').toLowerCase(), typing=tag==='input'||tag==='textarea'||e.target.isContentEditable;
+    if((e.key==='/'&&!typing)||((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K'))){e.preventDefault();q.focus();q.select();}
+  });
+})();
+</script>
+</body>
+</html>

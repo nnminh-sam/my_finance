@@ -24,6 +24,26 @@ export interface Spending {
   planDate?: string | null; // the plan occurrence date it came from
 }
 
+export type TransactionKind = 'expense' | 'income';
+
+/** One real money movement. Expenses are spendings; income rows are written from income schedules once paid. */
+export interface Transaction {
+  id: string;
+  kind: TransactionKind;
+  amount: number; // always > 0; the kind gives the direction
+  description: string;
+  category: string; // expense: a category id; income: the income source (Salary, Freelance, ...)
+  date: string; // YYYY-MM-DD, the paid day
+  time: string; // HH:mm
+  planId?: string | null;
+  planDate?: string | null;
+  incomeId?: string | null; // the income schedule it came from; null once that schedule is deleted
+  incomeDate?: string | null; // the nominal payday it came from
+}
+
+/** Editable fields of a transaction; its kind never changes. */
+export type TransactionInput = Pick<Transaction, 'amount' | 'description' | 'category' | 'date' | 'time'>;
+
 /** A forecast spending. Future occurrences are projected, never stored, until their time passes. */
 export interface PlanInput {
   amount: number;

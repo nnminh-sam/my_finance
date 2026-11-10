@@ -11,6 +11,7 @@ import { pageHref } from '../../lib/navigation';
 import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodOf } from '../../lib/periods';
 import { pages } from '../../lib/pages';
 import { fmtCompact, fmtVND } from '../../lib/analytics';
+import { expectedPaydays } from '../../lib/income';
 import '../../styles/Mobile.css';
 
 const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -18,7 +19,7 @@ const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 /** F · Month: a plain calendar of dates; daily spending lives in the bar chart above it. */
 export function MobileMonth() {
   const { currentDate, activeDate, onActiveDateChange } = useFinanceShell();
-  const { spendings, plans, incomes, fetchWeeksSpendings, projectedBetween } = useFinance();
+  const { spendings, plans, incomes, received, fetchWeeksSpendings, projectedBetween } = useFinance();
   const { settings } = useSettings();
   const router = useRouter();
   const [month, setMonth] = useState(() => startOfMonth(currentDate));
@@ -58,6 +59,15 @@ export function MobileMonth() {
     }
     return byDate;
   }, [projectedBetween, month]);
+
+  // Days with money in get a green dot: filled when received, a ring when the payday is still to come.
+  const incomeDays = useMemo(() => {
+    const from = format(month, 'yyyy-MM-dd'), to = format(endOfMonth(month), 'yyyy-MM-dd');
+    const byDate = new Map<string, 'received' | 'expected'>();
+    for (const item of expectedPaydays(incomes, from, to)) byDate.set(item.date, 'expected');
+    for (const record of received) if (record.date >= from && record.date <= to) byDate.set(record.date, 'received');
+    return byDate;
+  }, [incomes, received, month]);
 
   const max = Math.max(1, ...totals.values(), ...planned.values());
   const monthTotal = spendings.filter(s => s.date >= period.start && s.date <= period.end).reduce((sum, s) => sum + s.amount, 0);
@@ -116,16 +126,18 @@ export function MobileMonth() {
         {days.map(day => {
           const future = isAfter(day, today);
           const isToday = isSameDay(day, today);
+          const income = incomeDays.get(format(day, 'yyyy-MM-dd'));
           return (
             <button
               key={day.toISOString()}
               type="button"
               className={`m-dc${isToday ? ' is-today' : ''}${future ? ' is-future' : ''}`}
-              aria-label={format(day, 'EEEE d MMMM')}
+              aria-label={`${format(day, 'EEEE d MMMM')}${income === 'received' ? ', money received' : income === 'expected' ? ', payday expected' : ''}`}
               aria-current={isToday ? 'date' : undefined}
               onClick={() => openDay(day)}
             >
               <b>{format(day, 'd')}</b>
+              {income && <i className={`m-dc-income${income === 'expected' ? ' is-expected' : ''}`} aria-hidden="true" />}
             </button>
           );
         })}

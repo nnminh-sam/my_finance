@@ -1,0 +1,508 @@
+<meta charset="utf-8">
+<title>Income On Its Day</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== FIXED: tokens. Mirror src/styles/globals.css (dark is the app default, light mirrors .light-mode). ===== */
+:root {
+  --page: #050506; --bg: #09090b; --card: #18181b; --card-2: #1f1f23; --card-3: #27272a; --line: #3f3f46; --line-soft: #2a2a2f;
+  --fg: #f4f4f5; --muted: #a1a1aa; --faint: #71717a;
+  --primary: #3b82f6; --primary-text: #60a5fa; --primary-soft: rgba(59,130,246,.15);
+  --income: #34d399; --danger: #f87171; --danger-soft: rgba(239,68,68,.14); --warn: #f59e0b; --warn-soft: rgba(245,158,11,.14);
+  --ok: #34d399; --ok-soft: rgba(52,211,153,.13);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light; } }
+:root[data-theme="light"] {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light;
+}
+
+/* ===== FIXED: base ===== */
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 var(--font); background: var(--page); color: var(--fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.cur { font-size: .7em; opacity: .6; margin-left: .15em; font-weight: 500; }
+code { font-size: .9em; background: var(--card-2); padding: 1px 5px; border-radius: 5px; }
+svg { flex: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ===== FIXED: page chrome (sections 1–5) ===== */
+.intro { padding-block: 32px 8px; display: grid; gap: 12px; }
+.intro .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary-text); }
+.intro h1 { font-size: 26px; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); max-width: 76ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.part { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 32px; display: grid; gap: 16px; }
+.part > h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; display: flex; gap: 10px; align-items: baseline; }
+.part > h2 .n { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; }
+.part > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.today { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.shot { display: grid; gap: 8px; margin: 0; min-width: 0; }
+.shot img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+.shot figcaption { font-size: 12.5px; color: var(--muted); }
+.issues { display: grid; gap: 8px; counter-reset: issue; margin: 0; padding: 0; list-style: none; }
+.issues li { counter-increment: issue; display: grid; grid-template-columns: 28px 1fr; gap: 2px 10px; background: var(--card); border-radius: 12px; padding: 10px 14px; }
+.issues li::before { content: counter(issue); grid-row: span 2; width: 24px; height: 24px; border-radius: 99px; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--danger-soft); color: var(--danger); }
+.issues li.minor::before { background: var(--warn-soft); color: var(--warn); }
+.issues b { font-size: 14px; } .issues span { color: var(--muted); font-size: 13px; }
+.sev { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 1px; }
+.sev.hi { background: var(--danger-soft); color: var(--danger); } .sev.md { background: var(--warn-soft); color: var(--warn); } .sev.lo { background: var(--card-3); color: var(--muted); }
+.stories { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.story { background: var(--card); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; font-size: 13.5px; }
+.story .who { font-size: 12px; font-weight: 700; color: var(--primary-text); text-transform: uppercase; letter-spacing: .05em; }
+.story p { margin: 0; color: var(--muted); } .story p b { color: var(--fg); font-weight: 600; }
+.tbl { overflow-x: auto; background: var(--card); border-radius: 12px; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+.tbl th, .tbl td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.tbl th { color: var(--faint); font-weight: 500; font-size: 12px; border-top: 0; }
+.dir { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 24px; display: grid; gap: 16px; }
+.dir-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.dir-head .tag { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; text-transform: uppercase; }
+.dir-head h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.dir-head .rec { font-size: 11.5px; font-weight: 600; background: var(--primary-soft); color: var(--primary-text); padding: 2px 9px; border-radius: 999px; }
+.dir > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.notes div { background: var(--card); border-radius: 12px; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+.notes b { display: block; color: var(--fg); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.solves { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); align-items: center; }
+.solves i { font-style: normal; width: 20px; height: 20px; border-radius: 99px; display: inline-grid; place-items: center; font-weight: 700; background: var(--ok-soft); color: var(--ok); }
+
+/* ===== FIXED: stage + app-like components ===== */
+.stage { background: var(--bg); border-radius: 18px; padding: 28px 16px; display: grid; place-items: center; gap: 16px;
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(14.28% - 1px), var(--line-soft) calc(14.28% - 1px) 14.28%); }
+.modal { width: min(640px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.45); display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; }
+.modal.wide { width: min(860px, 100%); }
+.m-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.m-head h4 { margin: 0; font-size: 16px; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.m-head h4 small { color: var(--muted); font-weight: 500; font-size: 13px; }
+.x { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--card-2); color: var(--muted); }
+.m-body { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+.m-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.sp { flex: 1; }
+.btn { height: 38px; padding: 0 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); white-space: nowrap; }
+.btn.pri { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn[disabled] { opacity: .35; cursor: default; }
+.lbl { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.field { height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); padding: 0 12px; width: 100%; min-width: 0; font-size: 14px; }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--card-3); color: var(--muted); white-space: nowrap; }
+.sub { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.sub::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+.grid { display: grid; gap: 10px; }
+
+/* ===== FIXED: stepper visibility ===== */
+.stage-host [data-p] { display: none !important; }
+.stage-host[data-step="0"] [data-p~="0"], .stage-host[data-step="1"] [data-p~="1"], .stage-host[data-step="2"] [data-p~="2"],
+.stage-host[data-step="3"] [data-p~="3"], .stage-host[data-step="4"] [data-p~="4"], .stage-host[data-step="5"] [data-p~="5"] { display: revert !important; }
+.stage-host[data-step="0"] .grid[data-p~="0"], .stage-host[data-step="1"] .grid[data-p~="1"], .stage-host[data-step="2"] .grid[data-p~="2"],
+.stage-host[data-step="3"] .grid[data-p~="3"], .stage-host[data-step="4"] .grid[data-p~="4"], .stage-host[data-step="5"] .grid[data-p~="5"] { display: grid !important; }
+
+$1.stage { place-items: stretch; padding: 16px; }
+.demo { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+@media (max-width: 860px) { .demo { grid-template-columns: 1fr; } }
+.cal { background: var(--card); border-radius: 16px; padding: 12px; display: grid; gap: 8px; min-width: 0; }
+.cal-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; }
+.cal-sum { font-size: 12.5px; color: var(--muted); }
+.in { color: var(--income); }
+.wk, .grid7 { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.wk span { font-size: 11px; color: var(--faint); text-align: center; text-transform: uppercase; letter-spacing: .04em; }
+.cell { min-height: 64px; border-radius: 10px; background: var(--card-2); padding: 6px 7px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; text-align: left; border: 1px solid transparent; min-width: 0; }
+.cell.hot { background: color-mix(in srgb, var(--primary) var(--heat), var(--card-2)); }
+.cell.out { opacity: .3; cursor: default; }
+.cell.is-sel { border-color: var(--fg); }
+.cell.is-today .dnum { background: var(--fg); color: var(--bg); border-radius: 99px; padding: 0 6px; }
+.num-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.dnum { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.amt { margin-left: auto; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.amt.est, .inline.est { color: var(--faint); font-weight: 500; }
+.amt.in { color: var(--income); }
+.inline { align-self: flex-end; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inline.in { color: var(--income); }
+.inline.in.est { color: var(--income); opacity: .55; font-weight: 500; }
+.pay-dot { width: 8px; height: 8px; border-radius: 99px; background: var(--income); flex: none; }
+.pay-dot.ring { background: transparent; box-shadow: inset 0 0 0 1.5px var(--income); opacity: .7; }
+@media (max-width: 560px) { .cell { min-height: 52px; padding: 4px; } .amt { font-size: 11px; } .inline { font-size: 10.5px; } }
+
+.panel { background: var(--card); border-radius: 16px; padding: 14px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.p-head { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stats.three { grid-template-columns: repeat(3, 1fr); }
+.stat { background: var(--card-2); border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.stat span { font-size: 11.5px; color: var(--muted); }
+.stat b { font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat.in b { color: var(--income); }
+.month-line { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.month-line svg { color: var(--income); }
+.month-line b { color: var(--income); font-weight: 600; }
+.sub.in-sub { color: var(--income); }
+.list { display: grid; gap: 2px; }
+.tx { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 6px; border-radius: 10px; }
+.tx[data-edit] { cursor: pointer; }
+.tx[data-edit]:hover { background: var(--card-2); }
+.tx-ic { width: 30px; height: 30px; border-radius: 99px; display: inline-grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); flex: none; }
+.tx-info { display: grid; min-width: 0; }
+.tx-info b { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx-info small { color: var(--faint); font-size: 12px; }
+.tx-amt { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13.5px; white-space: nowrap; }
+.tx.is-in .tx-amt { color: var(--income); }
+.tx.is-est { opacity: .6; }
+.tx.is-est .tx-amt { font-weight: 500; }
+.empty { font-size: 13px; color: var(--faint); padding: 8px 6px; }
+
+.scrim { position: absolute; inset: 0; background: rgba(0,0,0,.45); border-radius: 16px; display: grid; place-items: center; padding: 16px; z-index: 2; }
+.sheet { width: min(440px, 100%); }
+.sheet .m-head h4 { gap: 10px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 480px) { .two { grid-template-columns: 1fr; } }
+.btn.danger { color: var(--danger); }
+.btn.in-btn { background: var(--income); border-color: var(--income); color: #04130d; }
+.toast { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: var(--fg); color: var(--bg); border-radius: 12px; padding: 8px 8px 8px 14px; font-size: 13px; display: flex; gap: 10px; align-items: center; z-index: 3; white-space: nowrap; }
+.toast button { font-weight: 700; padding: 4px 10px; border-radius: 8px; background: color-mix(in srgb, var(--bg) 12%, transparent); }
+.month-line .exp { color: var(--faint); }
+.phone-only { display: none; }
+@media (max-width: 560px) {
+  .phone-only { display: block; }
+  .demo[data-dir="a"] .inline { display: none; }
+  .num-row { flex-wrap: wrap; row-gap: 2px; }
+  .amt { margin-left: 0; width: 100%; font-size: 10.5px; }
+}
+
+</style>
+
+<!-- FIXED: icon sprite. Add symbols here as needed (lucide-style, 24×24, stroke=currentColor). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  $1  <symbol id="i-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7 7 17M17 17H7V7"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></symbol>
+  <symbol id="i-food" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2v-5l-2.5-5h-13L3 12v5h2M7 17a2 2 0 1 0 0 .01M17 17a2 2 0 1 0 0 .01M9 17h6"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 12h18M3 7.5h4M3 16.5h4M17 7.5h4M17 16.5h4"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1zM8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/></symbol>
+</svg>
+
+<main class="wrap">
+  <section class="intro">
+    <span class="eyebrow">Mockup · Calendar, Week, Day · income on its day</span>
+    <h1>Money you received never shows on the day you got it</h1>
+    <p>Each received payment is now a real row (a Salary payday, a gift from mom), so the calendar can show it. This page proposes how a day shows income without making it look like spending, how you fix one payment that came late or short, and how a payday that has not come yet looks.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--income)"></i>money in</span>
+      <span><i class="sw" style="background:var(--fg)"></i>money out</span>
+      <span><i class="sw" style="background:var(--faint)"></i>not yet (expected or planned)</span>
+      <span>Today is <b>Tue 10 Nov 2026</b>. Tap any day in a stage.</span>
+    </div>
+  </section>
+
+  <section class="part" id="today">
+    <h2><span class="n">01</span>Today</h2>
+    <p>Rebuilt from the current code with the same data as the directions. Tap 5 Nov: mom's 500.000 ₫ is in the database but appears nowhere on that day.</p>
+    <div class="stage"><div class="demo" data-dir="today" data-day="2026-11-05"></div></div>
+    <ol class="issues">
+      <li><b>The day cell sums spendings only <span class="sev hi">High</span></b><span>5 Nov shows <code>120k</code> and nothing about the 500k received. <code>src/components/CalendarView.tsx:740</code> reads <code>getTotalForDate(day, spendings)</code>.</span></li>
+      <li><b>The day list has no income rows <span class="sev hi">High</span></b><span>"Transactions" lists spendings only, and the empty state says "No spending recorded". <code>src/components/DayDetails.tsx:85,238</code>, <code>src/components/WeekView.tsx:139</code>, <code>src/components/mobile/MobileWeek.tsx:67</code>.</span></li>
+      <li><b>"Total Income" in the Daily Summary is the whole month <span class="sev hi">High</span></b><span>It sits next to "Total Spent" for the day but shows 23.500.000 ₫ for the period. <code>src/components/DayDetails.tsx:89,205</code>.</span></li>
+      <li><b>No way to fix one payment <span class="sev md">Medium</span></b><span>A salary paid 2 days late or 1tr short can only be changed by editing the schedule, which changes every month. <code>PUT /transactions/:id</code> exists since PR 1; no screen uses it.</span></li>
+      <li class="minor"><b>A coming payday is invisible on the calendar <span class="sev md">Medium</span></b><span>25 Nov looks like any other day, so "can I pay rent on the 28th?" needs the Income page. Planned spendings already show as <code>~</code> estimates, income does not.</span></li>
+      <li class="minor"><b>Income must not feed the heat fill <span class="sev lo">Constraint</span></b><span>The cell background is a spend heatmap (<code>CalendarView.tsx:741</code>). Adding 20.000k into it would paint payday as the most expensive day.</span></li>
+    </ol>
+  </section>
+
+  <section class="part" id="people">
+    <h2><span class="n">02</span>Who and when</h2>
+    <div class="stories">
+      <div class="story"><span class="who">Salaried parent</span><p>As <b>someone paid on the 25th</b>, I want <b>to see payday on the calendar</b> so that I know which bills land before and after it.</p></div>
+      <div class="story"><span class="who">Family member</span><p>As <b>a daughter who got 500k from mom</b>, I want <b>it on the day it came</b> so that the day's story is complete.</p></div>
+      <div class="story"><span class="who">Freelancer</span><p>As <b>someone paid late and short</b>, I want <b>to fix that one payment</b> so that the month is true without touching my schedule.</p></div>
+      <div class="story"><span class="who">Careful spender</span><p>As <b>someone watching the month</b>, I want <b>received and expected income apart</b> so that I never spend money that has not arrived.</p></div>
+    </div>
+    <div class="tbl"><table>
+      <tr><th>Use case</th><th>Trigger</th><th>Steps today</th><th>Goal</th></tr>
+      <tr><td>Check a day</td><td>Tap 5 Nov</td><td>See 120k spent; the gift is missing</td><td>See 500k in and 120k out</td></tr>
+      <tr><td>Salary came late</td><td>Paid 27 Oct, not 23 Oct</td><td>Profile → Income → edit schedule (changes every month)</td><td>Move that one payment to 27 Oct</td></tr>
+      <tr><td>Wrong entry</td><td>A payment that never came</td><td>Delete the whole schedule</td><td>Delete that one payment only</td></tr>
+      <tr><td>Plan around payday</td><td>Rent due 28 Nov</td><td>Open Profile → Income to find the payday</td><td>See "~20.000k" on 25 Nov in the calendar</td></tr>
+    </table></div>
+  </section>
+
+  <section class="part" id="directions">
+    <h2><span class="n">03</span>Directions</h2>
+    <p>All three use the same data and the same edit sheet. They differ in how loud income is in the month grid and how the day list is split.</p>
+  </section>
+
+  <section class="dir" id="a">
+    <div class="dir-head"><span class="tag">A</span><h3>Green second line</h3><span class="rec">Recommended</span></div>
+    <p>The spend total keeps its place. Income gets its own small green line under it: solid when received, faint with <code>~</code> when expected. The day list is one time-ordered list where money in is green and signed <code>+</code>.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>4</i><i>5</i><i>6</i></div>
+    <div class="stage"><div class="demo" data-dir="a" data-day="2026-11-05"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Same pattern as planned spendings (<code>~</code>, muted), so nothing new to learn.</li><li>Daily Summary becomes "Out / In" for the day; the month's income moves to a small line.</li><li>Heat fill stays spend-only.</li></ul></div>
+      <div><b>Watch</b><ul><li>Cells on phones fit one line: show income only when the day has no spend, or as a green dot.</li><li>Two numbers in one cell on a busy day.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="b">
+    <div class="dir-head"><span class="tag">B</span><h3>Payday dot</h3></div>
+    <p>The grid stays almost as it is: a green dot by the date says "money came in" (a ring when it is still expected). Amounts show only in the day panel, which splits into "Money in" above "Money out".</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>4</i><i>5</i><i>6</i></div>
+    <div class="stage"><div class="demo" data-dir="b" data-day="2026-11-05"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Calmest grid; works the same at phone width.</li><li>Two sections make income impossible to mistake for spending.</li></ul></div>
+      <div><b>Watch</b><ul><li>How much came in needs a tap.</li><li>Two lists split one day's story; time order is lost.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="c">
+    <div class="dir-head"><span class="tag">C</span><h3>Day net</h3></div>
+    <p>Each cell shows the day's net: <code>+380k</code> in green when more came in than went out, the spend total otherwise. The day panel opens with In, Out and Net, then one list.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>4</i></div>
+    <div class="stage"><div class="demo" data-dir="c" data-day="2026-11-05"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>One number per cell, no extra row.</li><li>Answers "did I end the day ahead?".</li></ul></div>
+      <div><b>Watch</b><ul><li>Payday hides that day's spending (20.000k − 85k reads as +19.915k).</li><li>Spend totals and nets mixed in one grid are hard to compare; expected paydays have no place.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="part" id="recommendation" style="padding-bottom:48px">
+    <h2><span class="n">04</span>Recommendation</h2>
+    <p>Build <b>A</b>. It shows the amount where you already look, reuses the muted <code>~</code> style for "not yet", and keeps green for money in only. On phones the cell falls back to B's green dot when the day also has spending. The edit sheet is shared by every direction.</p>
+    <div class="tbl"><table>
+      <tr><th>File</th><th>Change</th></tr>
+      <tr><td><code>src/lib/income.ts</code></td><td><code>receivedOn(day)</code> and <code>expectedOn(day)</code> helpers from <code>received</code> and the schedules (paydays after today)</td></tr>
+      <tr><td><code>src/components/CalendarView.tsx</code> + <code>CalendarView.css</code></td><td>Green income line under the spend total; <code>~</code> muted line for expected; heat fill unchanged</td></tr>
+      <tr><td><code>src/components/DayDetails.tsx</code></td><td>Summary "Out / In" for the day plus a small period income line; income rows in Transactions; expected payday row in Planned</td></tr>
+      <tr><td><code>src/components/IncomeRecordSheet.tsx</code> (new)</td><td>Edit amount, date, note of one payment; Delete; uses <code>updateReceived</code> / <code>deleteReceived</code></td></tr>
+      <tr><td><code>src/components/WeekView.tsx</code>, <code>mobile/MobileWeek.tsx</code>, <code>mobile/MobileMonth.tsx</code></td><td>Same income rows in the day lists; dot in phone cells</td></tr>
+    </table></div>
+  </section>
+</main>
+
+<script>
+/* FIXED: stepper engine. Page-specific scripts go in a second <script> below. */
+(() => {
+  document.querySelectorAll('.stage-host').forEach(host => {
+    const lefts = (host.dataset.lefts || '').split('|');
+    const max = Math.max(0, ...[...host.querySelectorAll('[data-p]')].flatMap(el => el.dataset.p.split(' ').map(Number)));
+    const set = step => {
+      step = Math.max(0, Math.min(max, step));
+      host.dataset.step = step;
+      if (host.dataset.lefts) host.querySelectorAll('[data-left]').forEach(el => { el.textContent = lefts[step] ?? ''; });
+      const next = host.querySelector('[data-go="next"]');
+      if (next && next.dataset.labels) { const l = next.dataset.labels.split('|'); const t = [...next.childNodes].find(n => n.nodeType === 3); if (t) t.nodeValue = l[step] ?? l[l.length - 1]; }
+      const back = host.querySelector('[data-go="back"]'); if (back) back.disabled = step === 0;
+      host.querySelectorAll('[data-go]:not([data-go="next"]):not([data-go="back"])').forEach(b => {
+        const on = +b.dataset.go === step; b.classList.toggle('on', on); b.classList.toggle('done', +b.dataset.go < step);
+        if (on) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      });
+      host.dispatchEvent(new CustomEvent('step', { detail: step }));
+    };
+    host.addEventListener('click', e => {
+      const b = e.target.closest('[data-go]'); if (!b || b.disabled || !host.contains(b)) return;
+      const cur = +host.dataset.step, go = b.dataset.go;
+      set(go === 'next' ? (cur === max ? 0 : cur + 1) : go === 'back' ? cur - 1 : +go);
+    });
+    set(+host.dataset.step || 0);
+  });
+})();
+</script>
+
+<script>
+(() => {
+  const TODAY = '2026-11-10';
+  const CATS = {
+    Food: { color: '#10b981', icon: 'i-food' }, Transport: { color: '#3b82f6', icon: 'i-car' },
+    Fun: { color: '#8b5cf6', icon: 'i-film' }, Shopping: { color: '#f59e0b', icon: 'i-bag' },
+    Bills: { color: '#ef4444', icon: 'i-receipt' }, Family: { color: '#ec4899', icon: 'i-heart' },
+  };
+  const SPEND = [
+    ['2026-11-02', '08:10', 'Phở bò', 'Food', 45000], ['2026-11-02', '18:40', 'Grab về nhà', 'Transport', 32000],
+    ['2026-11-03', '09:05', 'Cà phê', 'Food', 29000], ['2026-11-04', '19:20', 'Đi chợ', 'Shopping', 210000],
+    ['2026-11-05', '12:15', 'Cơm trưa', 'Food', 55000], ['2026-11-05', '17:50', 'Grab', 'Transport', 65000],
+    ['2026-11-06', '20:00', 'Xem phim', 'Fun', 140000], ['2026-11-07', '10:30', 'Đi chợ', 'Shopping', 180000],
+    ['2026-11-08', '11:00', 'Ba đi đám cưới', 'Family', 500000], ['2026-11-09', '08:45', 'Cà phê', 'Food', 35000],
+    ['2026-11-10', '12:05', 'Cơm trưa', 'Food', 50000],
+  ].map(([date, time, desc, cat, amount], i) => ({ id: 's' + i, date, time, desc, cat, amount }));
+  const PLANNED = [
+    { date: '2026-11-15', desc: 'Điện nước', cat: 'Bills', amount: 450000 },
+    { date: '2026-11-28', desc: 'Tiền trọ', cat: 'Bills', amount: 3500000 },
+  ];
+  const EXPECTED = [{ date: '2026-11-25', source: 'Salary', name: 'Company', amount: 20000000 }];
+  const START_INCOME = [
+    { id: 'r1', date: '2026-11-05', source: 'Gift', name: 'Mẹ cho', amount: 500000, schedule: 'One time' },
+    { id: 'r2', date: '2026-11-07', source: 'Freelance', name: 'Logo cho chị Hà', amount: 3000000, schedule: 'One time' },
+  ];
+
+  const vnd = n => n.toLocaleString('vi-VN');
+  const compact = n => n < 1000 ? vnd(n) + ' ₫' : (n / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + 'k';
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const label = s => parse(s).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const icon = (id, size = 16) => `<svg width="${size}" height="${size}"><use href="#${id}"/></svg>`;
+  const sum = list => list.reduce((t, x) => t + x.amount, 0);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  const DAYS = [];
+  for (let d = new Date(2026, 9, 26); DAYS.length < 42; d.setDate(d.getDate() + 1)) DAYS.push(iso(d));
+  const peak = Math.max(...DAYS.map(day => sum(SPEND.filter(s => s.date === day))));
+
+  document.querySelectorAll('.demo').forEach(host => {
+    const dir = host.dataset.dir;
+    const state = { day: host.dataset.day, income: structuredClone(START_INCOME), editing: null, toast: null };
+    const spendOn = day => SPEND.filter(s => s.date === day);
+    const incomeOn = day => state.income.filter(r => r.date === day);
+    const expectedOn = day => EXPECTED.filter(e => e.date === day && e.date > TODAY);
+    const plannedOn = day => PLANNED.filter(p => p.date === day && p.date > TODAY);
+    const monthReceived = () => sum(state.income.filter(r => r.date.startsWith('2026-11')));
+    const monthExpected = () => sum(EXPECTED.filter(e => e.date > TODAY));
+
+    function cell(day) {
+      const outside = !day.startsWith('2026-11');
+      const out = sum(spendOn(day)), inn = sum(incomeOn(day)), exp = sum(expectedOn(day)), plan = sum(plannedOn(day));
+      const heat = !outside && out ? `style="--heat:${Math.round(10 + 45 * out / peak)}%"` : '';
+      const cls = ['cell', outside && 'out', day === TODAY && 'is-today', day === state.day && 'is-sel', out && 'hot'].filter(Boolean).join(' ');
+      let top = '', lines = '', dot = '';
+      if (!outside) {
+        if (dir === 'c' && inn) {
+          const net = inn - out;
+          top = `<span class="amt ${net >= 0 ? 'in' : ''}">${net >= 0 ? '+' : '−'}${compact(Math.abs(net))}</span>`;
+        } else if (out) top = `<span class="amt">${compact(out)}</span>`;
+        else if (plan && dir !== 'c') top = `<span class="amt est">~${compact(plan)}</span>`;
+        else if (plan) top = `<span class="amt est">~${compact(plan)}</span>`;
+        if (dir === 'a') {
+          if (inn) lines += `<span class="inline in">+${compact(inn)}</span>`;
+          if (exp) lines += `<span class="inline in est">~+${compact(exp)}</span>`;
+          if (out && plan) lines += `<span class="inline est">~${compact(plan)}</span>`;
+        }
+        if (dir === 'a' && (inn || exp)) dot = `<i class="pay-dot phone-only ${inn ? '' : 'ring'}"></i>`;
+        if (dir === 'b' && (inn || exp)) dot = `<i class="pay-dot ${inn ? '' : 'ring'}" title="${inn ? 'Money in' : 'Payday expected'}"></i>`;
+      }
+      return `<button class="${cls}" ${heat} data-day="${day}" ${outside ? 'tabindex="-1"' : ''}>
+        <span class="num-row"><span class="dnum">${parse(day).getDate()}</span>${dot}${top}</span>${lines}</button>`;
+    }
+
+    function row({ cls = '', color, iconId, title, sub, amount, sign, attrs = '' }) {
+      return `<div class="tx ${cls}" ${attrs}><span class="tx-ic" style="--c:${color}">${icon(iconId)}</span>
+        <span class="tx-info"><b>${esc(title)}</b><small>${sub}</small></span>
+        <span class="tx-amt">${sign}${vnd(amount)} ₫</span></div>`;
+    }
+    const spendRow = s => row({ color: CATS[s.cat].color, iconId: CATS[s.cat].icon, title: s.desc, sub: s.time, amount: s.amount, sign: '−' });
+    const incomeRow = r => row({ cls: 'is-in', color: 'var(--income)', iconId: 'i-in', title: r.name, sub: `<span class="chip">${r.source}</span>`, amount: r.amount, sign: '+', attrs: `role="button" tabindex="0" data-edit="${r.id}"` });
+    const expectedRow = e => row({ cls: 'is-in is-est', color: 'var(--income)', iconId: 'i-in', title: `${e.source} · ${e.name}`, sub: '<span class="chip">expected</span>', amount: e.amount, sign: '~+' });
+    const plannedRow = p => row({ cls: 'is-est', color: CATS[p.cat].color, iconId: CATS[p.cat].icon, title: p.desc, sub: '<span class="chip">planned</span>', amount: p.amount, sign: '~−' });
+
+    function stat(k, v, cls = '') { return `<div class="stat ${cls}"><span>${k}</span><b>${v}</b></div>`; }
+
+    function panel() {
+      const day = state.day, spends = spendOn(day), incs = incomeOn(day), exps = expectedOn(day), plans = plannedOn(day);
+      const out = sum(spends), inn = sum(incs);
+      let html = `<div class="p-head"><b>${label(day)}</b>${day === TODAY ? '<span class="chip">Today</span>' : ''}</div>`;
+      if (dir === 'today') {
+        html += `<div class="stats">${stat('Total Spent', vnd(out) + ' ₫')}${stat('Total Income', vnd(monthReceived() + monthExpected()) + ' ₫', 'in')}</div>`;
+        html += `<div class="sub">Transactions</div>`;
+        html += spends.length ? `<div class="list">${spends.map(spendRow).join('')}</div>` : `<div class="empty">No spending recorded for this day.</div>`;
+        if (plans.length) html += `<div class="sub">Planned</div><div class="list">${plans.map(plannedRow).join('')}</div>`;
+        return html;
+      }
+      const month = `<div class="month-line">${icon('i-in', 13)}<span>Nov <b>+${compact(monthReceived())}</b> in · <span class="exp">~${compact(monthExpected())} expected</span></span></div>`;
+      if (dir === 'c') {
+        const net = inn - out;
+        html += `<div class="stats three">${stat('In', '+' + compact(inn), 'in')}${stat('Out', '−' + compact(out))}${stat('Net', (net >= 0 ? '+' : '−') + compact(Math.abs(net)), net >= 0 ? 'in' : '')}</div>${month}`;
+      } else {
+        html += `<div class="stats">${stat('Out', vnd(out) + ' ₫')}${stat('In', (inn ? '+' : '') + vnd(inn) + ' ₫', 'in')}</div>${month}`;
+      }
+      const timeline = [...incs.map(r => ({ t: '00:00', h: incomeRow(r) })), ...spends.map(s => ({ t: s.time, h: spendRow(s) }))].sort((a, b) => a.t.localeCompare(b.t));
+      if (dir === 'b') {
+        if (incs.length || exps.length) html += `<div class="sub in-sub">Money in</div><div class="list">${incs.map(incomeRow).join('')}${exps.map(expectedRow).join('')}</div>`;
+        html += `<div class="sub">Money out</div>` + (spends.length ? `<div class="list">${spends.map(spendRow).join('')}</div>` : `<div class="empty">Nothing spent</div>`);
+        if (plans.length) html += `<div class="sub">Planned</div><div class="list">${plans.map(plannedRow).join('')}</div>`;
+      } else {
+        html += `<div class="sub">Transactions</div>` + (timeline.length ? `<div class="list">${timeline.map(x => x.h).join('')}</div>` : `<div class="empty">Nothing in or out</div>`);
+        const later = dir === 'a' ? [...exps.map(expectedRow), ...plans.map(plannedRow)] : plans.map(plannedRow);
+        if (later.length) html += `<div class="sub">Coming</div><div class="list">${later.join('')}</div>`;
+      }
+      return html;
+    }
+
+    function sheet() {
+      const r = state.income.find(x => x.id === state.editing);
+      if (!r) return '';
+      return `<div class="scrim"><div class="modal sheet" role="dialog" aria-label="Edit payment">
+        <div class="m-head"><h4><span class="tx-ic" style="--c:var(--income)">${icon('i-in')}</span>${esc(r.name)} <small>${r.source} · ${r.schedule}</small></h4>
+          <button class="x" data-act="close" aria-label="Close">${icon('i-x')}</button></div>
+        <div class="m-body">
+          <label class="grid"><span class="lbl">Amount</span><input class="field num" data-f="amount" inputmode="numeric" value="${vnd(r.amount)}"></label>
+          <div class="two"><label class="grid"><span class="lbl">Received on</span><input class="field" type="date" data-f="date" value="${r.date}" min="2026-10-01" max="${TODAY}"></label>
+          <label class="grid"><span class="lbl">Note</span><input class="field" data-f="name" value="${esc(r.name)}"></label></div>
+        </div>
+        <div class="m-foot"><button class="btn ghost danger" data-act="delete">${icon('i-trash', 15)}Delete payment</button><span class="sp"></span>
+          <button class="btn" data-act="close">Cancel</button><button class="btn pri in-btn" data-act="save">${icon('i-check', 15)}Save</button></div>
+      </div></div>`;
+    }
+
+    function render() {
+      host.innerHTML = `<div class="cal"><div class="cal-head"><b>November 2026</b><span class="cal-sum">${dir === 'today' ? '' : `<span class="in">+${vnd(monthReceived())} ₫</span> received`}</span></div>
+        <div class="wk">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<span>${d}</span>`).join('')}</div>
+        <div class="grid7">${DAYS.map(cell).join('')}</div></div>
+        <aside class="panel">${panel()}</aside>${sheet()}${state.toast ? `<div class="toast">${state.toast}<button data-act="undo">Undo</button></div>` : ''}`;
+      const first = host.querySelector('.sheet .field'); if (first) first.focus();
+    }
+
+    let undo = null;
+    host.addEventListener('click', e => {
+      const dayBtn = e.target.closest('.cell:not(.out)');
+      if (dayBtn) { state.day = dayBtn.dataset.day; state.toast = null; render(); return; }
+      const edit = e.target.closest('[data-edit]');
+      if (edit && dir !== 'today') { state.editing = edit.dataset.edit; render(); return; }
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if (!act) return;
+      const r = state.income.find(x => x.id === state.editing);
+      if (act === 'close') state.editing = null;
+      if (act === 'save' && r) {
+        const get = f => host.querySelector(`[data-f="${f}"]`).value;
+        const amount = Number(get('amount').replace(/\D/g, ''));
+        if (amount > 0) r.amount = amount;
+        if (get('date')) r.date = get('date');
+        r.name = get('name').trim() || r.name;
+        state.day = r.date; state.editing = null; state.toast = 'Payment saved · schedule unchanged';
+      }
+      if (act === 'delete' && r) {
+        undo = structuredClone(r);
+        state.income = state.income.filter(x => x.id !== r.id); state.editing = null; state.toast = 'Payment deleted';
+      }
+      if (act === 'undo' && undo) { state.income.push(undo); undo = null; state.toast = null; }
+      render();
+    });
+    host.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && state.editing) { state.editing = null; render(); }
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-edit]')) { e.preventDefault(); e.target.click(); }
+    });
+    render();
+  });
+})();
+</script>

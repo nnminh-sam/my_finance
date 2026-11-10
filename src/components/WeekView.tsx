@@ -2,11 +2,12 @@
 
 import React, { useRef } from 'react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isToday, addWeeks, subWeeks } from 'date-fns';
-import { Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone } from "lucide-react";
+import { ArrowDownLeft, Utensils, Car, Film, ShoppingBag, Receipt, CircleDollarSign, Coffee, Home, Heart, Briefcase, Gift, Phone } from "lucide-react";
 import { getSpendingsForDate, getTotalForDate, formatCompactSpending } from '../lib/spendings';
 import { useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodIncome } from '../lib/periods';
+import { expectedPaydays } from '../lib/income';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import '../styles/WeekView.css';
@@ -31,7 +32,7 @@ interface WeekViewProps {
 
 export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, onNavigateDate }) => {
   const { settings } = useSettings();
-  const { spendings, incomes, projectedBetween } = useFinance();
+  const { spendings, incomes, received, projectedBetween } = useFinance();
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const mobileDayCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -60,7 +61,7 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
   };
 
   // Income follows Show by: the calendar month, or the pay period that contains the date shown.
-  const { totalIncome } = viewPeriodIncome(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, format(currentDate, 'yyyy-MM-dd'));
+  const { totalIncome } = viewPeriodIncome(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, format(currentDate, 'yyyy-MM-dd'), received);
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: startDate, end: endDate });
@@ -138,6 +139,24 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
           const dayKey = format(day, 'yyyy-MM-dd');
           const daySpendings = getSpendingsForDate(day, spendings);
           const dayPlanned = weekPlanned.filter(item => item.date === dayKey);
+          const dayReceived = received.filter(record => record.date === dayKey);
+          const dayExpected = expectedPaydays(incomes, dayKey, dayKey);
+          const incomeRows = [
+            ...dayReceived.map(record => (
+              <div key={record.id} className="week-feed-tx-row is-income">
+                <span className="week-feed-tx-badge is-income" aria-hidden="true"><ArrowDownLeft size={15} /></span>
+                <span className="week-feed-tx-desc">{record.description || record.category}</span>
+                <span className="week-feed-tx-amount">+{formatCompactSpending(record.amount)}</span>
+              </div>
+            )),
+            ...dayExpected.map(payday => (
+              <div key={`payday-${payday.incomeId}`} className="week-feed-tx-row is-income is-planned" title="Payday expected, not received yet">
+                <span className="week-feed-tx-badge is-income" aria-hidden="true"><ArrowDownLeft size={15} /></span>
+                <span className="week-feed-tx-desc">{payday.source}<span className="sr-only"> (expected)</span></span>
+                <span className="week-feed-tx-amount">~+{formatCompactSpending(payday.amount)}</span>
+              </div>
+            )),
+          ];
           const isCurrentDay = isToday(day);
 
           return (
@@ -161,9 +180,10 @@ export const WeekView: React.FC<WeekViewProps> = ({ currentDate, onDateClick, on
               </div>
 
               <div className="week-feed-tx-col">
+                {incomeRows}
                 {daySpendings.length === 0 && dayPlanned.length === 0 ? (
-                  <div className="week-feed-empty-row">
-                    <span>No spending</span>
+                  incomeRows.length > 0 ? null : <div className="week-feed-empty-row">
+                    <span>Nothing in or out</span>
                     <span className="week-feed-empty-amount">0</span>
                   </div>
                 ) : (

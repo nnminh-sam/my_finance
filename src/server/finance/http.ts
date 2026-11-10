@@ -2,7 +2,7 @@ import { authenticateRequest, HttpError } from "../auth/http";
 import type { AuthStore } from "../auth/store";
 import { loadPlanPeriodSummary } from "./periodSummary";
 import type { FinanceStore } from "./store";
-import { categoryMerge, incomeInput, pagination, planDate, planExceptionInput, planInput, planSummaryDate, repeatRuleInput, settingsPatch, spendingInput, uuid } from "./validation";
+import { categoryMerge, incomeInput, pagination, planDate, planExceptionInput, planInput, planSummaryDate, repeatRuleInput, settingsPatch, spendingInput, transactionInput, transactionKind, uuid } from "./validation";
 
 function planId(value: unknown): string {
   try { return uuid(value); }
@@ -104,6 +104,27 @@ export async function handleFinanceRequest(
     }
     if (method === "DELETE") {
       if (!await store.deleteSpending(user.id, uuid(rawId))) throw new HttpError(404, "Spending not found");
+      return new Response(null, { status: 204, headers: responseHeaders });
+    }
+  }
+
+  // Every real money movement: spendings (kind expense) and income received (kind income).
+  if (subpath === "/transactions" && (method === "GET" || method === "HEAD")) {
+    const { limit, cursor, startDate, endDate } = pagination(query);
+    return jsonResponse(await store.listTransactions(user.id, limit, cursor, startDate, endDate, transactionKind(query)));
+  }
+
+  const transactionMatch = /^\/transactions\/([^/]+)$/.exec(subpath);
+  if (transactionMatch) {
+    const rawId = decodeURIComponent(transactionMatch[1]);
+    if (method === "PUT") {
+      const transaction = await store.updateTransaction(user.id, uuid(rawId), transactionInput(body));
+      if (transaction === "not-found") throw new HttpError(404, "Transaction not found");
+      if (transaction === "invalid-category") throw new HttpError(400, "Category must exist in current settings");
+      return jsonResponse({ transaction });
+    }
+    if (method === "DELETE") {
+      if (!await store.deleteTransaction(user.id, uuid(rawId))) throw new HttpError(404, "Transaction not found");
       return new Response(null, { status: 204, headers: responseHeaders });
     }
   }

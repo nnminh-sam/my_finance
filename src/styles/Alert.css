@@ -30,3 +30,11 @@
 @media (prefers-reduced-motion: reduce) {
   .m-alert { animation: none; }
 }
+
+/* Edit one received income payment (IncomeRecordSheet): labelled fields inside the alert. */
+.income-sheet-source { color: var(--success); font-weight: 600; }
+.income-sheet-fields { display: grid; gap: 10px; margin-top: 12px; text-align: left; }
+.income-sheet-fields label { display: grid; gap: 4px; }
+.income-sheet-fields label > span { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+.income-sheet-fields .m-alert-input { margin-top: 0; text-align: left; }
+.income-sheet-error { margin: 0; color: var(--danger); font-size: 0.85rem; }
