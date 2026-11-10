@@ -26,6 +26,25 @@ export interface Spending extends SpendingInput {
   planDate?: string | null; // the plan occurrence date it came from
 }
 export interface SpendingPage { spendings: Spending[]; nextCursor: string | null }
+export const TRANSACTION_KINDS = ["expense", "income"] as const;
+export type TransactionKind = typeof TRANSACTION_KINDS[number];
+/** One real money movement. Expenses are spendings; income rows are written from income schedules. */
+export interface Transaction {
+  id: string;
+  kind: TransactionKind;
+  amount: number; // always > 0; the kind gives the direction
+  description: string;
+  category: string; // expense: a category id; income: the income source (Salary, Freelance, ...)
+  date: string; // YYYY-MM-DD, the paid day
+  time: string; // HH:mm
+  planId?: string | null;
+  planDate?: string | null;
+  incomeId?: string | null; // the income schedule this payment came from; null once that schedule is deleted
+  incomeDate?: string | null; // the nominal payday it came from
+}
+/** Editable fields of a transaction; the kind never changes. */
+export interface TransactionInput { amount: number; description: string; category: string; date: string; time: string }
+export interface TransactionPage { transactions: Transaction[]; nextCursor: string | null }
 export const INCOME_FREQUENCIES = ["once", "daily", "weekly", "semimonthly", "monthly", "yearly"] as const;
 export type IncomeFrequency = typeof INCOME_FREQUENCIES[number];
 export interface IncomeInput {

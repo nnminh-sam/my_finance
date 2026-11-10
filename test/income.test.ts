@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { countIncomeOccurrences, describeIncomeSchedule, getMonthIncome, getRangeIncome, incomeMonth, monthRange } from '../src/lib/income';
+import { countIncomeOccurrences, describeIncomeSchedule, expectedPaydays, getMonthIncome, getRangeIncome, incomeMonth, monthRange } from '../src/lib/income';
 import { summarizePlanPeriod } from '../src/lib/periodSummary';
 import { addDays } from '../src/lib/plans';
 import type { Income, IncomeFrequency } from '../src/types';
@@ -93,8 +93,8 @@ test('getMonthIncome sums every source in exact cents and splits recurring from 
     { income: wage, occurrences: 4, total: 0.4 },
     { income: gift, occurrences: 1, total: 0.2 },
   ]);
-  assert.deepEqual(getMonthIncome('2025-01', incomes), { recurringIncome: 0, oneTimeIncome: 0, totalIncome: 0, items: [] });
-  assert.deepEqual(getMonthIncome('2026-10', []), { recurringIncome: 0, oneTimeIncome: 0, totalIncome: 0, items: [] });
+  assert.deepEqual(getMonthIncome('2025-01', incomes), { recurringIncome: 0, oneTimeIncome: 0, totalIncome: 0, receivedIncome: 0, expectedIncome: 0, items: [] });
+  assert.deepEqual(getMonthIncome('2026-10', []), { recurringIncome: 0, oneTimeIncome: 0, totalIncome: 0, receivedIncome: 0, expectedIncome: 0, items: [] });
 });
 
 test('editing, ending, and deleting income recalculate months without stale totals', () => {
@@ -156,4 +156,44 @@ test('getRangeIncome counts both ends of the range and agrees with the plan summ
     assert.equal(getRangeIncome(start, end, scheduleCases).totalIncome, summary.income, `${start}..${end}`);
   }
   assert.equal(getRangeIncome('2026-04-30', '2026-04-01', scheduleCases).totalIncome, 0, 'an inverted range is empty');
+});
+
+test('getRangeIncome with ledger rows: the past is what was received, only later paydays are projected', () => {
+  const salary = income('salary', 'monthly', 20_000_000, '2026-09-25');
+  const gift = income('gift', 'once', 500_000, '2026-11-05');
+  const today = '2026-11-10';
+  // October was paid late and short; the deleted schedule's bonus stays as received one-time income.
+  const received = [
+    { amount: 19_000_000, date: '2026-10-27', incomeId: 'salary' },
+    { amount: 500_000, date: '2026-11-05', incomeId: 'gift' },
+    { amount: 1_000_000, date: '2026-11-07', incomeId: null },
+  ];
+  const november = getMonthIncome('2026-11', [salary, gift], received, today);
+  assert.equal(november.receivedIncome, 1_500_000);
+  assert.equal(november.expectedIncome, 20_000_000); // the 25th has not come yet
+  assert.equal(november.recurringIncome, 20_000_000);
+  assert.equal(november.oneTimeIncome, 1_500_000);
+  assert.equal(november.totalIncome, 21_500_000);
+  const october = getMonthIncome('2026-10', [salary, gift], received, today);
+  assert.deepEqual([october.receivedIncome, october.expectedIncome, october.totalIncome], [19_000_000, 0, 19_000_000]);
+  // A raise on the schedule changes only what is still expected.
+  const raised = { ...salary, amount: 25_000_000 };
+  assert.equal(getMonthIncome('2026-10', [raised, gift], received, today).totalIncome, 19_000_000);
+  assert.equal(getMonthIncome('2026-11', [raised, gift], received, today).expectedIncome, 25_000_000);
+  // A deleted payment is simply gone; the schedule does not bring it back.
+  assert.equal(getMonthIncome('2026-09', [salary], [], today).totalIncome, 0);
+  // Without ledger rows every payday is projected from the schedules, split at today.
+  const projected = getMonthIncome('2026-11', [salary, gift], undefined, today);
+  assert.deepEqual([projected.receivedIncome, projected.expectedIncome, projected.totalIncome], [500_000, 20_000_000, 20_500_000]);
+});
+
+test('expectedPaydays lists only paydays after today, weekend-shifted, in date order', () => {
+  const salary = { ...income('salary', 'monthly', 20_000_000, '2026-07-25'), weekendShift: true };
+  const gift = income('gift', 'once', 500_000, '2026-11-05');
+  assert.deepEqual(expectedPaydays([salary, gift], '2026-10-01', '2027-01-31', '2026-11-10').map(day => day.date),
+    ['2026-11-25', '2026-12-25', '2027-01-25']);
+  // 2027-04-25 is a Sunday, paid on Friday the 23rd.
+  assert.deepEqual(expectedPaydays([salary], '2027-04-01', '2027-04-30', '2026-11-10').map(day => [day.date, day.amount, day.source]),
+    [['2027-04-23', 20_000_000, 'Source']]);
+  assert.deepEqual(expectedPaydays([salary], '2026-11-01', '2026-11-25', '2026-11-25'), []);
 });

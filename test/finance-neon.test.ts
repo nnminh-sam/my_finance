@@ -434,3 +434,79 @@ test("Neon pay schedules and budget period (needs migration 009): income options
     for (const id of users) await sql.query("DELETE FROM auth_users WHERE id = $1", [id]);
   }
 });
+
+test("Neon ledger (needs migration 011): income rows per payday, once per occurrence, history kept on delete", { skip: !databaseUrl, timeout: 60000 }, async () => {
+  const sql = neon(databaseUrl!);
+  const store = createFinanceStore(databaseUrl!);
+  const otherWorker = createFinanceStore(databaseUrl!);
+  const migration = await readFile(new URL("../migrations/011_income_records.sql", import.meta.url), "utf8");
+  const runMigration = () => sql.transaction(migration.split(";").map(statement => statement.trim()).filter(Boolean).map(statement => sql.query(statement)));
+  const users = [randomUUID(), randomUUID()];
+  const at = new Date("2026-11-10T01:00:00Z"); // 08:00 in Asia/Ho_Chi_Minh
+  // Reads use the real clock, so the salary ends in November to keep later runs from adding paydays.
+  const incomeRows = async (userId: string) => (await store.listTransactions(userId, 500, undefined, undefined, undefined, "income")).transactions
+    .sort((a, b) => a.date.localeCompare(b.date));
+  try {
+    // Rerunnable.
+    await runMigration();
+    await runMigration();
+    for (const id of users) await sql.query("INSERT INTO auth_users (id, name, email, password_hash) VALUES ($1, 'Ledger test', $2, 'unused')", [id, `ledger-${id}@example.test`]);
+    await store.getSettings(users[0]);
+    const lunch = await store.createSpending(users[0], { ...input, date: "2026-11-05" });
+    assert.ok(lunch);
+
+    // Constraints: kind values and kind-specific links.
+    await assert.rejects(sql.query("UPDATE finance_spendings SET kind = 'transfer' WHERE id = $1", [lunch.id]));
+    await assert.rejects(sql.query("UPDATE finance_spendings SET income_date = DATE '2026-11-05' WHERE id = $1", [lunch.id]));
+
+    const salary = await store.createIncome(users[0], { source: "Salary", name: "Company", amount: 20000000, frequency: "monthly", startDate: "2026-09-25", endDate: "2026-11-30", weekendShift: true });
+    const gift = await store.createIncome(users[0], { source: "Gift", name: "From mom", amount: 500000, frequency: "once", startDate: "2026-11-05", endDate: null });
+
+    // Two workers race on the first run: every payday is written exactly once.
+    const [a, b] = await Promise.all([store.materializeIncomes(users[0], at), otherWorker.materializeIncomes(users[0], at)]);
+    assert.equal(a + b, 3);
+    assert.equal(await store.materializeIncomes(users[0], at), 0);
+    const rows = await incomeRows(users[0]);
+    assert.deepEqual(rows.map(row => [row.date, row.incomeDate, row.time, row.category, row.amount, row.description]), [
+      ["2026-09-25", "2026-09-25", "00:00", "Salary", 20000000, "Company"],
+      ["2026-10-23", "2026-10-25", "00:00", "Salary", 20000000, "Company"],
+      ["2026-11-05", "2026-11-05", "00:00", "Gift", 500000, "From mom"],
+    ]);
+    assert.equal(rows[0].incomeId, salary.id);
+    // /spendings and category merge never touch income rows.
+    assert.deepEqual((await store.listSpendings(users[0], 500)).spendings.map(row => row.id), [lunch.id]);
+    assert.equal(await store.updateSpending(users[0], rows[0].id, { ...input }), "not-found");
+    assert.equal(await store.deleteSpending(users[0], rows[0].id), false);
+
+    // A deleted payday stays deleted, even for a worker that read the old watermark.
+    assert.equal(await store.deleteTransaction(users[0], rows[0].id), true);
+    await sql.query("UPDATE finance_incomes SET materialized_through = NULL WHERE id = $1", [gift.id]);
+    assert.equal(await store.materializeIncomes(users[0], at), 0); // the once row already exists
+    assert.equal((await incomeRows(users[0])).length, 2);
+
+    // Editing: a recurring income keeps past rows, a one-time income rewrites its row.
+    const raised = await store.updateIncome(users[0], salary.id, { source: "Salary", name: "Company", amount: 25000000, frequency: "monthly", startDate: "2026-09-25", endDate: "2026-11-30", weekendShift: true });
+    assert.ok(typeof raised === "object");
+    const moved = await store.updateIncome(users[0], gift.id, { source: "Gift", name: "From mom", amount: 700000, frequency: "once", startDate: "2026-11-06", endDate: null });
+    assert.ok(typeof moved === "object");
+    await store.materializeIncomes(users[0], new Date("2026-11-25T01:00:00Z"));
+    assert.deepEqual((await incomeRows(users[0])).map(row => [row.date, row.amount]), [
+      ["2026-10-23", 20000000], ["2026-11-06", 700000], ["2026-11-25", 25000000],
+    ]);
+
+    // updateTransaction: income takes any source, expense needs a current category.
+    const october = (await incomeRows(users[0]))[0];
+    const fixed = await store.updateTransaction(users[0], october.id, { amount: 19000000, description: "Late", category: "Salary", date: "2026-10-27", time: "09:00" });
+    assert.ok(typeof fixed === "object" && fixed.kind === "income" && fixed.incomeId === salary.id && fixed.date === "2026-10-27");
+    assert.equal(await store.updateTransaction(users[0], lunch.id, { amount: 1, description: "", category: "Nope", date: "2026-11-05", time: "12:00" }), "invalid-category");
+    assert.equal(await store.updateTransaction(users[1], october.id, { amount: 1, description: "", category: "Salary", date: "2026-11-05", time: "12:00" }), "not-found");
+
+    // Deleting a recurring income keeps its rows unlinked; a one-time income takes its row with it.
+    assert.equal(await store.deleteIncome(users[0], salary.id), true);
+    assert.equal(await store.deleteIncome(users[0], gift.id), true);
+    assert.deepEqual((await incomeRows(users[0])).map(row => [row.date, row.incomeId ?? null]), [["2026-10-27", null], ["2026-11-25", null]]);
+    assert.deepEqual((await store.listTransactions(users[1], 500)).transactions, []);
+  } finally {
+    for (const id of users) await sql.query("DELETE FROM auth_users WHERE id = $1", [id]);
+  }
+});

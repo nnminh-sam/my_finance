@@ -5,7 +5,7 @@
 // each (weekend-shifted) payday of one chosen income, extrapolated before its start date and after its
 // end date so every day belongs to a period.
 
-import { daysInMonth, getRangeIncome, incomePaydays, type IncomeSchedule } from './income';
+import { daysInMonth, getRangeIncome, incomePaydays, type IncomeRecord, type IncomeSchedule } from './income';
 import type { Income } from '../types';
 import { addDays, MAX_RANGE_DAYS } from './plans';
 
@@ -111,9 +111,9 @@ export function viewPeriodOf(setting: BudgetPeriodSetting, showBy: ShowBy, incom
 }
 
 /** Income paid in the view period that contains `date`: the calendar month, or the pay period for Show by "Pay cycle". */
-export function viewPeriodIncome(setting: BudgetPeriodSetting, showBy: ShowBy, incomes: readonly Income[], date: string) {
+export function viewPeriodIncome(setting: BudgetPeriodSetting, showBy: ShowBy, incomes: readonly Income[], date: string, received?: readonly IncomeRecord[]) {
   const period = viewPeriodOf(setting, showBy, incomes, date);
-  return getRangeIncome(period.start, period.end, incomes);
+  return getRangeIncome(period.start, period.end, incomes, received);
 }
 
 /** The period before or after `period`, found with the same resolver that produced it. */

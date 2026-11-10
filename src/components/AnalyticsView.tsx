@@ -103,7 +103,7 @@ const toneIcon: Record<InsightTone, React.ReactNode> = {
 
 export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
   const { settings } = useSettings();
-  const { spendings, incomes } = useFinance();
+  const { spendings, incomes, received } = useFinance();
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [searchQueries, setSearchQueries] = useState<Record<string, string>>({});
 
@@ -115,8 +115,8 @@ export const AnalyticsView: React.FC<{ currentDate: Date }> = ({ currentDate }) 
   // A pay period follows Show by. It is undefined for a calendar month, which keeps the month analysis.
   const period = useMemo(() => analysisPeriodFor(budgetPeriod, showBy, incomes, dateKey), [budgetPeriod, showBy, incomes, dateKey]);
   const a = useMemo(
-    () => computeMonthlyAnalytics(new Date(year, month, 1), settings, spendings, incomes, period),
-    [year, month, settings, spendings, incomes, period],
+    () => computeMonthlyAnalytics(new Date(year, month, 1), settings, spendings, incomes, period, received),
+    [year, month, settings, spendings, incomes, period, received],
   );
 
   const categorySpendings = useMemo(() => {

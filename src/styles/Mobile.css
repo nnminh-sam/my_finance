@@ -170,3 +170,16 @@
 .m-row-planned .m-amt { color: var(--primary); font-style: italic; }
 .m-row-planned.is-skipped .m-rt b,
 .m-row-planned.is-skipped .m-amt { text-decoration: line-through; color: var(--text-muted); }
+
+/* Income on its day: received rows are green and signed "+" (tap to fix one payment);
+   an expected payday sits with Planned, faded and prefixed "~". */
+.m-row-income { width: 100%; text-align: left; border: 0; color: inherit; font: inherit; }
+.m-row-income .m-amt { color: var(--success); }
+.m-row-planned.m-row-income { background: repeating-linear-gradient(135deg, var(--bg-card) 0 10px, color-mix(in srgb, var(--success) 5%, var(--bg-card)) 10px 20px); }
+.m-row-planned.m-row-income .m-ic { border-color: var(--success); }
+.m-row-planned.m-row-income .m-amt { color: var(--success); opacity: .65; }
+.m-ledger-totals { display: inline-flex; align-items: baseline; gap: 10px; }
+.m-in-text { color: var(--success); }
+.m-dc { position: relative; }
+.m-dc-income { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+.m-dc-income.is-expected { background: transparent; box-shadow: inset 0 0 0 1.5px var(--success); }

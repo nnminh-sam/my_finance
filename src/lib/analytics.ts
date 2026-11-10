@@ -9,7 +9,7 @@ import {
   subMonths,
 } from 'date-fns';
 import type { Income, Spending, UserSettings } from '../types';
-import { getRangeIncome } from './income';
+import { getRangeIncome, type IncomeRecord } from './income';
 import { adjacentPeriod, viewPeriodOf, type BudgetPeriodSetting, type PeriodIncome, type ShowBy } from './periods';
 import { addDays } from './plans';
 
@@ -230,6 +230,7 @@ export const computeMonthlyAnalytics = (
   allSpendings: Spending[],
   incomes: readonly Income[] = [],
   period?: AnalysisPeriod,
+  received?: readonly IncomeRecord[],
 ): MonthlyAnalytics => {
   const today = startOfDay(new Date());
   const monthStart = startOfMonth(monthDate);
@@ -241,7 +242,7 @@ export const computeMonthlyAnalytics = (
   const isCurrentMonth = todayKey >= periodStart && todayKey <= periodEnd;
   const isFutureMonth = todayKey < periodStart;
   const elapsedDays = isFutureMonth ? 0 : isCurrentMonth ? days.findIndex((day) => format(day, 'yyyy-MM-dd') === todayKey) + 1 : daysInMonth;
-  const { recurringIncome, oneTimeIncome, totalIncome: income } = getRangeIncome(periodStart, periodEnd, incomes);
+  const { recurringIncome, oneTimeIncome, totalIncome: income } = getRangeIncome(periodStart, periodEnd, incomes, received);
 
   const spendings = inRange(allSpendings, periodStart, periodEnd);
   const total = sum(spendings.map((s) => s.amount));

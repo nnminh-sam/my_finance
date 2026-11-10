@@ -1,7 +1,7 @@
 import { HttpError } from "../auth/http";
 import { BUDGET_PERIOD_MODES, SHOW_BY, type BudgetPeriodMode, type ShowBy } from "../../lib/periods";
 import { isValidTimeZone, PLAN_FREQUENCIES, type PlanFrequency } from "../../lib/plans";
-import { CATEGORY_ICONS, INCOME_FREQUENCIES, MAX_CATEGORIES, type Category, type IncomeFrequency, type IncomeInput, type PlanExceptionInput, type PlanInput, type SettingsPatch, type SpendingInput } from "./model";
+import { CATEGORY_ICONS, INCOME_FREQUENCIES, MAX_CATEGORIES, type Category, type IncomeFrequency, type IncomeInput, type PlanExceptionInput, type PlanInput, type SettingsPatch, type SpendingInput, TRANSACTION_KINDS, type TransactionInput, type TransactionKind } from "./model";
 
 function invalid(field: string): never { throw new HttpError(400, `Invalid ${field}`); }
 function object(value: unknown, allowed: readonly string[]): Record<string, unknown> {
@@ -283,4 +283,20 @@ export function pagination(query: Record<string, unknown>): {
   const endDate = query.endDate === undefined ? undefined : validDate(query.endDate, "endDate");
   if (startDate && endDate && endDate < startDate) return invalid("date range");
   return { limit, cursor, startDate, endDate };
+}
+export function transactionInput(value: unknown): TransactionInput {
+  const body = object(value, ["amount", "description", "category", "date", "time"]);
+  const amount = money(body.amount, "amount", true);
+  const description = text(body.description, "description", 1000, true);
+  const category = text(body.category, "category", 100);
+  const date = validDate(body.date, "date");
+  const time = text(body.time, "time", 5);
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return invalid("time");
+  return { amount, description, category, date, time };
+}
+/** Optional `kind` query filter: expense or income; omitted = both. */
+export function transactionKind(query: Record<string, unknown>): TransactionKind | undefined {
+  if (query.kind === undefined) return undefined;
+  if (typeof query.kind !== "string" || !(TRANSACTION_KINDS as readonly string[]).includes(query.kind)) return invalid("kind");
+  return query.kind as TransactionKind;
 }

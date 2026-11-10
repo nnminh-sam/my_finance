@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   addDays, differenceInCalendarWeeks, eachDayOfInterval, endOfWeek, format, isAfter, isSameDay, startOfDay, startOfWeek,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowDownLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useFinance } from '../../contexts/FinanceContext';
 import { useFinanceShell } from '../../contexts/FinanceShellContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -15,8 +15,10 @@ import { pageHref } from '../../lib/navigation';
 import { pages } from '../../lib/pages';
 import { getSpendingsForDate } from '../../lib/spendings';
 import { fmtVND } from '../../lib/analytics';
+import { expectedPaydays } from '../../lib/income';
+import { IncomeRecordSheet } from '../IncomeRecordSheet';
 import { errorMessage } from '../../services/auth';
-import type { Spending } from '../../types';
+import type { Spending, Transaction } from '../../types';
 import type { PlanOccurrence } from '../../lib/plans';
 import { CategoryIcon, Toast, categoryMeta, haptic, useToast } from './MobileUi';
 import { QuickEntryDock } from '../quickEntry/QuickEntryDock';
@@ -43,7 +45,7 @@ function weekTitle(offset: number) {
 /** F · Week: B's ledger — seven-bar chart, day strip, that day's expenses and a closable keypad. */
 export function MobileWeek() {
   const { currentDate, keypadOpen, setKeypadOpen, keypadPulse } = useFinanceShell();
-  const { spendings, plans, createSpending, deleteSpending, projectedBetween, setPlanException, clearPlanException, completePlanOccurrence } = useFinance();
+  const { spendings, plans, incomes, received, createSpending, deleteSpending, projectedBetween, setPlanException, clearPlanException, completePlanOccurrence } = useFinance();
   const { settings } = useSettings();
   const router = useRouter();
   const today = startOfDay(new Date());
@@ -71,6 +73,11 @@ export function MobileWeek() {
   const daySkipped = plans.filter(plan => plan.exceptions.some(item => item.date === selectedKey && item.kind === 'skip')
     && `${selectedKey}T${plan.time}` > plan.materializedThrough);
   const selectedLabel = dayLabel(selected, today);
+  // Money in on this day (green, tap to fix one payment) and paydays on it that have not come yet.
+  const dayReceived = received.filter(record => record.date === selectedKey);
+  const dayIncome = dayReceived.reduce((sum, record) => sum + record.amount, 0);
+  const dayExpected = expectedPaydays(incomes, selectedKey, selectedKey);
+  const [editingReceived, setEditingReceived] = useState<Transaction | null>(null);
 
   const { toast, show: showToast, hide: hideToast } = useToast();
   const [alert, setAlert] = useState<{ title: string; message?: string; buttons: AlertButton[] } | null>(null);
@@ -273,10 +280,27 @@ export function MobileWeek() {
       <div className="m-ledger">
         <div className="m-ledger-h">
           <span className="m-muted">{selectedLabel}</span>
-          <b>{fmtVND(dayTotal)}</b>
+          <span className="m-ledger-totals">
+            {dayIncome > 0 && <b className="m-in-text">+{fmtVND(dayIncome)}</b>}
+            <b>{fmtVND(dayTotal)}</b>
+          </span>
         </div>
+        {dayReceived.length > 0 && (
+          <div className="m-list">
+            {dayReceived.map(record => (
+              <button key={record.id} type="button" className="m-row m-row-income" aria-label={`${record.description || record.category}, received ${fmtVND(record.amount)}. Opens edit.`} onClick={() => setEditingReceived(record)}>
+                <span className="m-ic" style={{ ['--c' as string]: 'var(--success)' }}><ArrowDownLeft size={16} /></span>
+                <span className="m-rt">
+                  <b>{record.description || record.category}</b>
+                  <small>{record.category}</small>
+                </span>
+                <span className="m-amt">+{fmtVND(record.amount)}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {daySpendings.length === 0 ? (
-          dayPlanned.length === 0 && <p className="m-empty">No expenses yet.</p>
+          dayPlanned.length === 0 && dayReceived.length === 0 && dayExpected.length === 0 && <p className="m-empty">Nothing in or out yet.</p>
         ) : (
           <div className="m-list">
             {daySpendings.map(spending => (
@@ -291,13 +315,25 @@ export function MobileWeek() {
           </div>
         )}
         {daySpendings.length > 0 && <p className="m-hint">Swipe left to delete · tap to edit</p>}
-        {(dayPlanned.length > 0 || daySkipped.length > 0) && (
+        {(dayPlanned.length > 0 || daySkipped.length > 0 || dayExpected.length > 0) && (
           <>
             <div className="m-ledger-h m-planned-h">
               <span className="m-muted">Planned</span>
               <b className="m-planned-text">~{fmtVND(dayPlanned.reduce((sum, item) => sum + item.amount, 0))}</b>
             </div>
             <div className="m-list">
+              {dayExpected.map(payday => (
+                <button key={`payday-${payday.incomeId}`} type="button" className="m-row m-row-planned m-row-income"
+                  aria-label={`${payday.source} payday expected, ${fmtVND(payday.amount)}. Opens the income schedule.`}
+                  onClick={() => router.push(`${pages.profile.path}#income`)}>
+                  <span className="m-ic" style={{ ['--c' as string]: 'var(--success)' }}><ArrowDownLeft size={16} /></span>
+                  <span className="m-rt">
+                    <b>{payday.name ? `${payday.source} · ${payday.name}` : payday.source}</b>
+                    <small>Expected payday</small>
+                  </span>
+                  <span className="m-amt">~+{fmtVND(payday.amount)}</span>
+                </button>
+              ))}
               {dayPlanned.map(occurrence => {
                 const meta = categoryMeta(settings.categories, occurrence.category);
                 return (
@@ -334,6 +370,14 @@ export function MobileWeek() {
           <button type="button" className="m-btn m-btn-ghost" onClick={() => setKeypadOpen(true)}>+ Add expense</button>
         )}
       </div>
+
+      {editingReceived && (
+        <IncomeRecordSheet
+          record={editingReceived}
+          onClose={() => setEditingReceived(null)}
+          onDone={(message) => { setEditingReceived(null); showToast(message); }}
+        />
+      )}
 
       {keypadOpen && (
         <QuickEntryDock

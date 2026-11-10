@@ -1145,3 +1145,28 @@
     padding: 0 8px;
   }
 }
+
+/* Income received (ledger rows of kind income): green, signed "+", tap to fix one payment.
+   An expected payday sits in Planned: same green, faded and prefixed "~", like planned spendings. */
+.day-tx-icon-circle.is-income {
+  background-color: color-mix(in srgb, var(--success) 16%, transparent);
+  color: var(--success);
+}
+.day-tx-amount.is-income { color: var(--success); }
+.day-tx-amount.is-income.is-expected { opacity: 0.6; font-weight: 600; }
+.day-tx-repeat-badge.is-income { color: var(--success); }
+.day-tx-row.is-planned.is-income {
+  background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in srgb, var(--success) 4%, transparent) 10px 20px);
+}
+.day-summary-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 12px 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.day-summary-period svg { color: var(--success); }
+.day-summary-period b { color: var(--success); font-weight: 600; font-variant-numeric: tabular-nums; }
+.day-summary-period .is-expected { opacity: 0.8; }

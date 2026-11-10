@@ -74,7 +74,7 @@ export function UserProfile() {
   const { settings, updateSettings } = useSettings();
   const { user, logout } = useAuth();
   const { theme, preference, setTheme } = useTheme();
-  const { incomes, plans, reload } = useFinance();
+  const { incomes, received, plans, reload } = useFinance();
   const [tab, setTab] = useState<TabId>('account');
   // Phones show a grouped list first; choosing a row pushes that section (null = the list).
   const [mobileSection, setMobileSection] = useState<TabId | null>(null);
@@ -96,7 +96,7 @@ export function UserProfile() {
   const initials = (user?.name || user?.email || '').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
   // The income figure follows Show by: the calendar month, or the pay period that contains today.
   const incomePeriod = viewPeriodOf(settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD, settings.showBy ?? DEFAULT_SHOW_BY, incomes, format(new Date(), 'yyyy-MM-dd'));
-  const monthIncome = getRangeIncome(incomePeriod.start, incomePeriod.end, incomes).totalIncome;
+  const monthIncome = getRangeIncome(incomePeriod.start, incomePeriod.end, incomes, received).totalIncome;
   const activeCategories = settings.categories.filter(item => !item.archived).length;
   const counts: Partial<Record<TabId, number>> = { income: incomes.length, categories: activeCategories, ...(mcpTokenCount !== undefined ? { mcp: mcpTokenCount } : {}) };
 
