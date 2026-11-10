@@ -1011,7 +1011,7 @@ test("ledger: past paydays become income rows on their day; /spendings stays exp
   // 01:00 UTC = 08:00 in the default Asia/Ho_Chi_Minh time zone, 2026-11-10.
   store.planStore.now = () => new Date("2026-11-10T01:00:00Z");
   const list = async (query = "") => (await (await request(`/transactions${query}`)).json() as { transactions: Transaction[] }).transactions
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
 
   const salary = await (await request("/incomes", "POST", { source: "Salary", name: "Company", amount: 20000000, frequency: "monthly", startDate: "2026-09-25", endDate: null, weekendShift: true })).json() as { income: Income };
   const gift = await (await request("/incomes", "POST", { source: "Gift", name: "From mom", amount: 500000, frequency: "once", startDate: "2026-11-05", endDate: null })).json() as { income: Income };
