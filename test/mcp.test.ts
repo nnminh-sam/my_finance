@@ -19,6 +19,7 @@ import {
 import { formatDateUtc, generateOccurrences, isRuleDueForSync } from "../src/server/finance/recurrence";
 import type { FinanceStore } from "../src/server/finance/store";
 import { applySettingsPatch, MemoryPlans, paycheckInUse, planSpendingsBetween, resetPaycheck } from "./support/memoryPlans";
+import { MemoryLedger } from "./support/memoryLedger";
 
 class MemoryAuthStore implements AuthStore {
   accounts = new Map<string, Account>();
@@ -125,6 +126,11 @@ class MemoryFinanceStore implements FinanceStore {
   materializePlans = this.planStore.materializePlans.bind(this.planStore);
   completePlanOccurrence = this.planStore.completePlanOccurrence.bind(this.planStore);
   mergeCategory = this.planStore.mergeCategory.bind(this.planStore);
+  ledger = new MemoryLedger(this, () => this.planStore.now());
+  listTransactions = this.ledger.listTransactions.bind(this.ledger);
+  updateTransaction = this.ledger.updateTransaction.bind(this.ledger);
+  deleteTransaction = this.ledger.deleteTransaction.bind(this.ledger);
+  materializeIncomes = this.ledger.materializeIncomes.bind(this.ledger);
   settings = new Map<string, FinanceSettings>();
   spendings = new Map<string, Map<string, Spending>>();
   incomes = new Map<string, Map<string, Income>>();
@@ -182,6 +188,7 @@ class MemoryFinanceStore implements FinanceStore {
     return this.rows(userId).delete(id);
   }
   async listIncomes(userId: string, limit: number, cursor?: string) {
+    await this.ledger.materializeIncomes(userId);
     const rows = [...this.incomeRows(userId).values()]
       .filter(r => !cursor || r.id > cursor)
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -196,12 +203,16 @@ class MemoryFinanceStore implements FinanceStore {
   async updateIncome(userId: string, id: string, input: IncomeInput) {
     if (!this.incomeRows(userId).has(id)) return undefined;
     if (paycheckInUse(this.settings.get(userId), id, input)) return "paycheck-in-use" as const;
+    const before = this.incomeRows(userId).get(id)!;
     const income: Income = { id, ...input };
     this.incomeRows(userId).set(id, income);
+    this.ledger.incomeUpdated(userId, before, income);
     return structuredClone(income);
   }
   async deleteIncome(userId: string, id: string) {
     resetPaycheck(this.settings.get(userId), id);
+    const before = this.incomeRows(userId).get(id);
+    if (before) this.ledger.incomeDeleted(userId, before);
     return this.incomeRows(userId).delete(id);
   }
   async listRepeatRules(userId: string) {

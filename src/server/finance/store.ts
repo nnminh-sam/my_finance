@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import { addDays, dueOccurrences, isPlanDate, localNowStamp, planOccurrences, stampOf, type PlanException } from "../../lib/plans";
 import { SHOW_BY } from "../../lib/periods";
-import { defaultFinanceSettings, type FinanceSettings, type Income, type IncomeInput, type IncomePage, type Plan, type PlanExceptionInput, type PlanInput, type RepeatRule, type RepeatRuleInput, type SettingsPatch, type Spending, type SpendingInput, type SpendingPage } from "./model";
+import { dueIncomePaydays, INCOME_RECORD_TIME } from "../../lib/income";
+import { defaultFinanceSettings, type FinanceSettings, type Income, type IncomeInput, type IncomePage, type Plan, type PlanExceptionInput, type PlanInput, type RepeatRule, type RepeatRuleInput, type SettingsPatch, type Spending, type SpendingInput, type SpendingPage, type Transaction, type TransactionInput, type TransactionPage, type TransactionKind } from "./model";
 import { formatDateUtc, generateOccurrences, isRuleDueForSync, type RecurrenceState } from "./recurrence";
 
 export interface FinanceStore {
@@ -20,11 +21,20 @@ export interface FinanceStore {
   createSpending(userId: string, input: SpendingInput): Promise<Spending | undefined>;
   updateSpending(userId: string, id: string, input: SpendingInput): Promise<Spending | "not-found" | "invalid-category">;
   deleteSpending(userId: string, id: string): Promise<boolean>;
+  /** Every real money movement, expense and income, optionally of one kind. Writes due plan and income rows first. */
+  listTransactions(userId: string, limit: number, cursor?: string, startDate?: string, endDate?: string, kind?: TransactionKind): Promise<TransactionPage>;
+  /** Edits one row of either kind; the kind and its plan or income link never change. An expense needs a current category. */
+  updateTransaction(userId: string, id: string, input: TransactionInput): Promise<Transaction | "not-found" | "invalid-category">;
+  /** Deletes one row of either kind. A deleted income row is not written again, because its payday is behind the watermark. */
+  deleteTransaction(userId: string, id: string): Promise<boolean>;
   listIncomes(userId: string, limit: number, cursor?: string): Promise<IncomePage>;
   createIncome(userId: string, input: IncomeInput): Promise<Income>;
   /** "paycheck-in-use": the income is the paycheck of the budget period and the new frequency cannot be one. */
   updateIncome(userId: string, id: string, input: IncomeInput): Promise<Income | undefined | "paycheck-in-use">;
-  /** Also resets the budget period to calendar when this income was its paycheck. */
+  /**
+   * Also resets the budget period to calendar when this income was its paycheck.
+   * Income already received stays (its income_id becomes null), except for a one-time income, whose single row is the income itself.
+   */
   deleteIncome(userId: string, id: string): Promise<boolean>;
   listRepeatRules(userId: string): Promise<RepeatRule[]>;
   createRepeatRule(userId: string, input: RepeatRuleInput): Promise<{ repeatRule: RepeatRule; spendings: Spending[] } | undefined>;
@@ -42,6 +52,8 @@ export interface FinanceStore {
   completePlanOccurrence(userId: string, id: string, date: string, at?: Date): Promise<Spending | "not-found" | "invalid-date">;
   /** Turns every plan occurrence whose local date+time has passed into a real spending. */
   materializePlans(userId: string, at?: Date): Promise<number>;
+  /** Turns every payday whose local paid day has started into a real income row. */
+  materializeIncomes(userId: string, at?: Date): Promise<number>;
 }
 
 type Row = Record<string, unknown>;
@@ -86,6 +98,17 @@ function plan(row: Row): Plan {
     })),
   };
 }
+function transaction(row: Row): Transaction {
+  const result: Transaction = {
+    id: String(row.id), kind: row.kind === "income" ? "income" : "expense", amount: Number(row.amount),
+    description: String(row.description), category: String(row.category), date: String(row.date), time: String(row.time),
+  };
+  if (row.plan_id) result.planId = String(row.plan_id);
+  if (row.plan_date) result.planDate = String(row.plan_date);
+  if (row.income_id) result.incomeId = String(row.income_id);
+  if (row.income_date) result.incomeDate = String(row.income_date);
+  return result;
+}
 // Schedule options that equal their default are left out, so incomes that do not use them look as before.
 function income(row: Row): Income {
   const result: Income = {
@@ -127,6 +150,8 @@ function scheduleValues(input: IncomeInput): unknown[] {
   return [input.interval ?? 1, input.semimonthlyDays?.[0] ?? null, input.semimonthlyDays?.[1] ?? null, input.weekendShift === true];
 }
 const spendingColumns = "id, amount, description, category, to_char(date, 'YYYY-MM-DD') AS date, to_char(date + time, 'HH24:MI') AS time, repeat_rule_id::text AS repeat_rule_id, plan_id::text AS plan_id, to_char(plan_date, 'YYYY-MM-DD') AS plan_date";
+const transactionColumns = `id, kind, amount, description, category, to_char(date, 'YYYY-MM-DD') AS date, to_char(date + time, 'HH24:MI') AS time,
+  plan_id::text AS plan_id, to_char(plan_date, 'YYYY-MM-DD') AS plan_date, income_id::text AS income_id, to_char(income_date, 'YYYY-MM-DD') AS income_date`;
 // Selected from an alias/CTE named `p`; exceptions already materialized are omitted.
 const planColumns = `p.id, p.amount, p.description, p.category, to_char(p.start_date + p.time, 'HH24:MI') AS time,
   to_char(p.start_date, 'YYYY-MM-DD') AS start_date, p.frequency, p.interval, p.days_of_week, p.sure,
@@ -202,7 +227,7 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
       const params = [userId, from, into];
       const results = await sql.transaction([
         ensure(userId), lock(userId),
-        sql.query(`UPDATE finance_spendings SET category = $3 WHERE user_id = $1 AND category = $2 AND ${valid} RETURNING id`, params),
+        sql.query(`UPDATE finance_spendings SET category = $3 WHERE user_id = $1 AND kind = 'expense' AND category = $2 AND ${valid} RETURNING id`, params),
         sql.query(`UPDATE finance_plans SET category = $3 WHERE user_id = $1 AND category = $2 AND ${valid} RETURNING id`, params),
         sql.query(`UPDATE finance_repeat_rules SET category = $3 WHERE user_id = $1 AND category = $2 AND ${valid} RETURNING id`, params),
         sql.query(`UPDATE finance_settings SET categories = (
@@ -216,7 +241,7 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
     },
     async listPlanSpendings(userId, fromDate, toDate) {
       const rows = await query(`SELECT ${spendingColumns} FROM finance_spendings
-        WHERE user_id = $1 AND plan_id IS NOT NULL AND plan_date BETWEEN $2::date AND $3::date ORDER BY id ASC LIMIT 10000`, [userId, fromDate, toDate]);
+        WHERE user_id = $1 AND kind = 'expense' AND plan_id IS NOT NULL AND plan_date BETWEEN $2::date AND $3::date ORDER BY id ASC LIMIT 10000`, [userId, fromDate, toDate]);
       return rows.map(spending);
     },
     async listSpendings(userId, limit, cursor, startDate, endDate) {
@@ -224,9 +249,9 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
       await store.materializePlans(userId).catch(() => 0);
       const rows = !startDate && !endDate
         ? await query(`SELECT ${spendingColumns} FROM finance_spendings
-            WHERE user_id = $1 AND ($2::uuid IS NULL OR id > $2::uuid) ORDER BY id ASC LIMIT $3`, [userId, cursor ?? null, limit + 1])
+            WHERE user_id = $1 AND kind = 'expense' AND ($2::uuid IS NULL OR id > $2::uuid) ORDER BY id ASC LIMIT $3`, [userId, cursor ?? null, limit + 1])
         : await query(`SELECT ${spendingColumns} FROM finance_spendings
-            WHERE user_id = $1
+            WHERE user_id = $1 AND kind = 'expense'
               AND ($2::uuid IS NULL OR id > $2::uuid)
               AND ($4::date IS NULL OR date >= $4::date)
               AND ($5::date IS NULL OR date <= $5::date)
@@ -248,15 +273,16 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
         ensure(userId), lock(userId),
         sql.query(`WITH updated AS (
           UPDATE finance_spendings SET amount = $3, description = $4, category = $5, date = $6::date, time = $7::time, repeat_rule_id = $8::uuid
-          WHERE user_id = $1 AND id = $2 AND ${categoryAllowed} RETURNING ${spendingColumns}
+          WHERE user_id = $1 AND id = $2 AND kind = 'expense' AND ${categoryAllowed} RETURNING ${spendingColumns}
         ) SELECT (SELECT row_to_json(updated) FROM updated) AS spending,
-          EXISTS (SELECT 1 FROM finance_spendings WHERE user_id = $1 AND id = $2) AS found`, values(userId, id, input)),
+          EXISTS (SELECT 1 FROM finance_spendings WHERE user_id = $1 AND id = $2 AND kind = 'expense') AS found`, values(userId, id, input)),
       ], { isolationLevel: "ReadCommitted" });
       const row = results[2][0];
       if (row.spending) return spending(row.spending as Row);
       return row.found ? "invalid-category" : "not-found";
     },
     async listIncomes(userId, limit, cursor) {
+      await store.materializeIncomes(userId).catch(() => 0);
       const rows = await query(`SELECT ${incomeColumns} FROM finance_incomes
         WHERE user_id = $1 AND ($2::uuid IS NULL OR id > $2::uuid) ORDER BY id ASC LIMIT $3`, [userId, cursor ?? null, limit + 1]);
       const incomes = rows.slice(0, limit).map(income);
@@ -271,15 +297,24 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
     },
     async updateIncome(userId, id, input) {
       // While the budget period is in paycheck mode, its paycheck income cannot become a frequency that is not usable as one.
-      const rows = await query(`WITH updated AS (
+      // A recurring income changes from now on: rows already received keep their amount and date.
+      // A one-time income is a single payment, so its row is removed and written again from the new values.
+      const rows = await query(`WITH old AS (
+          SELECT frequency FROM finance_incomes WHERE user_id = $1 AND id = $2
+        ), updated AS (
           UPDATE finance_incomes SET source = $3, name = $4, amount = $5, frequency = $6,
             start_date = $7::date, end_date = $8::date,
-            interval = $9, semimonthly_day_1 = $10, semimonthly_day_2 = $11, weekend_shift = $12
+            interval = $9, semimonthly_day_1 = $10, semimonthly_day_2 = $11, weekend_shift = $12,
+            materialized_through = CASE WHEN finance_incomes.frequency = 'once' OR $6 = 'once' THEN NULL ELSE finance_incomes.materialized_through END
           WHERE user_id = $1 AND id = $2
             AND NOT (EXISTS (SELECT 1 FROM finance_settings s WHERE s.user_id = $1 AND s.paycheck_income_id = $2 AND s.budget_period_mode = 'paycheck')
               AND $6 NOT IN ('weekly', 'semimonthly', 'monthly'))
           RETURNING ${incomeColumns}
-        ) SELECT (SELECT row_to_json(updated) FROM updated) AS income,
+        ), removed AS (
+          DELETE FROM finance_spendings WHERE user_id = $1 AND kind = 'income' AND income_id = $2
+            AND EXISTS (SELECT 1 FROM updated) AND (SELECT frequency FROM old) = 'once'
+          RETURNING id
+        ) SELECT (SELECT row_to_json(updated) FROM updated) AS income, (SELECT count(*) FROM removed) AS removed,
           EXISTS (SELECT 1 FROM finance_incomes WHERE user_id = $1 AND id = $2) AS found`,
         [userId, id, input.source, input.name, input.amount, input.frequency, input.startDate, input.endDate, ...scheduleValues(input)]);
       if (rows[0].income) return income(rows[0].income as Row);
@@ -290,11 +325,48 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
       const results = await sql.transaction([
         sql.query(`UPDATE finance_settings SET budget_period_mode = 'calendar', paycheck_income_id = NULL
           WHERE user_id = $1 AND paycheck_income_id = $2 AND budget_period_mode = 'paycheck'`, [userId, id]),
+        sql.query(`DELETE FROM finance_spendings sp USING finance_incomes i
+          WHERE sp.user_id = $1 AND sp.kind = 'income' AND sp.income_id = $2 AND i.id = $2 AND i.user_id = $1 AND i.frequency = 'once'`, [userId, id]),
         sql.query("DELETE FROM finance_incomes WHERE user_id = $1 AND id = $2 RETURNING id", [userId, id]),
       ], { isolationLevel: "ReadCommitted" });
-      return results[1].length > 0;
+      return results[2].length > 0;
     },
     async deleteSpending(userId, id) {
+      const results = await sql.transaction([
+        ensure(userId), lock(userId),
+        sql.query("DELETE FROM finance_spendings WHERE user_id = $1 AND id = $2 AND kind = 'expense' RETURNING id", [userId, id]),
+      ], { isolationLevel: "ReadCommitted" });
+      return results[2].length > 0;
+    },
+    async listTransactions(userId, limit, cursor, startDate, endDate, kind) {
+      await store.syncRepeatSpendings(userId).catch(() => 0);
+      await store.materializePlans(userId).catch(() => 0);
+      await store.materializeIncomes(userId).catch(() => 0);
+      const rows = await query(`SELECT ${transactionColumns} FROM finance_spendings
+        WHERE user_id = $1
+          AND ($2::uuid IS NULL OR id > $2::uuid)
+          AND ($4::date IS NULL OR date >= $4::date)
+          AND ($5::date IS NULL OR date <= $5::date)
+          AND ($6::text IS NULL OR kind = $6::text)
+        ORDER BY id ASC LIMIT $3`, [userId, cursor ?? null, limit + 1, startDate ?? null, endDate ?? null, kind ?? null]);
+      const transactions = rows.slice(0, limit).map(transaction);
+      return { transactions, nextCursor: rows.length > limit ? transactions[transactions.length - 1].id : null };
+    },
+    async updateTransaction(userId, id, input) {
+      const results = await sql.transaction([
+        ensure(userId), lock(userId),
+        sql.query(`WITH updated AS (
+          UPDATE finance_spendings SET amount = $3, description = $4, category = $5, date = $6::date, time = $7::time
+          WHERE user_id = $1 AND id = $2 AND (kind = 'income' OR ${categoryAllowed}) RETURNING ${transactionColumns}
+        ) SELECT (SELECT row_to_json(updated) FROM updated) AS transaction,
+          EXISTS (SELECT 1 FROM finance_spendings WHERE user_id = $1 AND id = $2) AS found`,
+          [userId, id, input.amount, input.description, input.category, input.date, input.time]),
+      ], { isolationLevel: "ReadCommitted" });
+      const row = results[2][0];
+      if (row.transaction) return transaction(row.transaction as Row);
+      return row.found ? "invalid-category" : "not-found";
+    },
+    async deleteTransaction(userId, id) {
       const results = await sql.transaction([
         ensure(userId), lock(userId),
         sql.query("DELETE FROM finance_spendings WHERE user_id = $1 AND id = $2 RETURNING id", [userId, id]),
@@ -572,6 +644,42 @@ export function createFinanceStore(databaseUrl: string): FinanceStore {
           WHERE e.plan_id = p.id AND p.user_id = $1 AND e.date < $2::date`, [userId, now.slice(0, 10)]),
       ], { isolationLevel: "ReadCommitted" });
       return results[0].length;
+    },
+    async materializeIncomes(userId, at = new Date()) {
+      const rows = await query(`SELECT ${incomeColumns},
+          to_char(materialized_through, 'YYYY-MM-DD"T"HH24:MI') AS materialized_through,
+          COALESCE((SELECT timezone FROM finance_settings WHERE user_id = $1), 'Asia/Ho_Chi_Minh') AS timezone
+        FROM finance_incomes WHERE user_id = $1`, [userId]);
+      if (!rows.length) return 0;
+      const now = localNowStamp(String(rows[0].timezone), at);
+      const behind = rows.filter(row => row.materialized_through === null || String(row.materialized_through) < now);
+      if (!behind.length) return 0;
+      const due = behind.flatMap(row => {
+        const item = income(row);
+        const after = row.materialized_through === null ? null : String(row.materialized_through);
+        return dueIncomePaydays(item, after, now).map(payday => ({ income: item, ...payday }));
+      });
+      const statements = [];
+      if (due.length) {
+        // As with plans, the watermark check stops a stale worker from re-creating a row the user
+        // already deleted, and the unique (income_id, income_date) index absorbs concurrent workers.
+        statements.push(sql.query(`INSERT INTO finance_spendings (user_id, id, kind, amount, description, category, date, time, income_id, income_date)
+          SELECT $1, u.id, 'income', u.amount, u.description, u.category, u.date, $8::time, u.income_id, u.income_date
+          FROM unnest($2::uuid[], $3::numeric[], $4::text[], $5::text[], $6::date[], $7::uuid[], $9::date[])
+            AS u(id, amount, description, category, date, income_id, income_date)
+          WHERE EXISTS (SELECT 1 FROM finance_incomes i WHERE i.id = u.income_id AND i.user_id = $1
+            AND (i.materialized_through IS NULL OR i.materialized_through < u.date + $8::time))
+          ON CONFLICT (income_id, income_date) DO NOTHING
+          RETURNING id`, [
+          userId, due.map(() => randomUUID()), due.map(item => item.income.amount), due.map(item => item.income.name),
+          due.map(item => item.income.source), due.map(item => item.paid), due.map(item => item.income.id),
+          INCOME_RECORD_TIME, due.map(item => item.nominal),
+        ]));
+      }
+      statements.push(sql.query(`UPDATE finance_incomes SET materialized_through = GREATEST(COALESCE(materialized_through, $2::timestamp), $2::timestamp)
+        WHERE user_id = $1 AND id = ANY($3::uuid[])`, [userId, now.replace("T", " "), behind.map(row => String(row.id))]));
+      const results = await sql.transaction(statements, { isolationLevel: "ReadCommitted" });
+      return due.length ? results[0].length : 0;
     },
   };
 

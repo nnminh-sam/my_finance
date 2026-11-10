@@ -156,6 +156,24 @@ export function incomePaydays(
   return result.sort((a, b) => a.paid.localeCompare(b.paid) || a.nominal.localeCompare(b.nominal));
 }
 
+/** Local time of day an income payment is recorded at: the start of its paid day. */
+export const INCOME_RECORD_TIME = '00:00';
+
+/**
+ * Paydays that are due to become income records: paid at or before `now` and strictly after the
+ * watermark `after` (null = none recorded yet, so every payday from the start date). Both are local
+ * `YYYY-MM-DDTHH:mm` stamps. A payday counts from INCOME_RECORD_TIME on its paid (weekend-shifted) day.
+ */
+export function dueIncomePaydays(income: IncomeSchedule, after: string | null, now: string): { nominal: string; paid: string }[] {
+  const rangeStart = after ? after.slice(0, 10) : '0001-01-01';
+  const rangeEnd = now.slice(0, 10);
+  if (rangeEnd < rangeStart) return [];
+  return incomePaydays(income, rangeStart, rangeEnd).filter(({ paid }) => {
+    const stamp = `${paid}T${INCOME_RECORD_TIME}`;
+    return (after === null || stamp > after) && stamp <= now;
+  });
+}
+
 /**
  * Number of times an income is paid within [rangeStart, rangeEnd] (inclusive YYYY-MM-DD).
  * Monthly and yearly income falls on the start date's day, clamped to shorter months

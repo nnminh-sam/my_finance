@@ -10,6 +10,7 @@ import { formatDateUtc, generateOccurrences, isRuleDueForSync } from "../src/ser
 import type { FinanceStore } from "../src/server/finance/store";
 import { incomeInput as validateIncome } from "../src/server/finance/validation";
 import { applySettingsPatch, MemoryPlans, paycheckInUse, planSpendingsBetween, resetPaycheck } from "./support/memoryPlans";
+import { MemoryLedger } from "./support/memoryLedger";
 
 class MemoryFinanceStore implements FinanceStore {
   planStore = new MemoryPlans(this);
@@ -23,6 +24,11 @@ class MemoryFinanceStore implements FinanceStore {
   materializePlans = this.planStore.materializePlans.bind(this.planStore);
   completePlanOccurrence = this.planStore.completePlanOccurrence.bind(this.planStore);
   mergeCategory = this.planStore.mergeCategory.bind(this.planStore);
+  ledger = new MemoryLedger(this, () => this.planStore.now());
+  listTransactions = this.ledger.listTransactions.bind(this.ledger);
+  updateTransaction = this.ledger.updateTransaction.bind(this.ledger);
+  deleteTransaction = this.ledger.deleteTransaction.bind(this.ledger);
+  materializeIncomes = this.ledger.materializeIncomes.bind(this.ledger);
   settings = new Map<string, FinanceSettings>();
   spendings = new Map<string, Map<string, Spending>>();
   incomes = new Map<string, Map<string, Income>>();
@@ -84,6 +90,7 @@ class MemoryFinanceStore implements FinanceStore {
   async deleteSpending(userId: string, id: string) { this.check(); return this.rows(userId).delete(id); }
   async listIncomes(userId: string, limit: number, cursor?: string) {
     this.check();
+    await this.ledger.materializeIncomes(userId);
     const rows = [...this.incomeRows(userId).values()].filter(row => !cursor || row.id > cursor)
       .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     const incomes = rows.slice(0, limit);
@@ -99,13 +106,17 @@ class MemoryFinanceStore implements FinanceStore {
     this.check();
     if (!this.incomeRows(userId).has(id)) return undefined;
     if (paycheckInUse(this.settings.get(userId), id, input)) return "paycheck-in-use" as const;
+    const before = this.incomeRows(userId).get(id)!;
     const income = { id, ...input };
     this.incomeRows(userId).set(id, income);
+    this.ledger.incomeUpdated(userId, before, income);
     return structuredClone(income);
   }
   async deleteIncome(userId: string, id: string) {
     this.check();
     resetPaycheck(this.settings.get(userId), id);
+    const before = this.incomeRows(userId).get(id);
+    if (before) this.ledger.incomeDeleted(userId, before);
     return this.incomeRows(userId).delete(id);
   }
   async listRepeatRules(userId: string) {
@@ -991,4 +1002,68 @@ test("deleting the paycheck income resets the budget period and keeps showBy", a
   assert.equal((await request(`/incomes/${pay}`, "DELETE")).status, 204);
   const after = await settings(await request("/settings"));
   assert.deepEqual([after.budgetPeriod.mode, after.budgetPeriod.paycheckIncomeId, after.showBy], ["calendar", null, "pay_cycle"]);
+});
+
+type Transaction = import("../src/server/finance/model").Transaction;
+
+test("ledger: past paydays become income rows on their day; /spendings stays expense-only", async t => {
+  const { request, store } = await fixture(t);
+  // 01:00 UTC = 08:00 in the default Asia/Ho_Chi_Minh time zone, 2026-11-10.
+  store.planStore.now = () => new Date("2026-11-10T01:00:00Z");
+  const list = async (query = "") => (await (await request(`/transactions${query}`)).json() as { transactions: Transaction[] }).transactions
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const salary = await (await request("/incomes", "POST", { source: "Salary", name: "Company", amount: 20000000, frequency: "monthly", startDate: "2026-09-25", endDate: null, weekendShift: true })).json() as { income: Income };
+  const gift = await (await request("/incomes", "POST", { source: "Gift", name: "From mom", amount: 500000, frequency: "once", startDate: "2026-11-05", endDate: null })).json() as { income: Income };
+  await created(await request("/spendings", "POST", { ...input, date: "2026-11-05" }));
+
+  const all = await list();
+  assert.deepEqual(all.map(row => [row.kind, row.date, row.category, row.amount]), [
+    ["income", "2026-09-25", "Salary", 20000000],
+    ["income", "2026-10-23", "Salary", 20000000], // Sunday 10-25 paid on Friday
+    ["expense", "2026-11-05", "Food", 12.34],
+    ["income", "2026-11-05", "Gift", 500000],
+  ]);
+  assert.equal(all[1].incomeId, salary.income.id);
+  assert.equal(all[1].incomeDate, "2026-10-25");
+  assert.equal(all[1].time, "00:00");
+  assert.deepEqual((await list("?kind=income&startDate=2026-11-01&endDate=2026-11-30")).map(row => row.category), ["Gift"]);
+  assert.equal((await request("/transactions?kind=transfer")).status, 400);
+  // The spendings API never sees income rows.
+  const spendings = (await (await request("/spendings")).json() as { spendings: Spending[] }).spendings;
+  assert.deepEqual(spendings.map(row => row.category), ["Food"]);
+
+  // Reading again writes nothing twice.
+  assert.equal((await list()).length, 4);
+
+  // A raise changes only paydays from now on.
+  const raised = await request(`/incomes/${salary.income.id}`, "PUT", { source: "Salary", name: "Company", amount: 25000000, frequency: "monthly", startDate: "2026-09-25", endDate: null, weekendShift: true });
+  assert.equal(raised.status, 200);
+  store.planStore.now = () => new Date("2026-11-25T01:00:00Z");
+  assert.deepEqual((await list("?kind=income")).filter(row => row.category === "Salary").map(row => row.amount), [20000000, 20000000, 25000000]);
+
+  // A late salary is fixed on its own row; an income row takes any source as its category.
+  const october = (await list()).find(row => row.date === "2026-10-23")!;
+  const fixed = await request(`/transactions/${october.id}`, "PUT", { amount: 19000000, description: "Paid late", category: "Salary", date: "2026-10-27", time: "09:00" });
+  assert.equal(fixed.status, 200);
+  assert.deepEqual((await fixed.json() as { transaction: Transaction }).transaction.date, "2026-10-27");
+  const food = (await list()).find(row => row.kind === "expense")!;
+  assert.equal((await request(`/transactions/${food.id}`, "PUT", { amount: 1, description: "", category: "Nope", date: "2026-11-05", time: "12:00" })).status, 400);
+
+  // A deleted payday is not written again.
+  const september = (await list()).find(row => row.date === "2026-09-25")!;
+  assert.equal((await request(`/transactions/${september.id}`, "DELETE")).status, 204);
+  assert.equal((await list("?kind=income")).some(row => row.date === "2026-09-25"), false);
+
+  // Editing a one-time income rewrites its single row.
+  const moved = await request(`/incomes/${gift.income.id}`, "PUT", { source: "Gift", name: "From mom", amount: 700000, frequency: "once", startDate: "2026-11-06", endDate: null });
+  assert.equal(moved.status, 200);
+  assert.deepEqual((await list("?kind=income")).filter(row => row.category === "Gift").map(row => [row.date, row.amount]), [["2026-11-06", 700000]]);
+
+  // Deleting a recurring income keeps what was received; deleting a one-time income removes its row.
+  assert.equal((await request(`/incomes/${salary.income.id}`, "DELETE")).status, 204);
+  assert.equal((await request(`/incomes/${gift.income.id}`, "DELETE")).status, 204);
+  const kept = await list("?kind=income");
+  assert.deepEqual(kept.map(row => [row.date, row.incomeId ?? null]), [["2026-10-27", null], ["2026-11-25", null]]);
+  assert.equal((await request(`/transactions/${randomUUID()}`, "DELETE")).status, 404);
 });
