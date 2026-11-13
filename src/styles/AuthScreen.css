@@ -1,12 +1,12 @@
 /* Sign in / Create account: aurora light behind a frosted card (design A1, docs/mockups/login.html).
-   The logo and button use a deeper blue than --primary: white on #3b82f6 is only 3.68:1,
-   on #2563eb 5.17:1 (dark) and on #1d4ed8 6.70:1 (light). */
+   The logo and button are a deep jade so white passes contrast on them:
+   5.4:1 on #2f7566 (dark) and 7.2:1 on #2b605c (light). */
 .auth-screen {
-  --auth-brand: #2563eb;
-  --auth-brand-hover: #1d4ed8;
+  --auth-brand: #2f7566;
+  --auth-brand-hover: #286457;
   --auth-danger: #f87171;
   --auth-danger-soft: rgba(239, 68, 68, 0.14);
-  --auth-violet: #8b5cf6;
+  --auth-ink: #3d5a52;
   --auth-teal: #14b8a6;
   --auth-aurora: 0.42;
   position: relative;
@@ -19,8 +19,8 @@
   background: var(--bg-main);
 }
 .light-mode .auth-screen {
-  --auth-brand: #1d4ed8;
-  --auth-brand-hover: #1e40af;
+  --auth-brand: #2b605c;
+  --auth-brand-hover: #234e4b;
   --auth-danger: #dc2626;
   --auth-danger-soft: rgba(220, 38, 38, 0.1);
   --auth-aurora: 0.3;
@@ -29,8 +29,8 @@
 /* Light stays in the corners so the card's centre is calm and the logo and button stand out. */
 .auth-aurora { position: absolute; inset: -20%; z-index: -1; filter: blur(80px); opacity: var(--auth-aurora); pointer-events: none; }
 .auth-aurora i { position: absolute; width: 42%; aspect-ratio: 1; border-radius: 50%; }
-.auth-aurora i:nth-child(1) { left: -6%; top: -8%; background: var(--primary); animation: auth-drift-1 18s ease-in-out infinite alternate; }
-.auth-aurora i:nth-child(2) { right: -8%; top: 18%; background: var(--auth-violet); animation: auth-drift-2 22s ease-in-out infinite alternate; }
+.auth-aurora i:nth-child(1) { left: -6%; top: -8%; background: var(--auth-brand); animation: auth-drift-1 18s ease-in-out infinite alternate; }
+.auth-aurora i:nth-child(2) { right: -8%; top: 18%; background: var(--auth-ink); animation: auth-drift-2 22s ease-in-out infinite alternate; }
 .auth-aurora i:nth-child(3) { left: 24%; bottom: -22%; background: var(--auth-teal); animation: auth-drift-3 20s ease-in-out infinite alternate; }
 @keyframes auth-drift-1 { to { transform: translate(10%, 8%) scale(1.08); } }
 @keyframes auth-drift-2 { to { transform: translate(-8%, 10%) scale(0.92); } }

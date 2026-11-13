@@ -10,6 +10,8 @@ export interface CategoryData {
   icon: string;
   /** Hidden from pickers; kept so past spendings and plans still show its name, color and icon. */
   archived?: boolean;
+  /** Spendings in a bill category (rent, money for parents, subscriptions) never count against the everyday budget. */
+  bill?: boolean;
 }
 
 export interface Spending {

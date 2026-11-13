@@ -44,8 +44,8 @@
 }
 
 .calendar-weekday-label {
-  font-weight: 600;
-  font-size: 0.875rem;
+  font-weight: 500;
+  font-size: 0.8125rem;
   color: var(--text-muted);
 }
 
@@ -100,11 +100,9 @@
   justify-content: center;
   border-radius: var(--radius-sm);
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
+  color: var(--forecast);
   user-select: none;
 }
 
@@ -120,49 +118,70 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  transition: all 0.2s;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
   color: var(--text-main);
+  /* A day is a neutral card. Intensity is the bar at the bottom, today is the date badge. */
+  border-color: transparent;
 }
 
-/* Days of the neighbouring period: only the date, faded. */
+.calendar-day-cell:hover {
+  background: var(--bg-card-hover);
+}
+
+/* Days of the neighbouring period: only the date, faded, no card. */
 .calendar-day-cell.calendar-day-outside {
   opacity: 0.35;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .calendar-day-cell.calendar-day-outside:hover {
   opacity: 0.6;
-}
-
-.calendar-day-cell.calendar-day-first-of-month {
-  border-top: 2px solid var(--primary) !important;
+  background: var(--bg-card);
 }
 
 .calendar-day-first-badge {
-  font-size: 0.7rem;
-  font-weight: 800;
+  font-size: 0.68rem;
+  font-weight: 600;
   text-transform: uppercase;
-  color: var(--primary);
+  color: var(--forecast);
   margin-right: 3px;
   line-height: 1;
 }
 
 .calendar-day-cell.calendar-day-today {
-  border: 2px solid var(--calendar-today-border) !important;
-  box-shadow: var(--calendar-today-glow) !important;
   z-index: 2;
-}
-
-.calendar-day-cell.calendar-day-today:hover {
-  border-color: var(--calendar-today-border-hover) !important;
-  box-shadow: var(--calendar-today-glow-hover) !important;
-  z-index: 3;
 }
 
 .calendar-day-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 4px;
+  min-width: 0;
   margin-bottom: 4px;
+}
+
+/* Narrow cells cannot fit "~130.000 ₫" beside the date badge. The rows below keep their ₫. */
+.calendar-day-cell {
+  container-type: inline-size;
+}
+
+@container (max-width: 140px) {
+  .calendar-day-header .calendar-currency {
+    display: none;
+  }
+
+  .calendar-day-header .calendar-day-total-desktop {
+    font-size: 0.875rem;
+  }
+
+  .calendar-day-total-desktop.is-over::before {
+    width: 5px;
+    height: 5px;
+    margin-right: 3px;
+  }
 }
 
 .calendar-day-number {
@@ -171,17 +190,34 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: 999px;
   background-color: transparent;
-  color: var(--text-main);
-  font-size: 1.25rem;
-  font-weight: 900;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 
+/* "MMM d" on the 1st needs more room than the round badge. */
+.calendar-day-number.calendar-day-number-first {
+  width: auto;
+  min-width: 28px;
+  padding: 0 4px;
+}
+
 .calendar-day-cell.calendar-day-today .calendar-day-number {
-  color: var(--calendar-today-border) !important;
-  font-weight: 900;
+  background: var(--today);
+  color: var(--on-today);
+  font-weight: 700;
+}
+
+.calendar-day-cell.calendar-day-today .calendar-day-number-first {
+  padding: 0 8px;
+}
+
+.calendar-day-cell.calendar-day-today .calendar-day-first-badge {
+  color: inherit;
 }
 
 @keyframes calendarFillLeftToRight {
@@ -198,8 +234,9 @@
 }
 
 .calendar-day-total-desktop {
-  font-size: 1.125rem;
-  font-weight: 900;
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--text-main);
   white-space: nowrap;
   animation: calendarFillLeftToRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -219,10 +256,44 @@
   overflow: hidden;
 }
 
-.calendar-no-expenses {
-  font-size: 0.75rem;
+/* The currency sign sits back so the digits carry the amount. */
+.calendar-currency {
+  margin-left: 0.2em;
+  font-size: 0.78em;
+  font-weight: 500;
+  opacity: 0.55;
+}
+
+/* Quiet flag: a normal day carries no mark. Only everyday spending over the page's budget turns the total amber. */
+.calendar-day-total-desktop.is-over,
+.calendar-day-total-mobile.is-over {
+  color: var(--money-over);
+}
+
+.calendar-day-total-desktop.is-over::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  vertical-align: 0.15em;
+}
+
+/* A day that only paid sure plans (rent, money for parents, subscriptions): neutral, never amber. */
+.calendar-bill-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-card-hover);
   color: var(--text-muted);
-  animation: calendarFillLeftToRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  font-size: 0.6875rem;
+  font-weight: 600;
 }
 
 .calendar-spending-row {
@@ -232,7 +303,7 @@
   gap: 6px;
   font-size: 0.75rem;
   line-height: 1.25;
-  color: var(--text-main);
+  color: color-mix(in srgb, var(--text-main) 82%, transparent);
   animation: calendarFillLeftToRight 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: calc(var(--row-idx, 0) * 35ms);
 }
@@ -326,8 +397,8 @@
   .calendar-day-number {
     width: 22px;
     height: 22px;
-    font-size: 0.85rem;
-    font-weight: 800;
+    font-size: 0.8rem;
+    font-weight: 600;
   }
 
   .calendar-day-number.calendar-day-number-first {
@@ -335,9 +406,6 @@
     height: 22px;
     padding: 0 4px;
     font-size: 0.72rem;
-    border-radius: 11px;
-    background-color: color-mix(in srgb, var(--primary) 15%, transparent);
-    color: var(--primary);
   }
 
   .calendar-day-first-badge {
@@ -363,7 +431,7 @@
     width: 100%;
     text-align: center;
     font-size: 0.7rem;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.1;
     color: var(--text-main);
     white-space: nowrap;
@@ -418,25 +486,23 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
 }
 
-/* Planned (forecast) spendings: faded, dashed, prefixed with "~" so they never read as real. */
+/* Planned (forecast) spendings: grey and prefixed with "~", so they stay quieter than real spending.
+   An estimate is the faintest; a plan marked sure is one step stronger. */
 .calendar-day-planned-total {
-  color: var(--primary) !important;
-  opacity: 0.75;
-  font-style: italic;
+  color: var(--forecast);
+  font-weight: 500;
 }
 
 .calendar-spending-row-planned {
-  opacity: 0.7;
-  border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent);
-  background: transparent !important;
+  color: var(--forecast);
 }
 
-.calendar-spending-row-planned .calendar-spending-amount {
-  color: var(--primary);
+.calendar-spending-row-planned.is-sure {
+  color: var(--forecast-sure);
 }
 
 .calendar-pay-cycle-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 6px 12px; font-size: 0.8rem; color: var(--text-muted); }
-.calendar-pay-cycle-hint a { color: var(--primary); font-weight: 600; text-decoration: underline; }
+.calendar-pay-cycle-hint a { color: var(--text-main); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .calendar-pay-cycle-hint button { min-height: 28px; padding: 2px 10px; border-radius: var(--radius-sm); color: var(--text-muted); border: 1px solid var(--border-color); }
 
 /* Period summary: on wide screens a panel pinned to the right edge of the page, full height below the
@@ -459,8 +525,8 @@
 }
 :root { --calendar-side-width: 320px; }
 
-/* Income on its day: a green line under the spend total ("~" and faded when the payday is still to come).
-   Phones show only a dot by the date: filled when received, a ring when expected. Never part of the heat fill. */
+/* Income on its day: a jade line under the spend total ("~" and faded when the payday is still to come).
+   Phones show only a dot by the date: filled when received, a ring when expected. Never part of the spend bar. */
 .calendar-day-income {
   display: flex;
   flex-direction: column;
@@ -471,21 +537,21 @@
 }
 .calendar-day-income-amount {
   font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--success);
+  font-weight: 500;
+  color: var(--money-income);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.calendar-day-income-amount.is-expected { opacity: 0.6; font-weight: 600; }
+.calendar-day-income-amount.is-expected { opacity: 0.6; }
 .calendar-day-income-dot {
   display: none;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--success);
+  background: var(--money-income);
   flex: none;
 }
-.calendar-day-income-dot.is-expected { background: transparent; box-shadow: inset 0 0 0 1.5px var(--success); opacity: 0.75; }
+.calendar-day-income-dot.is-expected { background: transparent; box-shadow: inset 0 0 0 1.5px var(--money-income); opacity: 0.75; }
 @media (max-width: 768px) {
   .calendar-day-income { display: none; }
   .calendar-day-income-dot { display: inline-block; }

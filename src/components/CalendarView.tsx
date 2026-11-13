@@ -34,7 +34,7 @@ import { useFinanceShell } from "../contexts/FinanceShellContext";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useSettings } from "../contexts/SettingsContext";
-import { getHeatmapColor } from "../lib/heatmap";
+import { dayFlag, everydayBudget, periodBills, splitDay } from "../lib/dayBudget";
 import Link from "next/link";
 import { expectedPaydays, getRangeIncome } from "../lib/income";
 import { dismissPayCycleHint, shouldShowPayCycleHint } from "../lib/legacyPayday";
@@ -74,7 +74,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onDateClick,
 }) => {
   const { settings } = useSettings();
-  const { spendings, incomes, received, hasLoaded, fetchWeeksSpendings, projectedBetween } = useFinance();
+  const { spendings, plans, incomes, received, hasLoaded, fetchWeeksSpendings, projectedBetween } = useFinance();
   const { activeDate: shellActiveDate, calendarBasis: basis } = useFinanceShell();
   const { user } = useAuth();
   const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
@@ -167,7 +167,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         return;
       }
 
-      // Stage 2: Silently reveal total spending + heatmap for this day
+      // Stage 2: Silently reveal total spending + spend bar for this day
       setDayStages((prev) => {
         if (prev[nextDayKey] === 'totals' || prev[nextDayKey] === 'details') return prev;
         return { ...prev, [nextDayKey]: 'totals' };
@@ -342,19 +342,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Compute peaks per month so heatmap scale is calibrated per month
-  const monthlyPeaks = useMemo(() => {
-    const peaks: Record<string, number> = Object.create(null);
-    for (let i = 0; i < allDays.length; i++) {
-      const day = allDays[i];
-      const mKey = format(day, 'yyyy-MM');
-      const total = getTotalForDate(day, spendings);
-      if (!peaks[mKey] || total > peaks[mKey]) {
-        peaks[mKey] = total;
-      }
+  // Spendings by day, and which plans are sure bills: a day compares only its everyday spending with the budget.
+  const spendingsByDate = useMemo(() => {
+    const byDate = new Map<string, typeof spendings>();
+    for (const spending of spendings) byDate.set(spending.date, [...(byDate.get(spending.date) ?? []), spending]);
+    return byDate;
+  }, [spendings]);
+  const billRules = useMemo(() => ({
+    surePlanIds: new Set(plans.filter(plan => plan.sure === true).map(plan => plan.id)),
+    billCategories: new Set(settings.categories.filter(category => category.bill).map(category => category.id)),
+  }), [plans, settings.categories]);
+  // One everyday budget per page: (income − bills) ÷ days. Fixed for the page, so past days keep their flag.
+  const pageBudgets = useMemo(() => {
+    const budgets = new Map<string, number | null>();
+    for (const page of pages) {
+      const { totalIncome } = getRangeIncome(page.start, page.end, incomes, received);
+      const inPage = spendings.filter(spending => spending.date >= page.start && spending.date <= page.end);
+      const bills = periodBills(inPage, projectedBetween(page.start, page.end), billRules);
+      const days = Math.round((Date.parse(page.end) - Date.parse(page.start)) / 86_400_000) + 1;
+      budgets.set(page.key, everydayBudget(totalIncome, bills, days));
     }
-    return peaks;
-  }, [allDays, spendings]);
+    return budgets;
+  }, [pages, spendings, incomes, received, projectedBetween, billRules]);
 
   // Planned (not yet real) occurrences across every rendered day, grouped by date.
   const plannedByDate = useMemo(() => {
@@ -739,7 +748,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   </div>
                   {weekDaysList.map((day) => {
                     const dayKey = format(day, 'yyyy-MM-dd');
-                    const dayMonthStr = format(day, 'yyyy-MM');
                     const isCurrentDay = isToday(day);
                     const isFirstOfMonth = day.getDate() === 1;
                     // Days of the neighbouring periods only fill the first and last week: faded, without amounts.
@@ -751,14 +759,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     const showDetails = !isOutside && dayStage === 'details';
 
                     const total = showTotals ? getTotalForDate(day, spendings) : 0;
-                    const heatmapBg = showTotals
-                      ? getHeatmapColor(total, monthlyPeaks[dayMonthStr] || 0, settings.theme)
-                      : undefined;
+                    // A plain card unless everyday spending passed the page's budget (amber) or the day only paid bills.
+                    const pageBudget = pageBudgets.get(page.key) ?? null;
+                    const flag = showTotals && total > 0 ? dayFlag(splitDay(spendingsByDate.get(dayKey) ?? [], billRules), pageBudget) : null;
 
                     const topSpendings = showDetails ? getTopSpendingsForDate(day, 5, spendings) : [];
                     const plannedItems = showTotals ? plannedByDate.get(dayKey) ?? [] : [];
                     const plannedTotal = plannedItems.reduce((sum, item) => sum + item.amount, 0);
-                    // Money in stays out of the heat fill, so payday never reads as the most expensive day.
                     const incomeIn = showTotals ? receivedByDate.get(dayKey) ?? 0 : 0;
                     const incomeExpected = showTotals ? expectedByDate.get(dayKey) ?? 0 : 0;
 
@@ -772,18 +779,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           isCurrentDay && "calendar-day-today",
                           isFirstOfMonth && "calendar-day-first-of-month",
                           isOutside && "calendar-day-outside",
+                          flag === "over" && "is-over",
                         )}
                         aria-current={isCurrentDay ? "date" : undefined}
                         title={isCurrentDay ? "Today" : undefined}
-                        style={{
-                          backgroundColor: heatmapBg || undefined,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.filter = "brightness(1.2)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.filter = "none";
-                        }}
                       >
                         {/* Stage 1: Date value always renders immediately on the client side */}
                         <div className="calendar-day-header">
@@ -804,13 +803,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             )}
                           </span>
                           {showTotals && total > 0 && (
-                            <span className="calendar-day-total-desktop">
-                              {total.toLocaleString("vi-VN")} ₫
+                            <span
+                              className={cn("calendar-day-total-desktop", flag === "over" && "is-over")}
+                              title={flag === "over" && pageBudget !== null ? `Over the everyday budget of ${Math.round(pageBudget).toLocaleString("vi-VN")} ₫ a day` : undefined}
+                            >
+                              {total.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
                             </span>
                           )}
                           {showTotals && total === 0 && plannedTotal > 0 && (
                             <span className="calendar-day-total-desktop calendar-day-planned-total" title="Planned, not spent yet">
-                              ~{plannedTotal.toLocaleString("vi-VN")} ₫
+                              ~{plannedTotal.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
                             </span>
                           )}
                           {(incomeIn > 0 || incomeExpected > 0) && (
@@ -825,19 +827,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           <div className="calendar-day-income">
                             {incomeIn > 0 && (
                               <span className="calendar-day-income-amount" title="Received">
-                                +{incomeIn.toLocaleString("vi-VN")} ₫
+                                +{incomeIn.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
                               </span>
                             )}
                             {incomeExpected > 0 && (
                               <span className="calendar-day-income-amount is-expected" title="Payday expected, not received yet">
-                                ~+{incomeExpected.toLocaleString("vi-VN")} ₫
+                                ~+{incomeExpected.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
                               </span>
                             )}
                           </div>
                         )}
 
                         {showTotals && total > 0 && (
-                          <div className="calendar-day-total-mobile">
+                          <div className={cn("calendar-day-total-mobile", flag === "over" && "is-over")}>
                             {formatCompactSpending(total)}
                           </div>
                         )}
@@ -850,11 +852,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         {/* Stage 3: Detailed spendings fill in after the day's total */}
                         {showDetails && (
                           <div className="calendar-spending-list">
-                            {topSpendings.length === 0 && plannedItems.length === 0 && (
-                              <span className="calendar-no-expenses">
-                                No expenses
-                              </span>
-                            )}
                             {topSpendings.map((s, rowIdx) => (
                               <div
                                 key={s.id}
@@ -867,7 +864,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                   </span>
                                 </span>
                                 <span className="calendar-spending-amount">
-                                  {s.amount.toLocaleString("vi-VN")} ₫
+                                  {s.amount.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
                                 </span>
                               </div>
                             ))}
@@ -884,11 +881,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                   </span>
                                 </span>
                                 <span className="calendar-spending-amount">
-                                  ~{p.amount.toLocaleString("vi-VN")} ₫
+                                  ~{p.amount.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
                                 </span>
                               </div>
                             ))}
                           </div>
+                        )}
+
+                        {flag === "bills" && showDetails && (
+                          <span className="calendar-bill-tag" title="Only bills were paid today. Bills do not count against the everyday budget">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+                              <path d="M16 8h-6M16 12H8M13 16H8" />
+                            </svg>
+                            Bills
+                          </span>
                         )}
                       </div>
                     );

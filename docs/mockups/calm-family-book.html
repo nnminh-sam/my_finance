@@ -1,0 +1,1013 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Calm Family Book</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== FIXED: tokens. Mirror src/styles/globals.css (dark is the app default, light mirrors .light-mode). ===== */
+:root {
+  --page: #050506; --bg: #09090b; --card: #18181b; --card-2: #1f1f23; --card-3: #27272a; --line: #3f3f46; --line-soft: #2a2a2f;
+  --fg: #f4f4f5; --muted: #a1a1aa; --faint: #71717a;
+  --primary: #3b82f6; --primary-text: #60a5fa; --primary-soft: rgba(59,130,246,.15);
+  --income: #34d399; --danger: #f87171; --danger-soft: rgba(239,68,68,.14); --warn: #f59e0b; --warn-soft: rgba(245,158,11,.14);
+  --ok: #34d399; --ok-soft: rgba(52,211,153,.13);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light; } }
+:root[data-theme="light"] {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light;
+}
+
+/* ===== FIXED: base ===== */
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 var(--font); background: var(--page); color: var(--fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.cur { font-size: .7em; opacity: .6; margin-left: .15em; font-weight: 500; }
+code { font-size: .9em; background: var(--card-2); padding: 1px 5px; border-radius: 5px; }
+svg { flex: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ===== FIXED: page chrome (sections 1–5) ===== */
+.intro { padding-block: 32px 8px; display: grid; gap: 12px; }
+.intro .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary-text); }
+.intro h1 { font-size: 26px; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); max-width: 76ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.part { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 32px; display: grid; gap: 16px; }
+.part > h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; display: flex; gap: 10px; align-items: baseline; }
+.part > h2 .n { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; }
+.part > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.today { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.shot { display: grid; gap: 8px; margin: 0; min-width: 0; }
+.shot img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+.shot figcaption { font-size: 12.5px; color: var(--muted); }
+.issues { display: grid; gap: 8px; counter-reset: issue; margin: 0; padding: 0; list-style: none; }
+.issues li { counter-increment: issue; display: grid; grid-template-columns: 28px 1fr; gap: 2px 10px; background: var(--card); border-radius: 12px; padding: 10px 14px; }
+.issues li::before { content: counter(issue); grid-row: span 2; width: 24px; height: 24px; border-radius: 99px; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--danger-soft); color: var(--danger); }
+.issues li.minor::before { background: var(--warn-soft); color: var(--warn); }
+.issues b { font-size: 14px; } .issues span { color: var(--muted); font-size: 13px; }
+.sev { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 1px; }
+.sev.hi { background: var(--danger-soft); color: var(--danger); } .sev.md { background: var(--warn-soft); color: var(--warn); } .sev.lo { background: var(--card-3); color: var(--muted); }
+.stories { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.story { background: var(--card); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; font-size: 13.5px; }
+.story .who { font-size: 12px; font-weight: 700; color: var(--primary-text); text-transform: uppercase; letter-spacing: .05em; }
+.story p { margin: 0; color: var(--muted); } .story p b { color: var(--fg); font-weight: 600; }
+.tbl { overflow-x: auto; background: var(--card); border-radius: 12px; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+.tbl th, .tbl td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.tbl th { color: var(--faint); font-weight: 500; font-size: 12px; border-top: 0; }
+.dir { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 24px; display: grid; gap: 16px; }
+.dir-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.dir-head .tag { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; text-transform: uppercase; }
+.dir-head h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.dir-head .rec { font-size: 11.5px; font-weight: 600; background: var(--primary-soft); color: var(--primary-text); padding: 2px 9px; border-radius: 999px; }
+.dir > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.notes div { background: var(--card); border-radius: 12px; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+.notes b { display: block; color: var(--fg); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.solves { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); align-items: center; }
+.solves i { font-style: normal; width: 20px; height: 20px; border-radius: 99px; display: inline-grid; place-items: center; font-weight: 700; background: var(--ok-soft); color: var(--ok); }
+
+/* ===== FIXED: stage + app-like components ===== */
+.stage { background: var(--bg); border-radius: 18px; padding: 28px 16px; display: grid; place-items: center; gap: 16px;
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(14.28% - 1px), var(--line-soft) calc(14.28% - 1px) 14.28%); }
+.modal { width: min(640px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.45); display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; }
+.modal.wide { width: min(860px, 100%); }
+.m-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.m-head h4 { margin: 0; font-size: 16px; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.m-head h4 small { color: var(--muted); font-weight: 500; font-size: 13px; }
+.x { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--card-2); color: var(--muted); }
+.m-body { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+.m-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.sp { flex: 1; }
+.btn { height: 38px; padding: 0 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); white-space: nowrap; }
+.btn.pri { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn[disabled] { opacity: .35; cursor: default; }
+.lbl { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.field { height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); padding: 0 12px; width: 100%; min-width: 0; font-size: 14px; }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--card-3); color: var(--muted); white-space: nowrap; }
+.sub { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.sub::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+.grid { display: grid; gap: 10px; }
+
+/* ===== FIXED: stepper visibility ===== */
+.stage-host [data-p] { display: none !important; }
+.stage-host[data-step="0"] [data-p~="0"], .stage-host[data-step="1"] [data-p~="1"], .stage-host[data-step="2"] [data-p~="2"],
+.stage-host[data-step="3"] [data-p~="3"], .stage-host[data-step="4"] [data-p~="4"], .stage-host[data-step="5"] [data-p~="5"] { display: revert !important; }
+.stage-host[data-step="0"] .grid[data-p~="0"], .stage-host[data-step="1"] .grid[data-p~="1"], .stage-host[data-step="2"] .grid[data-p~="2"],
+.stage-host[data-step="3"] .grid[data-p~="3"], .stage-host[data-step="4"] .grid[data-p~="4"], .stage-host[data-step="5"] .grid[data-p~="5"] { display: grid !important; }
+
+$1.mock-pad { }
+/* ---------- page chrome for this mockup ---------- */
+.stage { place-items: stretch; padding: 14px; background-image: none; gap: 12px; }
+.stage.xl { width: min(1480px, calc(100vw - 48px)); margin-inline: calc((100% - min(1480px, 100vw - 48px)) / 2); }
+.ctl { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; padding: 3px; border-radius: 12px; background: var(--card); gap: 2px; }
+.seg button { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.seg button.on { background: var(--card-3); color: var(--fg); }
+.pals { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pals button { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 6px; border-radius: 99px; background: var(--card); font-size: 12.5px; font-weight: 600; color: var(--muted); border: 1px solid transparent; white-space: nowrap; }
+.pals button.on { border-color: var(--fg); color: var(--fg); }
+.pals i { width: 20px; height: 20px; border-radius: 99px; background: linear-gradient(135deg, var(--p1) 0 50%, var(--p2) 50% 100%); box-shadow: inset 0 0 0 1px var(--line); }
+.ctl-note { margin: 0; font-size: 12.5px; color: var(--muted); min-height: 19px; }
+.m .cur { font-style: normal; }
+.m { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- palette scope: today's tokens, then the three proposals ---------- */
+.pal {
+  --page: #050506; --bg: #09090b; --card: #18181b; --card-2: #1f1f23; --card-3: #27272a; --line: #3f3f46; --line-soft: #2a2a2f;
+  --fg: #f4f4f5; --muted: #a1a1aa; --faint: #71717a;
+  --primary: #3b82f6; --primary-text: #60a5fa; --primary-soft: rgba(59,130,246,.15);
+  --income: #10b981; --danger: #ef4444; --warn: #f59e0b; --ok: #10b981; --ok-soft: rgba(16,185,129,.13);
+  --a-on: #fff; --a-left: #3b82f6; --a-today: #38bdf8; --a-heat: #60a5fa;
+  --a-spent: color-mix(in srgb, var(--fg) 80%, transparent); --a-commit: var(--warn); --a-est: var(--warn); --a-display: var(--font); --a-fc: var(--faint);
+  color: var(--fg); color-scheme: dark;
+}
+.pal[data-pal="navy"] {
+  --page: #05070d; --bg: #0a0d18; --card: #121727; --card-2: #182035; --card-3: #202a44; --line: rgba(255,255,255,.1); --line-soft: rgba(255,255,255,.06);
+  --fg: #e6e9f2; --muted: #919ab4; --faint: #5f6885;
+  --primary: #8fa4ff; --primary-text: #a9b9ff; --primary-soft: rgba(143,164,255,.14);
+  --income: #56cfa6; --danger: #ff8f80; --warn: #e8b765; --ok: #56cfa6; --ok-soft: rgba(86,207,166,.13);
+  --a-on: #0a0d18; --a-left: #8fa4ff; --a-today: var(--fg); --a-fc: #7680a0;
+  --a-spent: color-mix(in srgb, var(--fg) 72%, transparent); --a-commit: var(--muted); --a-est: var(--faint);
+}
+.pal[data-pal="jade"] {
+  --page: #050807; --bg: #0a0e0d; --card: #121816; --card-2: #18201d; --card-3: #212b27; --line: rgba(255,255,255,.1); --line-soft: rgba(255,255,255,.06);
+  --fg: #e8eeeb; --muted: #8d9b96; --faint: #5c6965;
+  --primary: #e8eeeb; --primary-text: #6fcdb3; --primary-soft: rgba(111,205,179,.13);
+  --income: #6fcdb3; --danger: #f2a65a; --warn: #f2a65a; --ok: #6fcdb3; --ok-soft: rgba(111,205,179,.13);
+  --a-on: #0a0e0d; --a-left: #6fcdb3; --a-today: var(--fg); --a-fc: #73817c;
+  --a-spent: color-mix(in srgb, var(--fg) 72%, transparent); --a-commit: var(--muted); --a-est: var(--faint);
+}
+.pal[data-pal="warm"] {
+  --page: #e9e3d8; --bg: #f4efe6; --card: #fffdf8; --card-2: #f3eee4; --card-3: #e9e2d5; --line: rgba(60,45,20,.16); --line-soft: rgba(60,45,20,.08);
+  --fg: #29241f; --muted: #7b7267; --faint: #a89f92;
+  --primary: #b8522c; --primary-text: #b8522c; --primary-soft: rgba(184,82,44,.1);
+  --income: #2e7a59; --danger: #b83a2a; --warn: #a8650f; --ok: #2e7a59; --ok-soft: rgba(46,122,89,.1);
+  --a-on: #fff; --a-left: #2e7a59; --a-today: var(--fg); --a-fc: #978e82;
+  --a-spent: color-mix(in srgb, var(--fg) 70%, transparent); --a-commit: var(--muted); --a-est: var(--faint);
+  --a-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; color-scheme: light;
+}
+.pal .btn.pri { color: var(--a-on); }
+.pal[data-blur] .m { filter: blur(5px); }
+
+/* ---------- the app frame ---------- */
+.app { container: app / inline-size; background: var(--bg); border: 1px solid var(--line-soft); border-radius: 16px; overflow: hidden; position: relative; display: flex; flex-direction: column; font-size: 13px; width: 100%; margin-inline: auto; }
+.app[data-dev="phone"] { max-width: 390px; border-radius: 28px; }
+.a-top { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--card); border-bottom: 1px solid var(--line-soft); min-height: 50px; }
+.a-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.a-logo { width: 26px; height: 26px; border-radius: 8px; background: var(--primary); color: var(--a-on); display: grid; place-items: center; font-style: normal; font-weight: 700; font-size: 13px; }
+.a-nav { display: flex; gap: 2px; margin-left: 6px; }
+.a-nav span { padding: 5px 10px; border-radius: 8px; color: var(--muted); font-weight: 600; font-size: 12.5px; }
+.a-nav span.on { background: var(--primary-soft); color: var(--primary-text); }
+.l1 .a-nav span.on { background: var(--card-3); color: var(--fg); }
+.a-period { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.a-basis { display: inline-flex; padding: 2px; border-radius: 99px; background: var(--card-3); font-size: 11.5px; font-weight: 600; margin-right: 4px; }
+.a-basis span { padding: 3px 9px; border-radius: 99px; color: var(--muted); }
+.a-basis span.on { background: var(--primary); color: #fff; }
+.l1 .a-basis span.on { background: var(--card); color: var(--fg); }
+.a-pl { display: grid; line-height: 1.2; text-align: center; color: var(--fg); }
+.a-pl b { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.a-pl small { font-size: 10.5px; color: var(--muted); }
+.a-ico { width: 32px; height: 32px; border-radius: 99px; display: grid; place-items: center; color: var(--muted); background: var(--card-2); }
+.a-ico.on { color: var(--fg); background: var(--card-3); }
+.a-add { background: var(--primary); color: #fff; }
+.l1 .a-add { color: var(--a-on); }
+.a-who { display: inline-flex; padding: 2px; border-radius: 99px; background: var(--card-2); gap: 1px; }
+.a-who button { height: 26px; padding: 0 9px 0 4px; border-radius: 99px; font-size: 11.5px; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.a-who button:first-child { padding-left: 10px; }
+.a-who button.on { background: var(--card-3); color: var(--fg); }
+.w { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 99px; font-size: 8.5px; font-weight: 700; font-style: normal; flex: none; background: var(--card-3); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.w.pl { background: color-mix(in srgb, var(--fg) 80%, transparent); color: var(--bg); box-shadow: none; }
+.w.big { width: 28px; height: 28px; font-size: 12px; }
+
+.a-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; min-height: 0; }
+.a-cal { padding: 12px; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; min-width: 0; }
+.a-wk, .a-row { display: grid; grid-template-columns: 22px repeat(7, minmax(0, 1fr)); gap: 6px; }
+.a-wk span { text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); }
+.a-grid { display: grid; grid-auto-rows: minmax(112px, 1fr); gap: 6px; min-height: 0; }
+.a-wn { display: grid; place-items: center; font-size: 10.5px; font-weight: 700; color: var(--muted); border-radius: 8px; background: color-mix(in srgb, var(--muted) 8%, transparent); border: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.l1 .a-wn { background: none; border-color: transparent; color: var(--faint); font-weight: 500; }
+.l1 .a-wk span { font-weight: 500; color: var(--faint); font-size: 11.5px; }
+
+/* day cell: today's look */
+.c { position: relative; display: flex; flex-direction: column; gap: 3px; padding: 7px 8px; border-radius: 12px; text-align: left; min-width: 0; overflow: hidden; border: 1px solid var(--line); background: color-mix(in srgb, var(--a-heat) var(--heat, 0%), var(--card)); color: var(--fg); }
+.c.out { opacity: .35; cursor: default; }
+.c.first { border-top: 2px solid var(--primary); }
+.c.today { border: 2px solid var(--a-today); padding: 6px 7px; z-index: 1; box-shadow: 0 0 0 1px color-mix(in srgb, var(--a-today) 45%, transparent), 0 0 16px color-mix(in srgb, var(--a-today) 25%, transparent); }
+.c.sel { outline: 2px solid var(--fg); outline-offset: 1px; }
+.c-h { display: flex; justify-content: space-between; align-items: center; gap: 4px; min-height: 22px; }
+.c-n { font-size: 16px; font-weight: 900; display: inline-flex; align-items: center; gap: 3px; line-height: 1; }
+.c-n small { font-size: 9.5px; font-weight: 800; text-transform: uppercase; color: var(--primary); }
+.c.today .c-n { color: var(--a-today); }
+.c-t { font-size: 13.5px; font-weight: 900; }
+.c-t .cur, .r .cur, .c-in .cur { font-size: 1em; opacity: 1; margin-left: .25em; font-weight: inherit; }
+.c-t.plan { color: var(--primary); opacity: .75; font-style: italic; }
+.c-in { align-self: flex-end; font-size: 11px; font-weight: 700; color: var(--income); }
+.c-rows { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow: hidden; }
+.r { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 5px; font-size: 10.5px; line-height: 1.3; align-items: center; padding: 0 1px; }
+.r em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r .w { display: none; margin-right: 4px; vertical-align: -2px; width: 12px; height: 12px; font-size: 7.5px; }
+.l4 .r .w { display: inline-grid; }
+.r.plan { opacity: .7; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); }
+.r.plan .m { color: var(--primary); }
+.c-none { font-size: 10.5px; color: var(--muted); }
+.c-bar, .c-k, .c-dot { display: none; }
+
+/* day cell: calm */
+.l1 .c { background: var(--card); border-color: transparent; }
+.l1 .c.out { background: transparent; }
+.l1 .c.first { border-top-color: transparent; }
+.l1 .c.today { border: 1px solid transparent; padding: 7px 8px; box-shadow: none; }
+.l1 .c-n { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.l1 .c-n small { color: var(--faint); font-weight: 600; }
+.l1 .c.today .c-n { background: var(--a-today); color: var(--bg); border-radius: 99px; padding: 4px 7px; margin: -2px 0 -2px -3px; }
+.l1 .c-t { font-size: 13px; font-weight: 600; }
+.l1 .c-t .cur, .l1 .r .cur, .l1 .c-in .cur { font-size: .78em; opacity: .55; margin-left: .2em; font-weight: 500; }
+.l1 .c-t.plan { color: var(--a-fc); opacity: 1; font-style: normal; font-weight: 500; }
+.l1 .c-in { font-weight: 500; font-size: 11px; }
+.l1 .r { color: color-mix(in srgb, var(--fg) 82%, transparent); }
+.l1 .r.plan { opacity: 1; border: 0; color: var(--a-fc); }
+.l1 .r.plan.sure { color: var(--muted); }
+.l1 .r.plan .m { color: inherit; }
+.l1 .c-none { display: none; }
+.l1 .c-bar { display: block; position: absolute; left: 8px; bottom: 6px; height: 2px; border-radius: 2px; width: calc((100% - 16px) * var(--bar, 0) / 100); background: var(--a-spent); }
+.l1 .c-rows { padding-bottom: 7px; }
+
+/* side panel */
+.a-side { background: var(--card); border-left: 1px solid var(--line-soft); padding: 14px; display: flex; flex-direction: column; gap: 14px; min-width: 0; overflow-y: auto; }
+.s-lab { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+.sw2 { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+.s-val { font-size: 26px; font-weight: 700; letter-spacing: -.025em; line-height: 1.15; color: var(--a-left); }
+.s-val.over, .s-big.over { color: var(--danger); }
+.s-val.none, .s-big.none { color: var(--muted); }
+.s-sub { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.s-sub b { color: var(--fg); font-weight: 600; }
+.s-sub b.left { color: var(--a-left); }
+.s-sub b.over { color: var(--danger); }
+.s-big { font-family: var(--a-display); font-size: 36px; font-weight: 600; letter-spacing: -.03em; line-height: 1.1; margin: 2px 0 4px; }
+.s-big .cur { font-size: .5em; }
+.s-cta { height: 28px; padding: 0 11px; border-radius: 8px; font-size: 12px; font-weight: 600; background: var(--primary); color: var(--a-on); }
+.s-bar { position: relative; height: 12px; }
+.s-bar > div { display: flex; height: 100%; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--muted) 16%, transparent); }
+.s-bar span { height: 100%; }
+.s-bar span + span { box-shadow: inset 2px 0 0 var(--card); }
+.rs-spent { background: var(--a-spent); }
+.rs-commit { background: var(--a-commit); }
+.rs-est { background: repeating-linear-gradient(135deg, var(--a-est) 0 2px, transparent 2px 5px); box-shadow: inset 0 0 0 1px var(--a-est) !important; }
+.rs-left { background: var(--a-left); }
+.rs-over { background: repeating-linear-gradient(135deg, var(--danger) 0 3px, transparent 3px 6px); }
+.rs-income { background: var(--income); }
+.s-bar i { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--fg); border-radius: 1px; }
+.s-rows { display: grid; gap: 2px; margin: 0; }
+.s-rows > div { display: grid; grid-template-columns: minmax(0, 1fr) auto 2.3rem; gap: 8px; align-items: center; padding: 3px 0; font-size: 12.5px; }
+.s-rows dt { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.s-rows dd { margin: 0; text-align: right; font-weight: 600; }
+.s-rows dd.pct { font-size: 11px; font-weight: 400; color: var(--muted); }
+.s-rows .tot { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); }
+.s-rows .tot dt { color: var(--fg); }
+.s-rows .subrow { padding: 0; font-size: 11.5px; }
+.s-rows .subrow dt { padding-left: 18px; }
+.s-rows .subrow dd { font-weight: 400; color: var(--muted); }
+.s-rows .left dd .m { color: var(--a-left); }
+.s-rows .tot dd .m { color: var(--income); }
+.s-sec h5 { margin: 0 0 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.s-sec h5 span { letter-spacing: 0; text-transform: none; font-size: 12px; color: var(--fg); }
+.s-sec p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.s-sec p b { color: var(--fg); font-weight: 600; }
+.up { display: grid; }
+.up-r { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto 24px; gap: 8px; align-items: center; padding: 5px 0; font-size: 12.5px; }
+.up-d { display: grid; text-align: center; line-height: 1.1; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; background: var(--card-2); border-radius: 8px; padding: 4px 0; }
+.up-d b { font-size: 13px; color: var(--fg); letter-spacing: 0; }
+.up-t { display: grid; min-width: 0; line-height: 1.25; }
+.up-t b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.up-t small { color: var(--faint); font-size: 11px; }
+.up-r > .m { font-weight: 600; }
+.bell { width: 24px; height: 24px; border-radius: 99px; display: grid; place-items: center; color: var(--faint); }
+.bell.on { color: var(--fg); background: var(--card-3); }
+.up-more { display: flex; justify-content: space-between; padding: 5px 0 0 42px; font-size: 11.5px; color: var(--faint); }
+.pc { width: 100%; height: auto; display: block; overflow: visible; }
+.pc .inc { stroke: var(--faint); stroke-width: 1; }
+.pc .even { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 3; }
+.pc .act { stroke: var(--fg); stroke-width: 1.8; fill: none; stroke-linejoin: round; }
+.pc .proj { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: .5 4; stroke-linecap: round; fill: none; }
+.pc .gap { stroke: var(--a-left); stroke-width: 3; stroke-linecap: round; }
+.pc circle { fill: var(--fg); }
+.pc text { font-size: 9.5px; fill: var(--faint); font-family: var(--font); }
+.pc text.l { fill: var(--a-left); font-weight: 600; }
+.split-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; margin-bottom: 6px; }
+.split-bar span:first-child { background: color-mix(in srgb, var(--fg) 34%, transparent); }
+.split-bar span:last-child { background: color-mix(in srgb, var(--fg) 80%, transparent); }
+.split-r { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto 2.3rem; gap: 8px; align-items: center; font-size: 12.5px; padding: 3px 0; }
+.split-r .m { font-weight: 600; }
+.split-r small { font-size: 11px; color: var(--muted); text-align: right; }
+.mini { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; text-align: center; font-size: 11px; }
+.mini span { height: 22px; display: grid; place-items: center; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.mini .hd { color: var(--muted); font-size: 9.5px; height: 16px; }
+.mini .mu { color: var(--muted); opacity: .55; }
+.mini .td { box-shadow: inset 0 0 0 1.5px var(--a-today); font-weight: 700; }
+
+/* day sheet */
+.a-sheet { position: absolute; top: 58px; right: 12px; width: 300px; max-height: calc(100% - 70px); overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.4); padding: 12px 14px 14px; z-index: 5; display: grid; gap: 8px; }
+.day-h { display: flex; align-items: center; gap: 8px; }
+.day-h b { font-size: 15px; flex: 1; }
+.day-h .m { font-weight: 600; }
+.dr { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.dr > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.dr .m { font-weight: 600; }
+.dr.in .m { color: var(--income); }
+.dr.plan { color: var(--faint); }
+.dr.plan.sure { color: var(--muted); }
+.dr.plan .m { font-weight: 500; }
+.dr.hid { color: var(--faint); font-style: italic; }
+.pay { height: 24px; padding: 0 8px 0 4px; border-radius: 99px; background: var(--card-2); display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.lk { width: 24px; height: 24px; border-radius: 99px; display: grid; place-items: center; color: var(--faint); }
+.lk.on { color: var(--fg); background: var(--card-3); }
+.a-dock { display: none; }
+
+/* stacked and phone widths */
+@container app (min-width: 901px) { .a-body { height: 742px; } }
+@container app (max-width: 900px) {
+  .a-body { grid-template-columns: minmax(0, 1fr); }
+  .a-side { order: -1; border-left: 0; border-bottom: 1px solid var(--line-soft); overflow: visible; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: start; }
+  .a-sheet { top: auto; bottom: 12px; }
+}
+@container app (max-width: 640px) {
+  .a-nav, .a-basis, .a-brand b { display: none; }
+  .a-top { gap: 6px; padding: 8px 10px; }
+  .a-side { display: flex; align-items: stretch; }
+  .a-who button span { display: none; }
+  .a-who button { padding: 0 5px; }
+  .a-side .s-rows, .a-side .s-mini, .a-side .s-pace, .a-side .s-split { display: none; }
+  .a-cal { padding: 8px 6px; }
+  .a-wk, .a-row { grid-template-columns: 16px repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .a-grid { grid-auto-rows: minmax(52px, 1fr); gap: 4px; }
+  .a-wn { font-size: 8.5px; }
+  .c, .c.today, .l1 .c.today { padding: 4px 2px; gap: 2px; align-items: center; border-radius: 8px; }
+  .c-h { justify-content: center; }
+  .c-n { font-size: 12.5px; }
+  .c-t, .c-in, .c-rows { display: none; }
+  .c-k { display: block; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .c-k.plan { color: var(--primary); opacity: .75; font-style: italic; }
+  .l1 .c-k { font-weight: 600; }
+  .l1 .c-k.plan { color: var(--a-fc); opacity: 1; font-style: normal; font-weight: 500; }
+  .l1 .c-bar { left: 5px; bottom: 4px; width: calc((100% - 10px) * var(--bar, 0) / 100); }
+  .c-dot { display: block; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 99px; background: var(--income); }
+  .a-sheet { left: 8px; right: 8px; bottom: 58px; width: auto; max-height: 60%; }
+  .a-dock { display: flex; justify-content: space-around; align-items: center; padding: 8px 6px 10px; background: var(--card); border-top: 1px solid var(--line-soft); font-size: 10.5px; font-weight: 600; color: var(--muted); }
+  .a-dock span.on { color: var(--fg); }
+  .a-dock i { width: 40px; height: 40px; border-radius: 99px; background: var(--primary); color: #fff; display: grid; place-items: center; font-style: normal; }
+  .l1 .a-dock i { color: var(--a-on); }
+}
+
+/* ---------- A: palette options ---------- */
+.opts { display: grid; gap: 10px; }
+.opt { background: var(--bg); border: 1px solid var(--line-soft); border-radius: 16px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
+.opt.on { border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg); }
+.opt-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; }
+.opt-h b { font-size: 14px; }
+.opt-h small { color: var(--muted); font-size: 12px; }
+.dots { display: inline-flex; gap: 10px; font-size: 11px; color: var(--muted); }
+.dots span { display: inline-flex; align-items: center; gap: 4px; }
+.dots i { width: 9px; height: 9px; border-radius: 99px; }
+.opt-b { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 10px; }
+.opt-week { display: grid; grid-template-columns: repeat(7, minmax(96px, 1fr)); gap: 6px; overflow-x: auto; min-width: 0; padding: 3px; margin: -3px; }
+.opt-week .c { min-height: 116px; }
+.opt-hero { background: var(--card); border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: center; }
+.opt-hero .s-val { font-size: 22px; }
+.opt.l1 .opt-hero .s-val { font-family: var(--a-display); font-weight: 600; }
+@media (max-width: 760px) { .opt-b { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- B: sidebar states ---------- */
+.scn { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; align-items: start; }
+.solo.a-side { border: 1px solid var(--line-soft); border-radius: 16px; overflow: visible; }
+.scn-tag { align-self: flex-start; }
+
+/* ---------- C: your data ---------- */
+.trust, .fam { display: grid; justify-items: center; }
+.p-tabs { display: flex; gap: 2px; padding: 8px 12px; overflow-x: auto; border-bottom: 1px solid var(--line-soft); }
+.p-tabs span { padding: 5px 10px; border-radius: 8px; color: var(--muted); font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.p-tabs span.on { background: var(--card-3); color: var(--fg); }
+.t-grid { grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+.t-card { background: var(--card-2); border-radius: 14px; padding: 14px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.t-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.t-card .btn small { font-weight: 500; color: var(--muted); }
+.t-note { font-size: 12.5px; color: var(--muted); margin: 0; }
+.t-note b { color: var(--fg); font-weight: 600; }
+.drop { border: 1px dashed var(--line); border-radius: 12px; padding: 16px; display: grid; justify-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; text-align: center; }
+.drop svg { display: block; margin: 0 auto; }
+.lg { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10.5px; color: var(--faint); margin-top: 2px; }
+.map { display: grid; gap: 4px; font-size: 12.5px; }
+.map div { display: grid; grid-template-columns: 1fr 16px 1fr auto; gap: 8px; align-items: center; padding: 5px 8px; background: var(--card); border-radius: 8px; }
+.map div span:first-child { color: var(--muted); }
+.map svg { color: var(--faint); }
+.done { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.done i { width: 30px; height: 30px; border-radius: 99px; background: var(--ok-soft); color: var(--ok); display: inline-grid; place-items: center; vertical-align: middle; margin-right: 10px; }
+.prom { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.prom li { display: flex; gap: 8px; align-items: center; }
+.prom svg { color: var(--ok); }
+.switch { width: 40px; height: 24px; border-radius: 99px; background: var(--card-3); position: relative; flex: none; transition: background .15s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 99px; background: var(--fg); transition: transform .15s; }
+.pal[data-blur] .switch { background: var(--a-left); }
+.pal[data-blur] .switch::after { transform: translateX(16px); background: var(--bg); }
+.t-peek { font-size: 22px; font-weight: 600; font-family: var(--a-display); letter-spacing: -.02em; }
+.t-foot { display: flex; gap: 8px; align-items: center; }
+
+/* ---------- D: family ---------- */
+.fam-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; width: 100%; align-items: start; }
+.fam .modal { width: 100%; }
+.mem { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.mem b { display: block; font-size: 13.5px; }
+.mem small { color: var(--muted); font-size: 12px; }
+.linkrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.linkrow .field { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fam-live { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.fam-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.fam-live .seg { background: var(--card-2); }
+.fam-live .seg button { height: 28px; font-size: 12px; padding: 0 10px; }
+
+</style>
+
+<!-- FIXED: icon sprite. Add symbols here as needed (lucide-style, 24×24, stroke=currentColor). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  $1  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-2.9 3.9M6.6 6.6C3.7 8.5 2 12 2 12s3.5 7 10 7c1.9 0 3.5-.5 4.9-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2M2 2l20 20"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-unlock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.9-1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M4 21h16"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+</svg>
+
+<main class="wrap">
+  <section class="intro">
+    <span class="eyebrow">Mockup · whole app · from docs/finance-app-design-research.html</span>
+    <h1>The numbers are right, but the app shouts, hides the answer, and belongs to one person</h1>
+    <p>This page takes today's calendar as the base and adds the research plan on top, one layer per week: <b>Calm</b> (look), <b>Clear answer</b> (safe to spend, coming up, pace), <b>Trust</b> (export, import, privacy) and <b>Family</b> (who paid). Nothing moves money, nothing is locked, no bank sync.</p>
+    <div class="legend">
+      <span>Data: pay cycle <b>5 Nov – 4 Dec 2026</b>, today <b>Sun 8 Nov</b> (day 4 of 30), <b>3.856.583 ₫</b> left after plans</span>
+      <span>Jump to the result: <a href="#directions" style="color:var(--primary-text)">03 Directions</a></span>
+    </div>
+  </section>
+
+  <section class="part" id="today">
+    <h2><span class="n">01</span>Today</h2>
+    <p>Rebuilt from the current code (dark mode, Pay cycle view) with the screenshot's figures. Tap a day.</p>
+    <div class="stage xl"><div id="app-today"></div></div>
+    <ol class="issues">
+      <li><b>One blue does six jobs <span class="sev hi">High</span></b><span>Heat fill, estimates, “Left after plans”, the add button, the active tab and the active segment are all <code>--primary</code>: <code>src/styles/globals.css:11</code>, 143 uses in <code>src/styles</code>, e.g. <code>PeriodRunway.css:6</code>, <code>CalendarView.css:137</code>.</span></li>
+      <li><b>Forecasts are louder than facts <span class="sev hi">High</span></b><span>20 future days show <code>~50.000 ₫</code> in bold italic blue with a dashed box per row: <code>src/styles/CalendarView.css:422-436</code>, <code>CalendarView.tsx:812</code>.</span></li>
+      <li><b>Past days become blue slabs <span class="sev hi">High</span></b><span>7 Nov is filled at 60% blue and reads as a selected button: <code>src/lib/heatmap.ts:9-12</code>, <code>CalendarView.tsx:755</code>.</span></li>
+      <li><b>The answer is small print <span class="sev hi">High</span></b><span>“142.836 ₫ a day for 27 days” is a sub-line (<code>PeriodRunway.tsx:41</code>) and pace is a sentence to read (<code>PeriodSummary.tsx:58</code>).</span></li>
+      <li><b>Nothing looks ahead <span class="sev md">Medium</span></b><span>Bills and subscriptions exist as plans (<code>FinanceContext.tsx:242</code> <code>projectedBetween</code>) but you find them by scanning cells. No “next 7 days” list, no reminder.</span></li>
+      <li><b>Your data cannot leave or hide <span class="sev hi">High</span></b><span>No export, import or privacy mode anywhere in <code>src</code>; Profile has six tabs and none for data: <code>src/components/UserProfile.tsx:26-33</code>.</span></li>
+      <li><b>One person per book <span class="sev hi">High</span></b><span>Every row belongs to one <code>user_id</code>: <code>migrations/002_finance.sql:13</code>, <code>migrations/007_plans.sql:5</code>. No household, no “paid by”.</span></li>
+      <li class="minor"><b>Generic dark theme <span class="sev md">Medium</span></b><span>Neutral zinc <code>#09090b</code> / <code>#18181b</code> with Tailwind's default <code>#3b82f6</code>: <code>src/styles/globals.css:4-11</code>.</span></li>
+      <li class="minor"><b>Every number is weight 900 <span class="sev md">Medium</span></b><span>Date and day total are both black weight, so nothing leads: <code>src/styles/CalendarView.css:178,202</code>. No shared money style; <code>₫</code> is full size in cells.</span></li>
+      <li class="minor"><b>Empty days still draw a full card <span class="sev lo">Low</span></b><span>Weekends say “No expenses” and neighbour-period days keep a border: <code>CalendarView.tsx:855</code>, <code>CalendarView.css:128,222</code>.</span></li>
+    </ol>
+  </section>
+
+  <section class="part" id="people">
+    <h2><span class="n">02</span>Who and when</h2>
+    <div class="stories">
+      <div class="story"><span class="who">Paid on the 5th</span><p>As <b>someone 4 days into a pay cycle</b>, I want <b>one number for today</b> so that I know if the coffee is fine without doing maths.</p></div>
+      <div class="story"><span class="who">Bill payer</span><p>As <b>the one who pays điện, mạng and Spotify</b>, I want <b>the next 7 days in one list</b> so that no due date surprises me.</p></div>
+      <div class="story"><span class="who">Couple, one book</span><p>As <b>two people sharing costs</b>, I want <b>“paid by” on every row</b> so that month end has no “ai chi bao nhiêu?”.</p></div>
+      <div class="story"><span class="who">Leaving Money Lover</span><p>As <b>someone with 4 years of records</b>, I want <b>them in and out in one tap</b> so that I never feel locked in again.</p></div>
+      <div class="story"><span class="who">On the bus</span><p>As <b>someone logging in public</b>, I want <b>amounts hidden</b> so that the person next to me reads nothing.</p></div>
+    </div>
+    <div class="tbl"><table>
+      <tr><th>Use case</th><th>Trigger</th><th>Steps today</th><th>Goal</th></tr>
+      <tr><td>Can I afford this?</td><td>Standing at a shop</td><td>Open Calendar → find the sub-line under “Left after plans”</td><td>Biggest number on screen, under 2 seconds</td></tr>
+      <tr><td>What hits me this week?</td><td>Monday morning</td><td>Scan 7 cells, add the dashed rows in your head</td><td>One list with dates and a total</td></tr>
+      <tr><td>Who paid for the rent?</td><td>Month end</td><td>Not possible, one user per book</td><td>Split by person, filter the calendar</td></tr>
+      <tr><td>Take my data out</td><td>Backup, tax, spreadsheet</td><td>Not possible</td><td>CSV or JSON in one tap</td></tr>
+      <tr><td>Open the app next to someone</td><td>Café, office</td><td>Every amount is readable</td><td>One tap blurs all amounts</td></tr>
+    </table></div>
+  </section>
+
+  <section class="part" id="directions">
+    <h2><span class="n">03</span>Directions</h2>
+    <p>Not four alternatives: four layers that stack, in build order. The stage below is the whole app with every layer on. Step back to <b>Today</b> to compare. A–D then zoom into what each layer adds.</p>
+    <div class="stage xl" id="main-stage">
+      <div class="ctl">
+        <div class="seg" data-ctl="layer" role="group" aria-label="Layers">
+          <button type="button" data-v="0">Today</button><button type="button" data-v="1">+ Calm</button><button type="button" data-v="2">+ Clear answer</button><button type="button" data-v="3">+ Trust</button><button type="button" data-v="4">+ Family</button>
+        </div>
+        <div class="pals" role="group" aria-label="Palette">
+          <button type="button" data-pal-pick="navy"><i style="--p1:#0a0d18;--p2:#8fa4ff"></i>Navy</button>
+          <button type="button" data-pal-pick="jade"><i style="--p1:#0a0e0d;--p2:#6fcdb3"></i>Ink + jade</button>
+          <button type="button" data-pal-pick="warm"><i style="--p1:#f4efe6;--p2:#b8522c"></i>Warm white</button>
+        </div>
+        <span class="sp"></span>
+        <div class="seg" data-ctl="dev" role="group" aria-label="Device"><button type="button" data-v="desk">Desktop</button><button type="button" data-v="phone">Phone</button></div>
+      </div>
+      <p class="ctl-note" id="layer-note"></p>
+      <div id="app-main"></div>
+    </div>
+  </section>
+
+  <section class="dir" id="a">
+    <div class="dir-head"><span class="tag">A · week 1 · ~5 h</span><h3>Calm</h3><span class="rec">Recommended first</span></div>
+    <p>No new feature, no layout change. Real spending stays loud, forecasts go grey, the blue fill becomes a 2px bar, and colour is kept for three meanings: money left, money in, over. Pick the palette here; every stage on this page follows.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>8</i><i>9</i><i>10</i></div>
+    <div class="stage"><div class="opts" id="pal-opts"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>CSS and tokens only: no data, endpoint or layout change.</li><li>Committed plans (<code>is-sure</code>) read one step darker than estimates, so “sure” finally shows in the grid.</li><li>Today is a filled date badge, not a glowing box.</li></ul></div>
+      <div><b>Watch</b><ul><li>143 uses of <code>--primary</code>: add the new tokens as aliases first (no visual change), then change values one by one.</li><li>Ink + jade uses one hue for “left” and “income”. Fine in the sidebar, check Analytics charts.</li><li>Warm white is a light theme; the app's dark default would need a second tuned set.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="b">
+    <div class="dir-head"><span class="tag">B · week 2 · ~2 days</span><h3>Clear answer</h3></div>
+    <p>The sidebar leads with <b>Safe to spend today</b>, the value the app already computes. Under it: what is due in the next 7 days with a reminder bell, and the pace sentence drawn as a chart that ends on “how much will be left”. Three states of the same panel:</p>
+    <div class="solves">Solves <i>4</i><i>5</i></div>
+    <div class="stage"><div class="scn" id="scn"></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>No new data: <code>perDay</code>, <code>daysLeft</code> and plan occurrences already exist.</li><li>Over income becomes an action (“Trim plans”), not a red number.</li><li>On phones the hero and Coming up sit above the month grid (switch the main stage to Phone).</li></ul></div>
+      <div><b>Watch</b><ul><li>The sidebar gets longer; the mini calendar moves below Coming up or behind a toggle.</li><li>A reminder needs a channel. In-app only is free; push or email is new infrastructure.</li><li>“Safe today” is left ÷ days, so it jumps after a big bill. The sub-line keeps the total visible.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="c">
+    <div class="dir-head"><span class="tag">C · week 3 · ~2–3 days</span><h3>Trust</h3></div>
+    <p>A new <b>Your data</b> tab in Profile: everything out in one tap, old records in from a CSV without touching what is there, a switch that blurs amounts everywhere, and the promises in plain words. The export buttons really download this mockup's rows.</p>
+    <div class="solves">Solves <i>6</i></div>
+    <div class="stage"><div class="pal trust" data-follow>
+      <div class="modal wide">
+        <div class="m-head"><h4>Profile <small>Your data</small></h4></div>
+        <div class="p-tabs"><span>Account</span><span>Income</span><span>Categories</span><span>Paycycle</span><span>AI &amp; MCP</span><span>Preferences</span><span class="on">Your data</span></div>
+        <div class="m-body grid t-grid">
+          <div class="t-card">
+            <div class="sub">Export</div>
+            <div class="t-row">
+              <button type="button" class="btn" data-act="csv"><svg width="15" height="15"><use href="#i-download"/></svg>CSV <small>spreadsheet</small></button>
+              <button type="button" class="btn" data-act="json"><svg width="15" height="15"><use href="#i-download"/></svg>JSON <small>full backup</small></button>
+            </div>
+            <p class="t-note" id="exp-note">Everything since <b>3 Mar 2025</b>: transactions, plans, incomes, categories</p>
+          </div>
+          <div class="t-card stage-host" data-step="0">
+            <div class="sub">Import</div>
+            <div class="drop" data-p="0"><svg width="20" height="20"><use href="#i-upload"/></svg>Money Lover, Excel, any .csv</div>
+            <div class="grid" data-p="1">
+              <div class="map">
+                <div><span>Ngày</span><svg width="14" height="14"><use href="#i-right"/></svg><b>Date</b><span class="chip">214</span></div>
+                <div><span>Số tiền</span><svg width="14" height="14"><use href="#i-right"/></svg><b>Amount</b><span class="chip">₫</span></div>
+                <div><span>Nhóm</span><svg width="14" height="14"><use href="#i-right"/></svg><b>Category</b><span class="chip">3 new</span></div>
+                <div><span>Ghi chú</span><svg width="14" height="14"><use href="#i-right"/></svg><b>Note</b><span class="chip">optional</span></div>
+              </div>
+              <p class="t-note"><b>214 rows</b> · Mar 2022 → Oct 2026 · your existing rows stay as they are</p>
+            </div>
+            <div class="done" data-p="2"><i><svg width="16" height="16"><use href="#i-check"/></svg></i><span><b>214 added</b>, nothing changed. <button type="button" class="btn sm ghost" data-go="0">Undo</button></span></div>
+            <div class="t-foot"><button type="button" class="btn sm ghost" data-go="back">Back</button><span class="sp"></span><button type="button" class="btn sm pri" data-go="next" data-labels="Choose file|Import 214 rows|Import another">Choose file</button></div>
+          </div>
+          <div class="t-card">
+            <div class="sub">Privacy</div>
+            <div class="t-row"><button type="button" class="switch" data-act="blur" aria-label="Hide amounts"></button><b>Hide amounts</b></div>
+            <div class="t-peek"><span class="m">3.856.583<i class="cur">₫</i></span></div>
+            <p class="t-note">Same switch as the eye in the top bar. Saved on this device.</p>
+          </div>
+          <div class="t-card">
+            <div class="sub">Our promises</div>
+            <ul class="prom">
+              <li><svg width="15" height="15"><use href="#i-check"/></svg>Your history is never locked or paywalled</li>
+              <li><svg width="15" height="15"><use href="#i-check"/></svg>Updates add, they never rewrite your data</li>
+              <li><svg width="15" height="15"><use href="#i-check"/></svg>No ads, no loans, no upsell pop-ups</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Answers Money Lover's top complaint (“locked my history”) on one screen.</li><li>Import previews the column match and never edits existing rows; one Undo removes the batch.</li><li>Blur is a class on the app root plus the shared money style from A.</li></ul></div>
+      <div><b>Watch</b><ul><li>Import needs a batch id on rows to make Undo real, and the 50-item category limit applies to “3 new”.</li><li>Money Lover's export columns must be checked against a real file.</li><li>Blur is cosmetic: amounts are still in the page for screen readers and copy.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="dir" id="d">
+    <div class="dir-head"><span class="tag">D · week 4 · ~3–4 days</span><h3>Family</h3></div>
+    <p>One shared book. Invite one person by link, then every row carries who paid. Tap a name to change the payer and watch the split move; the lock keeps a row to yourself. Switch “sees” to check what the other person gets.</p>
+    <div class="solves">Solves <i>7</i></div>
+    <div class="stage"><div class="pal fam" data-follow><div class="fam-grid">
+      <div class="modal stage-host" data-step="0">
+        <div class="m-head"><h4><svg width="16" height="16"><use href="#i-users"/></svg>Household <small>Nhà mình</small></h4></div>
+        <div class="m-body">
+          <div class="grid mem" data-p="0 1 2"><i class="w pm big">M</i><span><b>Minh</b><small>Owner · you</small></span><span class="chip">Owner</span></div>
+          <div class="grid mem" data-p="2"><i class="w pl big">L</i><span><b>Lan</b><small>Joined just now · sees shared rows</small></span><span class="chip">Member</span></div>
+          <div class="grid" data-p="1">
+            <div class="linkrow"><span class="field"><svg width="14" height="14"><use href="#i-link"/></svg>myfinance.app/join/8f3k-2n7q</span><button type="button" class="btn">Copy</button></div>
+            <div class="chips"><span class="chip">1 person</span><span class="chip">Expires in 7 days</span><span class="chip">Private rows stay private</span></div>
+          </div>
+        </div>
+        <div class="m-foot"><button type="button" class="btn ghost" data-go="back">Back</button><span class="sp"></span><button type="button" class="btn pri" data-go="next" data-labels="Invite by link|Lan opens the link|Start over">Invite by link</button></div>
+      </div>
+      <div class="fam-live l1 l2 l3 l4" id="fam-live"></div>
+    </div></div></div>
+    <div class="notes">
+      <div><b>Good</b><ul><li>Payer chips are grey initials, so the calm palette keeps its three colours.</li><li>The calendar filter (All · Minh · Lan) reuses the same grid; no new screen.</li><li>Migration only adds tables and columns; existing rows become the owner's.</li></ul></div>
+      <div><b>Watch</b><ul><li>Biggest change: <code>household_id</code>, <code>paid_by</code>, <code>private</code> on spendings and plans, and every query that filters by <code>user_id</code>.</li><li>Decide what a private row shows the other person: hidden, or “Private” with the amount still counted (shown here).</li><li>Quick entry needs a default payer (the person typing) so logging stays one step.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="part" id="recommendation" style="padding-bottom:48px">
+    <h2><span class="n">04</span>Recommendation</h2>
+    <p>Build the layers in order <b>A → B → C → D</b>; each one ships alone. Start with <b>A in Ink + jade</b>: it is about 5 hours of CSS, it cuts the screen to two meaning colours plus grey, and it stops jade/green fighting a blue brand. Keep Warm white as the future light theme. Three answers decide the rest: the palette, whether private rows are hidden or counted, and whether reminders stay in-app.</p>
+    <div class="tbl"><table>
+      <tr><th>Layer</th><th>File</th><th>Change</th></tr>
+      <tr><td>A</td><td><code>src/styles/globals.css</code></td><td>Semantic tokens (<code>--accent</code>, <code>--money-left</code>, <code>--money-income</code>, <code>--money-over</code>, <code>--forecast</code>, <code>--today</code>) as aliases of <code>--primary</code> first, then the palette values and tinted darks; one <code>.money</code> style</td></tr>
+      <tr><td>A</td><td><code>src/styles/CalendarView.css</code></td><td>Grey estimates (422-436), today badge (149-185), weights 900 → 600 (178, 202), borderless empty and outside days</td></tr>
+      <tr><td>A</td><td><code>src/lib/heatmap.ts</code>, <code>CalendarView.tsx:755</code></td><td>Return a bar width (<code>total / peak</code>) instead of a background colour; drop “No expenses”</td></tr>
+      <tr><td>B</td><td><code>src/components/PeriodSummary.tsx</code>, <code>PeriodRunway.tsx</code></td><td>Hero “Safe to spend today” from <code>model.perDay</code>; pace chart from daily totals and plan occurrences</td></tr>
+      <tr><td>B</td><td><code>src/components/ComingUp.tsx</code> (new)</td><td>Next 7 days from <code>projectedBetween</code> and expected paydays; reminder flag on a plan</td></tr>
+      <tr><td>B</td><td><code>src/components/mobile/MobileMonth.tsx</code></td><td>Hero and Coming up above the daily bars</td></tr>
+      <tr><td>C</td><td><code>src/components/UserProfile.tsx</code>, <code>src/server/finance</code></td><td>“Your data” tab; <code>GET /api/v1/export</code> (CSV, JSON); CSV import with preview and batch undo</td></tr>
+      <tr><td>C</td><td><code>src/contexts/SettingsContext.tsx</code></td><td><code>hideAmounts</code> saved on the device; class on the app root; eye button in the top bar</td></tr>
+      <tr><td>D</td><td><code>migrations/012_households.sql</code> (new)</td><td><code>households</code>, <code>household_members</code>; add <code>household_id</code>, <code>paid_by</code>, <code>private</code> to spendings and plans (add only)</td></tr>
+      <tr><td>D</td><td><code>DayDetails.tsx</code>, quick entry, <code>PeriodSummary.tsx</code>, top bar</td><td>Payer chip and lock per row, “Who paid” split, All · person filter, invite sheet in Profile</td></tr>
+    </table></div>
+  </section>
+</main>
+
+<script>
+/* FIXED: stepper engine. Page-specific scripts go in a second <script> below. */
+(() => {
+  document.querySelectorAll('.stage-host').forEach(host => {
+    const lefts = (host.dataset.lefts || '').split('|');
+    const max = Math.max(0, ...[...host.querySelectorAll('[data-p]')].flatMap(el => el.dataset.p.split(' ').map(Number)));
+    const set = step => {
+      step = Math.max(0, Math.min(max, step));
+      host.dataset.step = step;
+      if (host.dataset.lefts) host.querySelectorAll('[data-left]').forEach(el => { el.textContent = lefts[step] ?? ''; });
+      const next = host.querySelector('[data-go="next"]');
+      if (next && next.dataset.labels) { const l = next.dataset.labels.split('|'); const t = [...next.childNodes].find(n => n.nodeType === 3); if (t) t.nodeValue = l[step] ?? l[l.length - 1]; }
+      const back = host.querySelector('[data-go="back"]'); if (back) back.disabled = step === 0;
+      host.querySelectorAll('[data-go]:not([data-go="next"]):not([data-go="back"])').forEach(b => {
+        const on = +b.dataset.go === step; b.classList.toggle('on', on); b.classList.toggle('done', +b.dataset.go < step);
+        if (on) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      });
+      host.dispatchEvent(new CustomEvent('step', { detail: step }));
+    };
+    host.addEventListener('click', e => {
+      const b = e.target.closest('[data-go]'); if (!b || b.disabled || !host.contains(b)) return;
+      const cur = +host.dataset.step, go = b.dataset.go;
+      set(go === 'next' ? (cur === max ? 0 : cur + 1) : go === 'back' ? cur - 1 : +go);
+    });
+    set(+host.dataset.step || 0);
+  });
+})();
+</script>
+
+<script>
+(() => {
+  /* ---------- data: pay cycle 5 Nov – 4 Dec 2026, today = Sun 8 Nov (day 4 of 30) ---------- */
+  const TODAY = '2026-11-08', P0 = '2026-11-05', P1 = '2026-12-04', GRID0 = '2026-11-02', INCOME = 20000000, DAYS = 30;
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const WHO = { M: 'Minh', L: 'Lan' };
+  const REAL = {
+    '2026-11-05': [{ d: 'Shopee', a: 1283417, w: 'L' }, { d: 'Xăng', a: 80000, w: 'M' }, { d: 'Lunch', a: 35000, w: 'M' }, { d: 'Breakfast', a: 15000, w: 'M' }],
+    '2026-11-06': [{ d: 'Ăn tối gia đình', a: 731000, w: 'M' }, { d: 'Cà phê', a: 45000, w: 'M', p: true }, { d: 'Lunch', a: 35000, w: 'M' }, { d: 'Breakfast', a: 15000, w: 'M' }],
+    '2026-11-07': [{ d: 'Tiền trọ', a: 5500000, w: 'M' }, { d: 'Siêu thị', a: 1055000, w: 'L' }],
+    '2026-11-08': [{ d: 'Học phí', a: 2400000, w: 'L' }, { d: 'Đi chợ', a: 200000, w: 'L' }],
+  };
+  const RECEIVED = { '2026-11-05': { d: 'Lương', a: INCOME } };
+  const SURE = {
+    '2026-11-10': [{ d: 'Tiền mạng', a: 220000, kind: 'bill', bell: false }],
+    '2026-11-12': [{ d: 'Spotify', a: 59000, kind: 'subscription', bell: false }],
+    '2026-11-13': [{ d: 'Tiền điện', a: 650000, kind: 'bill', bell: true }],
+    '2026-11-19': [{ d: 'Ba đi đám cưới', a: 500000, kind: 'family' }],
+    '2026-11-20': [{ d: 'Cho mẹ', a: 2000000, kind: 'family' }],
+  };
+
+  const dt = k => new Date(k + 'T00:00:00Z');
+  const add = (k, n) => { const d = dt(k); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const dow = k => (dt(k).getUTCDay() + 6) % 7;
+  const dnum = k => +k.slice(8), mon = k => MON[+k.slice(5, 7) - 1];
+  const dayLabel = k => `${WD[dow(k)]} ${dnum(k)} ${mon(k)}`;
+  const fmt = n => String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const short = n => {
+    const a = Math.abs(n);
+    if (a >= 1e6) return String(a >= 1e7 ? Math.round(a / 1e5) / 10 : Math.round(a / 1e4) / 100).replace('.', ',') + 'M';
+    if (a >= 1e3) return Math.round(a / 1e3) + 'k';
+    return fmt(a);
+  };
+  const M = (n, pre = '') => `<span class="m">${pre}${fmt(n)}<i class="cur">₫</i></span>`;
+  const ic = (n, s = 16) => `<svg width="${s}" height="${s}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  const chip = (w, big) => `<i class="w p${w.toLowerCase()}${big ? ' big' : ''}">${w}</i>`;
+  const sum = a => a.reduce((s, r) => s + r.a, 0);
+  const $ = s => document.querySelector(s);
+
+  const plansFor = k => {
+    if (k <= TODAY || k > P1) return [];
+    const out = (SURE[k] || []).map(p => ({ ...p, sure: true }));
+    const wd = dow(k);
+    if (wd === 0) out.push({ d: 'Xăng', a: 80000 });
+    if (wd < 5) out.push({ d: 'Lunch', a: 35000 }, { d: 'Breakfast', a: 15000 });
+    return out;
+  };
+  const period = Array.from({ length: DAYS }, (_, i) => add(P0, i));
+  const realOf = (k, who) => (REAL[k] || []).filter(r => !who || who === 'A' || r.w === who);
+  const SPENT = sum(period.flatMap(k => REAL[k] || []));
+  const COMMIT = sum(period.flatMap(k => plansFor(k).filter(p => p.sure)));
+  const EST = sum(period.flatMap(k => plansFor(k).filter(p => !p.sure)));
+  const LEFT = INCOME - SPENT - COMMIT - EST;
+  const DAY = period.indexOf(TODAY) + 1, DAYS_LEFT = DAYS - DAY + 1;
+  const PEAK = Math.max(...period.map(k => sum(REAL[k] || [])));
+  console.assert(LEFT === 3856583 && Math.floor(LEFT / DAYS_LEFT) === 142836, 'mock totals drifted', LEFT);
+
+  const S = { pal: 'jade', blur: false, viewAs: 'M', famDay: '2026-11-06' };
+  const apps = [];
+
+  /* ---------- calendar ---------- */
+  function cellHTML(k, o) {
+    const out = k < P0 || k > P1, first = dnum(k) === 1;
+    const rows = out ? [] : realOf(k, o.who), plans = out ? [] : plansFor(k), inc = out ? null : RECEIVED[k];
+    const total = sum(rows), ptotal = sum(plans);
+    const heat = total ? Math.round((0.2 + 0.4 * Math.min(total / PEAK, 1)) * 100) : 0;
+    const bar = total ? Math.max(5, Math.round((100 * total) / PEAK)) : 0;
+    const cls = ['c', out && 'out', k === TODAY && 'today', first && 'first', o.sel === k && 'sel'].filter(Boolean).join(' ');
+    let h = `<button type="button" class="${cls}" data-day="${k}" style="--heat:${heat}%;--bar:${bar}" aria-label="${dayLabel(k)}">`;
+    h += `<span class="c-h"><b class="c-n">${first ? `<small>${mon(k)}</small>` : ''}${dnum(k)}</b>`;
+    if (total) h += `<span class="c-t">${M(total)}</span>`;
+    else if (ptotal) h += `<span class="c-t plan">${M(ptotal, '~')}</span>`;
+    h += '</span>';
+    if (inc) h += `<span class="c-in">${M(inc.a, '+')}</span><i class="c-dot"></i>`;
+    if (!out) {
+      h += '<span class="c-rows">';
+      if (!rows.length && !plans.length) h += '<span class="c-none">No expenses</span>';
+      rows.slice(0, 5).forEach(r => { h += `<span class="r"><em>${chip(r.w)}${r.d}</em>${M(r.a)}</span>`; });
+      plans.slice(0, Math.max(0, 5 - rows.length)).forEach(p => { h += `<span class="r plan${p.sure ? ' sure' : ''}"><em>${p.d}</em>${M(p.a, '~')}</span>`; });
+      h += '</span>';
+      if (total) h += `<span class="c-k m">${short(total)}</span><i class="c-bar"></i>`;
+      else if (ptotal) h += `<span class="c-k plan m">~${short(ptotal)}</span>`;
+    }
+    return h + '</button>';
+  }
+  function calHTML(o) {
+    let h = `<div class="a-wk"><span></span>${WD.map(d => `<span>${d}</span>`).join('')}</div><div class="a-grid">`;
+    for (let w = 0; w < 5; w++) {
+      h += `<div class="a-row"><span class="a-wn">${45 + w}</span>`;
+      for (let d = 0; d < 7; d++) h += cellHTML(add(GRID0, w * 7 + d), o);
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+
+  /* ---------- side panel ---------- */
+  function model(scn) {
+    const m = { income: INCOME, spent: SPENT, commit: COMMIT, est: EST, daysLeft: DAYS_LEFT };
+    if (scn === 'over') m.commit += 4276583;
+    if (scn === 'none') m.income = 0;
+    m.left = m.income - m.spent - m.commit - m.est;
+    m.per = m.left > 0 ? Math.floor(m.left / m.daysLeft) : 0;
+    return m;
+  }
+  function barHTML(m) {
+    const tot = Math.max(m.income, m.spent + m.commit + m.est) || 1, w = a => ((a / tot) * 100).toFixed(2);
+    const seg = (c, a) => (a > 0 ? `<span class="rs-${c}" style="width:${w(a)}%"></span>` : '');
+    let mark = '';
+    if (m.income > 0 && m.left >= 0) mark = `<i style="left:${((DAY / DAYS) * 100).toFixed(1)}%" title="Even pace today"></i>`;
+    else if (m.income > 0) mark = `<i style="left:${w(m.income)}%;background:var(--danger)" title="Income"></i>`;
+    return `<div class="s-bar"><div>${seg('spent', m.spent)}${seg('commit', m.commit)}${seg('est', m.est)}${seg('left', m.left)}</div>${mark}</div>`;
+  }
+  const upcoming = () => {
+    const items = []; let est = 0;
+    for (let i = 1; i <= 7; i++) {
+      const k = add(TODAY, i);
+      plansFor(k).forEach(p => { if (p.sure) items.push({ k, i, p: SURE[k].find(s => s.d === p.d) }); else est += p.a; });
+    }
+    return { items, est };
+  };
+  function upHTML() {
+    const { items, est } = upcoming();
+    let h = `<div class="s-sec s-up"><h5>Coming up · 7 days <span>${M(sum(items.map(x => x.p)))}</span></h5><div class="up">`;
+    items.forEach(({ k, i, p }) => {
+      h += `<div class="up-r"><span class="up-d">${WD[dow(k)]}<b>${dnum(k)}</b></span><span class="up-t"><b>${p.d}</b><small>${p.kind} · in ${i} days</small></span>${M(p.a)}` +
+        `<button type="button" class="bell${p.bell ? ' on' : ''}" data-bell="${k}" aria-label="Remind me about ${p.d}" aria-pressed="${!!p.bell}">${ic('bell', 13)}</button></div>`;
+    });
+    return h + `</div><div class="up-more"><span>Daily estimates</span>${M(est, '~')}</div></div>`;
+  }
+  function chartSVG() {
+    const x = d => 4 + ((d - 1) / (DAYS - 1)) * 272, y = v => 84 - (v / INCOME) * 66;
+    let cum = 0, act = `M${x(1)},${y(0)}`, proj = '';
+    period.forEach((k, i) => {
+      const d = i + 1;
+      if (k <= TODAY) { cum += sum(REAL[k] || []); act += ` L${x(d).toFixed(1)},${y(cum).toFixed(1)}`; if (k === TODAY) proj = `M${x(d).toFixed(1)},${y(cum).toFixed(1)}`; }
+      else { cum += sum(plansFor(k)); proj += ` L${x(d).toFixed(1)},${y(cum).toFixed(1)}`; }
+    });
+    const ty = y(SPENT), ey = y(cum);
+    return `<svg class="pc" viewBox="0 0 280 100" role="img" aria-label="Spending against even pace. Projected to end ${fmt(INCOME - cum)} ₫ under income.">
+      <line class="inc" x1="4" x2="276" y1="${y(INCOME)}" y2="${y(INCOME)}"/><text class="m" x="4" y="${y(INCOME) - 5}">Income ${short(INCOME)}</text>
+      <line class="even" x1="${x(1)}" y1="${y(0)}" x2="${x(DAYS)}" y2="${y(INCOME)}"/>
+      <path class="act" d="${act}"/><path class="proj" d="${proj}"/>
+      <line class="gap" x1="276" x2="276" y1="${(ey - 2).toFixed(1)}" y2="${y(INCOME) + 2}"/><text class="l m" x="276" y="${y(INCOME) - 5}" text-anchor="end">${short(INCOME - cum)} left</text>
+      <circle cx="${x(DAY).toFixed(1)}" cy="${ty.toFixed(1)}" r="3"/>
+      <text x="4" y="98">${dnum(P0)} ${mon(P0)}</text><text x="${x(DAY).toFixed(1)}" y="${(ty - 8).toFixed(1)}" text-anchor="middle">today</text><text x="276" y="98" text-anchor="end">${dnum(P1)} ${mon(P1)}</text>
+    </svg>`;
+  }
+  function splitHTML() {
+    const by = { M: 0, L: 0 };
+    period.forEach(k => (REAL[k] || []).forEach(r => { by[r.w] += r.a; }));
+    const pm = Math.round((by.M / (by.M + by.L)) * 100);
+    return `<h5>Who paid · this cycle</h5><div class="split-bar"><span style="width:${pm}%"></span><span style="width:${100 - pm}%"></span></div>` +
+      ['M', 'L'].map(w => `<div class="split-r">${chip(w)}<span>${WHO[w]}</span>${M(by[w])}<small>${w === 'M' ? pm : 100 - pm}%</small></div>`).join('');
+  }
+  function miniHTML() {
+    let h = '<div class="s-sec s-mini"><h5>November 2026</h5><div class="mini">' + ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(d => `<span class="hd">${d}</span>`).join('') + '<span></span>'.repeat(6);
+    for (let d = 1; d <= 30; d++) { const k = `2026-11-${String(d).padStart(2, '0')}`; h += `<span class="${k < P0 ? 'mu' : ''}${k === TODAY ? ' td' : ''}">${d}</span>`; }
+    return h + '</div></div>';
+  }
+  function sideHTML(L, scn = 'ok', parts) {
+    const m = model(scn), has = p => !parts || parts.includes(p);
+    const pct = a => (m.income > 0 ? Math.round((a / m.income) * 100) + '%' : '');
+    let h = '';
+    if (L >= 2) {
+      h += '<div class="s-hero"><div class="s-lab">Safe to spend today</div>';
+      if (scn === 'none') h += '<div class="s-big none">—</div><div class="s-sub"><span>Income not set</span><button type="button" class="s-cta">Add your pay</button></div>';
+      else if (m.left < 0) h += `<div class="s-big over">${M(0)}</div><div class="s-sub"><span>Plans go over income by <b class="over">${M(-m.left)}</b></span><button type="button" class="s-cta">Trim plans</button></div>`;
+      else h += `<div class="s-big">${M(m.per)}</div><div class="s-sub"><span><b class="left">${M(m.left)}</b> left after plans</span><span>· ${m.daysLeft} days</span></div>`;
+      h += '</div>';
+    } else {
+      h += `<div class="s-head"><div class="s-lab"><i class="sw2 rs-left"></i>Left after plans</div><div class="s-val">${M(m.left)}</div><div class="s-sub"><span><b>${M(m.per)}</b> a day for ${m.daysLeft} days</span></div></div>`;
+    }
+    h += barHTML(m);
+    if (has('rows')) {
+      const row = (c, n, a, extra = '') => `<div class="${extra}"><dt><i class="sw2 rs-${c}"></i>${n}</dt><dd>${M(a)}</dd><dd class="pct">${pct(a)}</dd></div>`;
+      h += `<dl class="s-rows">${row('spent', 'Spent so far', m.spent)}${row('commit', 'Committed', m.commit)}${row('est', 'Estimates', m.est)}${row('left', 'Left', m.left, 'left')}` +
+        `<div class="tot"><dt><i class="sw2 rs-income"></i>Income</dt><dd>${M(m.income)}</dd><dd></dd></div>` +
+        (L < 2 ? `<div class="subrow"><dt>Recurring</dt><dd>${M(m.income)}</dd><dd></dd></div><div class="subrow"><dt>One-time</dt><dd>${M(0)}</dd><dd></dd></div>` : '') + '</dl>';
+    }
+    if (L >= 2 && has('up')) h += upHTML();
+    if (L >= 4 && has('split')) h += `<div class="s-sec s-split">${splitHTML()}</div>`;
+    if (L < 2 && has('mini')) h += miniHTML();
+    if (has('pace')) {
+      const even = Math.round((m.income * DAY) / DAYS);
+      h += L >= 2
+        ? `<div class="s-sec s-pace"><h5>Pace <span>${M(m.spent - even)} above even</span></h5>${chartSVG()}<div class="lg"><span>━ spent</span><span>┅ planned</span><span>╌ even pace</span></div></div>`
+        : `<div class="s-sec s-pace"><h5>Pace</h5><p>Spending evenly would be <b>${M(even)}</b> by today. You’ve spent <b>${M(m.spent - even)}</b> more.</p></div>`;
+    }
+    return h;
+  }
+
+  /* ---------- day detail ---------- */
+  function dayHTML(k, L, viewAs, close) {
+    const rows = REAL[k] || [], inc = RECEIVED[k], plans = plansFor(k), gap = '<span></span><span></span>';
+    let h = `<div class="day-h"><b>${dayLabel(k)}</b>${rows.length ? M(sum(rows)) : ''}${close ? `<button type="button" class="x" data-act="close-day" aria-label="Close">${ic('x', 14)}</button>` : ''}</div>`;
+    if (inc) h += `<div class="dr in"><span>${inc.d}</span>${gap}${M(inc.a, '+')}</div>`;
+    rows.forEach((r, i) => {
+      const hidden = L >= 4 && r.p && r.w !== viewAs, mine = r.w === viewAs;
+      h += `<div class="dr${hidden ? ' hid' : ''}"><span>${hidden ? ic('lock', 12) + 'Private' : r.d}</span>`;
+      if (L >= 4) h += `<button type="button" class="pay" data-pay="${k}|${i}" title="Paid by ${WHO[r.w]}. Tap to change.">${chip(r.w)}${WHO[r.w]}</button>` +
+        (mine ? `<button type="button" class="lk${r.p ? ' on' : ''}" data-lock="${k}|${i}" aria-label="Only me" aria-pressed="${!!r.p}">${ic(r.p ? 'lock' : 'unlock', 13)}</button>` : '<span></span>');
+      else h += gap;
+      h += (hidden ? '<span class="m">•••</span>' : M(r.a)) + '</div>';
+    });
+    plans.forEach(p => { h += `<div class="dr plan${p.sure ? ' sure' : ''}"><span>${p.d}</span>${gap}${M(p.a, '~')}</div>`; });
+    if (!inc && !rows.length && !plans.length) h += `<div class="dr plan"><span>Nothing recorded</span>${gap}<span></span></div>`;
+    return h;
+  }
+
+  /* ---------- app ---------- */
+  function renderApp(app) {
+    const L = app.layer, el = app.el, who = L >= 4 ? app.who : 'A';
+    el.className = 'pal app' + [1, 2, 3, 4].filter(n => L >= n).map(n => ' l' + n).join('');
+    el.dataset.pal = L ? S.pal : 'base';
+    el.dataset.dev = app.dev;
+    el.toggleAttribute('data-blur', L >= 3 && S.blur);
+    const whoBtn = (w, label) => `<button type="button" data-who="${w}" class="${who === w ? 'on' : ''}">${w === 'A' ? '' : chip(w)}${w === 'A' ? label : `<span>${label}</span>`}</button>`;
+    el.innerHTML =
+      `<header class="a-top"><span class="a-brand"><i class="a-logo">₫</i><b>MyFinance</b></span>` +
+      `<nav class="a-nav"><span class="on">Calendar</span><span>Week</span><span>Analytics</span><span>Profile</span></nav><span class="sp"></span>` +
+      (L >= 4 ? `<span class="a-who" role="group" aria-label="Paid by">${whoBtn('A', 'All')}${whoBtn('M', 'Minh')}${whoBtn('L', 'Lan')}</span>` : '') +
+      `<span class="a-period"><span class="a-basis"><span>Month</span><span class="on">Pay cycle</span></span>${ic('left', 16)}<span class="a-pl"><b>5 Nov – 4 Dec</b><small>Day ${DAY} of ${DAYS}</small></span>${ic('right', 16)}</span>` +
+      (L >= 3 ? `<button type="button" class="a-ico${S.blur ? ' on' : ''}" data-act="blur" aria-label="Hide amounts" aria-pressed="${S.blur}">${ic(S.blur ? 'eye-off' : 'eye', 16)}</button>` : '') +
+      `<button type="button" class="a-ico a-add" aria-label="Add expense">${ic('plus', 16)}</button></header>` +
+      `<div class="a-body"><div class="a-cal">${calHTML({ who, sel: app.day })}</div><aside class="a-side">${sideHTML(L)}</aside></div>` +
+      `<nav class="a-dock"><span class="on">Calendar</span><span>Week</span><i>${ic('plus', 18)}</i><span>Analytics</span><span>Profile</span></nav>` +
+      (app.day ? `<div class="a-sheet">${dayHTML(app.day, L, 'M', true)}</div>` : '');
+  }
+
+  /* ---------- direction stages ---------- */
+  function renderOpts() {
+    const days = Array.from({ length: 7 }, (_, i) => add(P0, i));
+    const defs = [
+      ['base', 'Today', 'zinc black, one blue for six jobs'],
+      ['navy', 'Navy', 'like Copilot: periwinkle for actions and “left”, green income'],
+      ['jade', 'Ink + jade', 'like Dash.fi: jade is money you have, orange is over, actions in white'],
+      ['warm', 'Warm white', 'like Monarch: light canvas, terracotta actions, serif numbers'],
+    ];
+    $('#pal-opts').innerHTML = defs.map(([id, name, note]) => {
+      const on = id === S.pal;
+      return `<div class="pal opt${id !== 'base' ? ' l1' : ''}${on ? ' on' : ''}" data-pal="${id}"><div class="opt-h">` +
+        (id === 'base' ? '<span class="chip">Now</span>' : `<button type="button" class="btn sm${on ? ' pri' : ''}" data-pal-pick="${id}">${on ? 'In use' : 'Use'}</button>`) +
+        `<b>${name}</b><small>${note}</small><span class="sp"></span><span class="dots"><span><i style="background:var(--a-left)"></i>left</span><span><i style="background:var(--income)"></i>income</span><span><i style="background:var(--danger)"></i>over</span><span><i style="background:var(--primary)"></i>action</span></span></div>` +
+        `<div class="opt-b"><div class="opt-week">${days.map(k => cellHTML(k, { who: 'A' })).join('')}</div>` +
+        `<div class="opt-hero"><div class="s-lab"><i class="sw2 rs-left"></i>Left after plans</div><div class="s-val">${M(LEFT)}</div>${barHTML(model('ok'))}</div></div></div>`;
+    }).join('');
+  }
+  function renderScn() {
+    $('#scn').innerHTML = [['ok', 'On track'], ['over', 'Plans over income'], ['none', 'Income not set']]
+      .map(([id, name]) => `<aside class="pal solo a-side l1 l2" data-pal="${S.pal}"${S.blur ? ' data-blur' : ''}><span class="chip scn-tag">${name}</span>${sideHTML(2, id, ['up'])}</aside>`).join('');
+  }
+  function renderFam() {
+    const seg = (ctl, opts, cur) => `<div class="seg" data-ctl="${ctl}">${opts.map(([v, t]) => `<button type="button" data-v="${v}" class="${v === cur ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+    $('#fam-live').innerHTML = `<div class="fam-top">${seg('view', [['M', chip('M') + ' Minh sees'], ['L', chip('L') + ' Lan sees']], S.viewAs)}` +
+      `${seg('fday', Object.keys(REAL).map(k => [k, dnum(k) + ' ' + mon(k)]), S.famDay)}</div><div class="s-sec">${splitHTML()}</div><div>${dayHTML(S.famDay, 4, S.viewAs, false)}</div>`;
+  }
+  const NOTES = [
+    'The app as it is today: dark mode, pay cycle 5 Nov – 4 Dec.',
+    'Same screen, same numbers. Forecasts go grey, a thin bar replaces the blue fill, colour only where it means something.',
+    'The sidebar now answers three questions: how much today, what is due this week, where the cycle ends.',
+    'The eye in the top bar blurs every amount. Export and import live in Profile (direction C).',
+    'Every row carries who paid. Filter the calendar by person; the sidebar splits the cycle. Tap a day.',
+  ];
+  function renderAll() {
+    apps.forEach(renderApp);
+    renderOpts(); renderScn(); renderFam();
+    document.querySelectorAll('[data-follow]').forEach(el => { el.dataset.pal = S.pal; el.toggleAttribute('data-blur', S.blur); });
+    document.querySelectorAll('[data-pal-pick]').forEach(b => b.classList.toggle('on', b.dataset.palPick === S.pal));
+    const main = apps[1];
+    document.querySelectorAll('#main-stage [data-ctl="layer"] button').forEach(b => b.classList.toggle('on', +b.dataset.v === main.layer));
+    document.querySelectorAll('#main-stage [data-ctl="dev"] button').forEach(b => b.classList.toggle('on', b.dataset.v === main.dev));
+    $('#layer-note').textContent = NOTES[main.layer];
+  }
+
+  function download(name, text, type) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  function exportRows() {
+    const rows = [];
+    Object.keys(RECEIVED).forEach(k => rows.push({ date: k, kind: 'income', description: RECEIVED[k].d, amount: RECEIVED[k].a, paid_by: '', private: false }));
+    Object.keys(REAL).forEach(k => REAL[k].forEach(r => rows.push({ date: k, kind: 'expense', description: r.d, amount: r.a, paid_by: WHO[r.w], private: !!r.p })));
+    return rows.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  document.addEventListener('click', e => {
+    const t = e.target.closest('button, [data-day]');
+    if (!t) return;
+    const app = apps.find(a => a.el.contains(t));
+    if (t.dataset.palPick) { S.pal = t.dataset.palPick; if (apps[1].layer === 0) apps[1].layer = 1; }
+    else if (t.dataset.act === 'blur') S.blur = !S.blur;
+    else if (t.dataset.act === 'close-day' && app) app.day = null;
+    else if (t.dataset.act === 'csv' || t.dataset.act === 'json') {
+      const rows = exportRows(), csv = t.dataset.act === 'csv', name = `myfinance-${TODAY}.${t.dataset.act}`;
+      const cols = Object.keys(rows[0]);
+      download(name, csv ? '﻿' + [cols.join(','), ...rows.map(r => cols.map(c => `"${String(r[c]).replace(/"/g, '""')}"`).join(','))].join('\n') : JSON.stringify({ exported: TODAY, transactions: rows }, null, 2), csv ? 'text/csv' : 'application/json');
+      $('#exp-note').innerHTML = `Saved <b>${name}</b> · ${rows.length} rows from this mockup`;
+      return;
+    }
+    else if (t.dataset.who && app) app.who = t.dataset.who;
+    else if (t.dataset.bell) { const p = SURE[t.dataset.bell][0]; p.bell = !p.bell; }
+    else if (t.dataset.pay) { const [k, i] = t.dataset.pay.split('|'); const r = REAL[k][+i]; r.w = r.w === 'M' ? 'L' : 'M'; }
+    else if (t.dataset.lock) { const [k, i] = t.dataset.lock.split('|'); const r = REAL[k][+i]; r.p = !r.p; }
+    else if (t.dataset.day && app) { if (t.classList.contains('out')) return; app.day = app.day === t.dataset.day ? null : t.dataset.day; }
+    else if (t.dataset.v && t.parentElement.dataset.ctl) {
+      const ctl = t.parentElement.dataset.ctl, v = t.dataset.v;
+      if (ctl === 'layer') apps[1].layer = +v;
+      else if (ctl === 'dev') apps[1].dev = v;
+      else if (ctl === 'view') S.viewAs = v;
+      else if (ctl === 'fday') S.famDay = v;
+    }
+    else return;
+    renderAll();
+  });
+
+  apps.push({ el: $('#app-today'), layer: 0, dev: 'desk', who: 'A', day: null });
+  apps.push({ el: $('#app-main'), layer: 4, dev: 'desk', who: 'A', day: null });
+  renderAll();
+})();
+</script>

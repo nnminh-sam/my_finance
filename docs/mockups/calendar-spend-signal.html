@@ -1,0 +1,524 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendar Spend Signal</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== FIXED: tokens. Mirror src/styles/globals.css (dark is the app default, light mirrors .light-mode). ===== */
+:root {
+  --page: #050506; --bg: #09090b; --card: #18181b; --card-2: #1f1f23; --card-3: #27272a; --line: #3f3f46; --line-soft: #2a2a2f;
+  --fg: #f4f4f5; --muted: #a1a1aa; --faint: #71717a;
+  --primary: #3b82f6; --primary-text: #60a5fa; --primary-soft: rgba(59,130,246,.15);
+  --income: #34d399; --danger: #f87171; --danger-soft: rgba(239,68,68,.14); --warn: #f59e0b; --warn-soft: rgba(245,158,11,.14);
+  --ok: #34d399; --ok-soft: rgba(52,211,153,.13);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light; } }
+:root[data-theme="light"] {
+  --page: #e4e4e7; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f4f6; --card-3: #e9e9ee; --line: #d4d4dc; --line-soft: #ececf0;
+  --fg: #0f172a; --muted: #64748b; --faint: #94a3b8;
+  --primary: #2563eb; --primary-text: #2563eb; --primary-soft: rgba(37,99,235,.1);
+  --income: #059669; --danger: #dc2626; --danger-soft: rgba(220,38,38,.1); --warn: #b45309; --warn-soft: rgba(217,119,6,.12);
+  --ok: #059669; --ok-soft: rgba(5,150,105,.1); color-scheme: light;
+}
+
+/* ===== FIXED: base ===== */
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 var(--font); background: var(--page); color: var(--fg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.cur { font-size: .7em; opacity: .6; margin-left: .15em; font-weight: 500; }
+code { font-size: .9em; background: var(--card-2); padding: 1px 5px; border-radius: 5px; }
+svg { flex: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ===== FIXED: page chrome (sections 1–5) ===== */
+.intro { padding-block: 32px 8px; display: grid; gap: 12px; }
+.intro .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--primary-text); }
+.intro h1 { font-size: 26px; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); max-width: 76ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.part { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 32px; display: grid; gap: 16px; }
+.part > h2 { margin: 0; font-size: 21px; letter-spacing: -.01em; display: flex; gap: 10px; align-items: baseline; }
+.part > h2 .n { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; }
+.part > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.today { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.shot { display: grid; gap: 8px; margin: 0; min-width: 0; }
+.shot img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+.shot figcaption { font-size: 12.5px; color: var(--muted); }
+.issues { display: grid; gap: 8px; counter-reset: issue; margin: 0; padding: 0; list-style: none; }
+.issues li { counter-increment: issue; display: grid; grid-template-columns: 28px 1fr; gap: 2px 10px; background: var(--card); border-radius: 12px; padding: 10px 14px; }
+.issues li::before { content: counter(issue); grid-row: span 2; width: 24px; height: 24px; border-radius: 99px; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--danger-soft); color: var(--danger); }
+.issues li.minor::before { background: var(--warn-soft); color: var(--warn); }
+.issues b { font-size: 14px; } .issues span { color: var(--muted); font-size: 13px; }
+.sev { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; margin-left: 6px; vertical-align: 1px; }
+.sev.hi { background: var(--danger-soft); color: var(--danger); } .sev.md { background: var(--warn-soft); color: var(--warn); } .sev.lo { background: var(--card-3); color: var(--muted); }
+.stories { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.story { background: var(--card); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; font-size: 13.5px; }
+.story .who { font-size: 12px; font-weight: 700; color: var(--primary-text); text-transform: uppercase; letter-spacing: .05em; }
+.story p { margin: 0; color: var(--muted); } .story p b { color: var(--fg); font-weight: 600; }
+.tbl { overflow-x: auto; background: var(--card); border-radius: 12px; }
+.tbl table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+.tbl th, .tbl td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.tbl th { color: var(--faint); font-weight: 500; font-size: 12px; border-top: 0; }
+.dir { padding-block: 36px 8px; border-top: 1px solid var(--line-soft); margin-top: 24px; display: grid; gap: 16px; }
+.dir-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.dir-head .tag { font-size: 12px; font-weight: 700; color: var(--primary-text); letter-spacing: .06em; text-transform: uppercase; }
+.dir-head h3 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.dir-head .rec { font-size: 11.5px; font-weight: 600; background: var(--primary-soft); color: var(--primary-text); padding: 2px 9px; border-radius: 999px; }
+.dir > p { margin: 0; color: var(--muted); max-width: 78ch; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.notes div { background: var(--card); border-radius: 12px; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+.notes b { display: block; color: var(--fg); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.solves { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); align-items: center; }
+.solves i { font-style: normal; width: 20px; height: 20px; border-radius: 99px; display: inline-grid; place-items: center; font-weight: 700; background: var(--ok-soft); color: var(--ok); }
+
+/* ===== FIXED: stage + app-like components ===== */
+.stage { background: var(--bg); border-radius: 18px; padding: 28px 16px; display: grid; place-items: center; gap: 16px;
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(14.28% - 1px), var(--line-soft) calc(14.28% - 1px) 14.28%); }
+.modal { width: min(640px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.45); display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; }
+.modal.wide { width: min(860px, 100%); }
+.m-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.m-head h4 { margin: 0; font-size: 16px; flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.m-head h4 small { color: var(--muted); font-weight: 500; font-size: 13px; }
+.x { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; background: var(--card-2); color: var(--muted); }
+.m-body { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+.m-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+.sp { flex: 1; }
+.btn { height: 38px; padding: 0 16px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); white-space: nowrap; }
+.btn.pri { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.ghost { border-color: transparent; color: var(--muted); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn[disabled] { opacity: .35; cursor: default; }
+.lbl { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.field { height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); padding: 0 12px; width: 100%; min-width: 0; font-size: 14px; }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--card-3); color: var(--muted); white-space: nowrap; }
+.sub { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
+.sub::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+.grid { display: grid; gap: 10px; }
+
+/* ===== FIXED: stepper visibility ===== */
+.stage-host [data-p] { display: none !important; }
+.stage-host[data-step="0"] [data-p~="0"], .stage-host[data-step="1"] [data-p~="1"], .stage-host[data-step="2"] [data-p~="2"],
+.stage-host[data-step="3"] [data-p~="3"], .stage-host[data-step="4"] [data-p~="4"], .stage-host[data-step="5"] [data-p~="5"] { display: revert !important; }
+.stage-host[data-step="0"] .grid[data-p~="0"], .stage-host[data-step="1"] .grid[data-p~="1"], .stage-host[data-step="2"] .grid[data-p~="2"],
+.stage-host[data-step="3"] .grid[data-p~="3"], .stage-host[data-step="4"] .grid[data-p~="4"], .stage-host[data-step="5"] .grid[data-p~="5"] { display: grid !important; }
+
+$1.assemble-guard {}
+/* Ink + jade: the shell still mirrors the old zinc + blue globals, so this page restates the Layer A values. */
+:root {
+  --page: #060908; --bg: #0a0e0d; --card: #121816; --card-2: #19201d; --card-3: #212b27; --line: #2a322f; --line-soft: #1c2421;
+  --fg: #e8eeeb; --muted: #8d9b96; --faint: #73817c;
+  --primary: #e8eeeb; --primary-text: #6fcdb3; --primary-soft: rgba(111,205,179,.14);
+  --income: #6fcdb3; --warn: #f2a65a; --warn-soft: rgba(242,166,90,.14); --ok: #6fcdb3; --ok-soft: rgba(111,205,179,.13);
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --page: #e9ecea; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f6f5; --card-3: #e6ebe9; --line: #d6dedb; --line-soft: #e2e8f0;
+  --fg: #0f172a; --muted: #64748b; --faint: #7b8798;
+  --primary: #1f2925; --primary-text: #2e7a59; --primary-soft: rgba(46,122,89,.1);
+  --income: #2e7a59; --warn: #a8650f; --warn-soft: rgba(168,101,15,.12); --ok: #2e7a59; --ok-soft: rgba(46,122,89,.1); } }
+:root[data-theme="light"] {
+  --page: #e9ecea; --bg: #f4f4f5; --card: #ffffff; --card-2: #f4f6f5; --card-3: #e6ebe9; --line: #d6dedb; --line-soft: #e2e8f0;
+  --fg: #0f172a; --muted: #64748b; --faint: #7b8798;
+  --primary: #1f2925; --primary-text: #2e7a59; --primary-soft: rgba(46,122,89,.1);
+  --income: #2e7a59; --warn: #a8650f; --warn-soft: rgba(168,101,15,.12); --ok: #2e7a59; --ok-soft: rgba(46,122,89,.1);
+}
+.btn.pri { color: var(--bg); }
+.stage { background-image: none; place-items: stretch; }
+
+/* Theme switch in the intro */
+.theme-sw { display: inline-flex; gap: 4px; background: var(--card); border-radius: 999px; padding: 3px; width: fit-content; }
+.theme-sw button { padding: 4px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.theme-sw button.on { background: var(--card-3); color: var(--fg); }
+
+/* Calendar stage */
+.cal { width: 100%; max-width: 900px; margin: 0 auto; display: grid; gap: 10px; }
+.cal-ctl { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.seg { display: inline-flex; gap: 2px; background: var(--card); border-radius: 10px; padding: 3px; }
+.seg button { padding: 4px 10px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.seg button.on { background: var(--card-3); color: var(--fg); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.dow { font-size: 11.5px; color: var(--faint); text-align: center; padding-bottom: 2px; }
+.cell { background: var(--card); border-radius: 12px; padding: 8px; min-height: 112px; position: relative; display: flex; flex-direction: column; gap: 3px; overflow: hidden; min-width: 0; }
+.cell.out { background: transparent; opacity: .35; }
+.c-head { display: flex; justify-content: space-between; align-items: center; gap: 4px; min-width: 0; }
+.c-date { min-width: 24px; height: 24px; padding: 0 3px; border-radius: 99px; display: grid; place-items: center; font-size: 12.5px; font-weight: 600; color: var(--muted); flex: none; }
+.cell.today .c-date { background: var(--fg); color: var(--bg); font-weight: 700; }
+.c-total { font-weight: 600; font-size: 14px; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+.c-total.fc { color: var(--faint); font-weight: 500; }
+.c-inc { font-size: 11.5px; color: var(--income); font-weight: 600; text-align: right; }
+.c-row { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--muted); }
+.c-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.c-row.fc { color: var(--faint); }
+.c-row.bill span:first-child::before { content: "▪ "; opacity: .6; }
+.c-more { font-size: 11px; color: var(--faint); }
+.c-foot { margin-top: auto; display: grid; gap: 3px; }
+
+/* Today: the 2px bar against the month's busiest day */
+.m-bar { height: 2px; border-radius: 2px; background: var(--muted); }
+
+/* A · Budget meter: the track is one day's everyday budget */
+.m-meter { height: 4px; border-radius: 4px; background: var(--card-3); overflow: hidden; }
+.m-meter i { display: block; height: 100%; border-radius: 4px; background: var(--muted); }
+.m-meter.over i { background: var(--warn); }
+.m-meter.fc i { background: transparent; border: 1px dashed var(--faint); }
+.m-lab { font-size: 11px; font-weight: 600; color: var(--warn); text-align: right; }
+
+/* B · Over / under line */
+.m-delta { font-size: 11.5px; font-weight: 600; color: var(--faint); }
+.m-delta.over { color: var(--warn); }
+
+/* C · Quiet flag */
+.c-total.over { color: var(--warn); }
+.c-total.over::before { content: ""; width: 6px; height: 6px; border-radius: 99px; background: var(--warn); }
+.bill-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--card-3); border-radius: 99px; padding: 1px 7px; width: fit-content; }
+.cal-sum { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.cal-sum .chip.over { background: var(--warn-soft); color: var(--warn); }
+
+/* D · Left after each day */
+.m-left { font-size: 11.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 4px; }
+.m-left b { color: var(--fg); font-weight: 600; }
+.m-left.fc b { color: var(--faint); font-weight: 500; }
+.m-line { height: 3px; border-radius: 3px; background: var(--card-3); overflow: hidden; }
+.m-line i { display: block; height: 100%; background: var(--income); }
+.m-line.fc i { background: var(--faint); opacity: .5; }
+
+/* Phone month grid: date only, one mark under it */
+.cal.phone { max-width: 390px; background: var(--bg); }
+.cal.phone .cell { background: transparent; min-height: 54px; padding: 4px 0; align-items: center; gap: 4px; }
+.cal.phone .cell.out { opacity: .3; }
+.cal.phone .c-date { min-width: 32px; height: 32px; font-size: 15px; color: var(--fg); }
+.cal.phone .cell.future .c-date { color: var(--faint); }
+.p-marks { display: flex; gap: 3px; height: 6px; align-items: center; justify-content: center; }
+.p-dot { width: 5px; height: 5px; border-radius: 99px; background: var(--income); }
+.p-dot.over { background: var(--warn); }
+.p-bar { width: 26px; height: 3px; border-radius: 3px; background: var(--card-3); overflow: hidden; }
+.p-bar i { display: block; height: 100%; background: var(--muted); }
+.p-bar.over i { background: var(--warn); }
+.p-note { font-size: 12px; color: var(--faint); text-align: center; }
+
+/* Today panel: a heavy and a light case side by side */
+.vs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.vs figure { margin: 0; display: grid; gap: 6px; }
+.vs figcaption { font-size: 12.5px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .cal:not(.phone) .cell { min-height: 96px; padding: 6px; }
+  .cal:not(.phone) .c-row { display: none; }
+  .cal:not(.phone) .c-total { font-size: 12px; }
+}
+
+</style>
+
+<!-- FIXED: icon sprite. Add symbols here as needed (lucide-style, 24×24, stroke=currentColor). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  $1  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6M16 12H8M13 16H8"/></symbol>
+</svg>
+
+<main class="wrap">
+  <section class="intro">
+    <span class="eyebrow">Mockup · Calendar day cells</span>
+    <h1>The spend bar shows size, not whether a day was OK</h1>
+    <p>Each day's 2px bar is measured against the month's busiest day. On 7 Nov rent and money for mẹ came to 6.555.000 ₫, so every ordinary day becomes a short grey dash. The bar never answers the question you open the calendar with: <b>was this day within my budget?</b> This page compares four ways to answer it, all in Ink + jade.</p>
+    <div class="theme-sw" role="group" aria-label="Theme"><button data-theme-set="dark" class="on">Dark</button><button data-theme-set="light">Light</button></div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--muted)"></i>Spent</span>
+      <span><i class="sw" style="background:var(--faint)"></i>Planned</span>
+      <span><i class="sw" style="background:var(--income)"></i>Income / left</span>
+      <span><i class="sw" style="background:var(--warn)"></i>Over everyday budget</span>
+    </div>
+  </section>
+
+  <section class="part" id="today">
+    <h2><span class="n">01</span>Today</h2>
+    <p>A rebuild of the live calendar (5 Nov – 4 Dec pay cycle, today 13 Nov), using your real entries. Turn on <b>Without rent day</b> to see the whole scale change when one day is removed.</p>
+    <div class="stage"><div class="cal" data-cal="old"></div></div>
+    <ol class="issues">
+      <li><b>The scale is the month's busiest day <span class="sev hi">High</span></b><span>Bar width = total ÷ busiest day of the month. Remove 7 Nov and every bar grows about 4×, although nothing about those days changed. <code>src/lib/heatmap.ts:10-14</code>, <code>src/components/CalendarView.tsx:346</code>, <code>:755</code></span></li>
+      <li><b>No reference, so no meaning <span class="sev hi">High</span></b><span>13.000 ₫ (11 Nov) and 449.000 ₫ (8 Nov) look the same: a short grey line. Nothing says "fine" or "too much". One colour for all bars: <code>src/styles/CalendarView.css</code> <code>.calendar-day-bar</code></span></li>
+      <li><b>Bills set the scale <span class="sev md">Medium</span></b><span>Tiền trọ, Cho mẹ and Claude are planned monthly payments. They are expected, yet they make 7 Nov the "busiest" day and flatten everyday spending.</span></li>
+      <li><b>Small days look like stray marks <span class="sev md">Medium</span></b><span>The 6% minimum width turns 9–11 Nov into dashes that read as a rendering glitch. <code>src/lib/heatmap.ts:2</code> <code>SPEND_BAR_MIN = 6</code></span></li>
+      <li class="minor"><b>The useful daily number is only in the side panel <span class="sev md">Medium</span></b><span>"172.436 ₫ a day for 22 days" sits in the runway panel, with no link to the day cells. <code>src/components/PeriodRunway.tsx:41</code></span></li>
+      <li class="minor"><b>Telling bills from everyday spending <span class="sev lo">To verify</span></b><span>Spendings keep <code>planId</code> (<code>src/server/finance/store.ts:80</code>) and plans have <code>sure</code> (<code>src/lib/periodSummary.ts:56</code>). Check that rent and Cho mẹ are recorded from sure plans, not typed in by hand.</span></li>
+    </ol>
+  </section>
+
+  <section class="part" id="people">
+    <h2><span class="n">02</span>Who and when</h2>
+    <div class="stories">
+      <div class="story"><span class="who">Daily logger</span><p>As <b>someone who logs lunch every day</b>, I want <b>to see at a glance whether today is still inside my budget</b> so that I can decide about dinner.</p></div>
+      <div class="story"><span class="who">Payday reviewer</span><p>As <b>the person closing the month on payday</b>, I want <b>to find the days that went over and why</b> so that next month's plans are realistic.</p></div>
+      <div class="story"><span class="who">Family sender</span><p>As <b>someone who pays rent and sends money to mẹ</b>, I want <b>those planned payments not to look like overspending</b> so that the calendar does not scold me for doing the right thing.</p></div>
+      <div class="story"><span class="who">Phone glance</span><p>As <b>a phone user</b>, I want <b>one mark under a date to tell me "too much"</b> so that I do not have to read numbers on a small screen.</p></div>
+    </div>
+    <div class="tbl"><table>
+      <tr><th>Use case</th><th>Trigger</th><th>Steps today</th><th>Goal</th></tr>
+      <tr><td>Check today</td><td>After logging an expense</td><td>Read the day total, open the side panel, compare with "a day" in your head</td><td>Over or under, without arithmetic</td></tr>
+      <tr><td>Review the month</td><td>Payday</td><td>Read every cell's total and remember which ones felt high</td><td>A list of over days</td></tr>
+      <tr><td>Bill day</td><td>Rent, Cho mẹ, subscriptions</td><td>The longest bar of the month appears; it looks like a problem</td><td>A neutral "bills" mark</td></tr>
+      <tr><td>Glance on phone</td><td>Waiting in line</td><td>Phone grid shows dates only; tap each day to see totals</td><td>Spot problem days from the grid</td></tr>
+    </table></div>
+  </section>
+
+  <section class="part" id="directions">
+    <h2><span class="n">03</span>Directions</h2>
+    <p>All four use one reference: <b>everyday budget</b> = (income − sure bills) ÷ days in the period = (13.822.583 − 6.555.000) ÷ 30 = <b>242.252 ₫ a day</b>. Sure bills (▪ rows) do not count against it. Use the controls to try a tighter or looser budget, count bills, or switch to the phone grid.</p>
+  </section>
+
+  <section class="dir" id="a">
+    <div class="dir-head"><span class="tag">A</span><h3>Budget meter</h3></div>
+    <p>Keep a bar but change its scale. The track is one day's everyday budget: a half-full meter means half the budget was spent. Over budget, it fills amber and shows how much over. Planned days show a dashed outline.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></div>
+    <div class="stage"><div class="cal" data-cal="meter"></div></div>
+    <div class="notes"><div><b>Good</b><ul><li>Keeps the "how much" feel of a bar, now with a fixed meaning</li><li>Works on the phone grid as a mini meter</li></ul></div><div><b>Watch</b><ul><li>One more element per cell; the least calm option</li><li>A meter fills at 100%, so 300K and 1.6M look alike except for the label</li></ul></div></div>
+  </section>
+
+  <section class="dir" id="b">
+    <div class="dir-head"><span class="tag">B</span><h3>Over / under line</h3></div>
+    <p>No bar. One short line per day says the answer in words: "185K under" in grey, "1.4M over" in amber.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></div>
+    <div class="stage"><div class="cal" data-cal="delta"></div></div>
+    <div class="notes"><div><b>Good</b><ul><li>Needs no legend</li><li>Exact, so it doubles as a daily review</li></ul></div><div><b>Watch</b><ul><li>A number in every cell: busy, close to the "wall of numbers" the research warns about</li><li>Does not fit the phone grid</li></ul></div></div>
+  </section>
+
+  <section class="dir" id="c">
+    <div class="dir-head"><span class="tag">C</span><h3>Quiet flag</h3><span class="rec">Recommended</span></div>
+    <p>Show nothing on a normal day. Only a day over the everyday budget changes: its total turns amber with a dot. A day that only holds sure bills gets a neutral "Bills" tag. A short line under the month counts the over days.</p>
+    <div class="solves">Solves <i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></div>
+    <div class="stage"><div class="cal" data-cal="flag"></div></div>
+    <div class="notes"><div><b>Good</b><ul><li>Calmest: most days carry no extra mark, as the Layer A brief asks</li><li>Amber already means "over" in the side panel, so no new meaning to learn</li><li>Phone: an amber dot next to the jade income dot</li></ul></div><div><b>Watch</b><ul><li>Says nothing about how close an under day came; the total shows that</li><li>Needs the bill split (issue 6), or rent days will flag</li></ul></div></div>
+  </section>
+
+  <section class="dir" id="d">
+    <div class="dir-head"><span class="tag">D</span><h3>Left after the day</h3></div>
+    <p>A different question: instead of how big a day was, show what is left after it. Each day ends with "Left 5.2M" and a jade line that shrinks through the cycle. Future days show the planned figure in grey.</p>
+    <div class="solves">Solves <i>1</i><i>4</i><i>5</i></div>
+    <div class="stage"><div class="cal" data-cal="left"></div></div>
+    <div class="notes"><div><b>Good</b><ul><li>Answers "can I still afford things?", the Layer B question</li><li>Bills are simply part of the story; no split needed</li></ul></div><div><b>Watch</b><ul><li>Does not point out a bad day; a big drop has to be read</li><li>Overlaps the side panel and Layer B's "Safe to spend today"</li><li>Not shown on the phone grid</li></ul></div></div>
+  </section>
+
+  <section class="part" id="recommendation" style="padding-bottom:48px">
+    <h2><span class="n">04</span>Recommendation</h2>
+    <p><b>C · Quiet flag.</b> Most days stay plain, and only a day that broke the everyday budget changes colour. Amber already means "over" in the side panel, so the calendar adds no new meaning. Bills get their own neutral tag, so paying rent or sending money to mẹ never looks like a mistake. On the phone, the same amber dot sits under the date. D's "left" figure belongs to Layer B's "Safe to spend today" and should not be used here.</p>
+    <div class="tbl"><table>
+      <tr><th>File</th><th>Change</th></tr>
+      <tr><td><code>src/lib/heatmap.ts</code> → <code>src/lib/dayBudget.ts</code></td><td>Replace <code>getSpendBarPercent</code> with <code>everydayBudget(income, sureBills, totalDays)</code> and <code>dayOver(everydaySpent, budget)</code>; rewrite <code>test/heatmap.test.ts</code></td></tr>
+      <tr><td><code>src/components/CalendarView.tsx</code></td><td>Remove <code>monthlyPeaks</code> and the bar; per day, split spent into sure-plan bills and everyday; add <code>is-over</code> and a Bills tag</td></tr>
+      <tr><td><code>src/styles/CalendarView.css</code></td><td>Remove <code>.calendar-day-bar</code>; add <code>.is-over</code> (total in <code>--money-over</code> with a dot) and <code>.calendar-bill-tag</code></td></tr>
+      <tr><td>Mobile month grid + <code>src/styles/Mobile.css</code></td><td>Amber dot under over days, next to the income dot</td></tr>
+      <tr><td><code>src/components/PeriodRunway.tsx</code></td><td>Show "Everyday budget 242K a day" so the amber has a visible source</td></tr>
+    </table></div>
+    <p><b>Open questions:</b> (1) Which budget: a fixed one, (income − sure bills) ÷ days, or a moving one, left ÷ days left (172K today), which would recolour past days every day? Fixed is recommended. (2) Should one-off family events (Ba đi đám cưới, 1.500.000 ₫) flag as over, or be marked as their own kind? (3) Issue 6: are rent and Cho mẹ recorded from sure plans?</p>
+  </section>
+</main>
+
+<script>
+/* FIXED: stepper engine. Page-specific scripts go in a second <script> below. */
+(() => {
+  document.querySelectorAll('.stage-host').forEach(host => {
+    const lefts = (host.dataset.lefts || '').split('|');
+    const max = Math.max(0, ...[...host.querySelectorAll('[data-p]')].flatMap(el => el.dataset.p.split(' ').map(Number)));
+    const set = step => {
+      step = Math.max(0, Math.min(max, step));
+      host.dataset.step = step;
+      if (host.dataset.lefts) host.querySelectorAll('[data-left]').forEach(el => { el.textContent = lefts[step] ?? ''; });
+      const next = host.querySelector('[data-go="next"]');
+      if (next && next.dataset.labels) { const l = next.dataset.labels.split('|'); const t = [...next.childNodes].find(n => n.nodeType === 3); if (t) t.nodeValue = l[step] ?? l[l.length - 1]; }
+      const back = host.querySelector('[data-go="back"]'); if (back) back.disabled = step === 0;
+      host.querySelectorAll('[data-go]:not([data-go="next"]):not([data-go="back"])').forEach(b => {
+        const on = +b.dataset.go === step; b.classList.toggle('on', on); b.classList.toggle('done', +b.dataset.go < step);
+        if (on) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      });
+      host.dispatchEvent(new CustomEvent('step', { detail: step }));
+    };
+    host.addEventListener('click', e => {
+      const b = e.target.closest('[data-go]'); if (!b || b.disabled || !host.contains(b)) return;
+      const cur = +host.dataset.step, go = b.dataset.go;
+      set(go === 'next' ? (cur === max ? 0 : cur + 1) : go === 'back' ? cur - 1 : +go);
+    });
+    set(+host.dataset.step || 0);
+  });
+})();
+</script>
+
+<script>
+(() => {
+  // Theme switch
+  const root = document.documentElement;
+  document.querySelectorAll('[data-theme-set]').forEach(b => b.addEventListener('click', () => {
+    root.dataset.theme = b.dataset.themeSet;
+    document.querySelectorAll('[data-theme-set]').forEach(x => x.classList.toggle('on', x === b));
+  }));
+  if (matchMedia('(prefers-color-scheme: light)').matches) {
+    root.dataset.theme = 'light';
+    document.querySelectorAll('[data-theme-set]').forEach(x => x.classList.toggle('on', x.dataset.themeSet === 'light'));
+  }
+
+  // Real entries, pay cycle 5 Nov – 4 Dec 2026, today 13 Nov. Rows: [name, amount, isSureBill]
+  const INCOME = 13822583, DAYS_IN_PERIOD = 30, TODAY = 13, START = 5;
+  const SPENT = {
+    5: { total: 1627000, inc: 13552583, rows: [['Ba đi đám cưới', 1500000], ['Hủ tíu mì bò kho', 45000], ['Lunch', 35000], ['Be về nha', 19000], ['Breakfast', 15000]] },
+    6: { rows: [['Xôi', 15000]] },
+    7: { rows: [['Tiền trọ', 3000000, 1], ['Cho mẹ', 3000000, 1], ['Claude', 555000, 1]] },
+    8: { total: 449000, inc: 270000, rows: [['Uniqlo cho Vy', 195000], ['Hair cut', 90000], ['Breakfast', 70000], ['Thuốc bôi kiến 3 khoang', 55000], ['Ngô Gia', 39000]] },
+    9: { rows: [['Khoai lắc', 20000]] },
+    10: { rows: [['Breakfast', 15000]] },
+    11: { rows: [['Coca', 13000]] },
+    12: { rows: [['Fuji', 239000], ['Fuel', 56000]] },
+  };
+  const daily = [['Breakfast', 15000], ['Lunch', 35000]];
+  const PLANNED = { 13: daily, 16: daily, 17: daily, 18: [['Breakfast', 15000], ['Fuel', 80000], ['Lunch', 35000]], 19: daily, 20: daily };
+  const BILLS = 6555000;
+
+  const fmt = n => n.toLocaleString('vi-VN');
+  const short = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : Math.round(n / 1000) + 'K';
+  const sum = rows => rows.reduce((s, r) => s + r[1], 0);
+  const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+
+  const day = (d, st) => {
+    const s = SPENT[d], p = PLANNED[d];
+    if (s) {
+      const total = s.total ?? sum(s.rows);
+      const bills = st.bills ? 0 : sum(s.rows.filter(r => r[2]));
+      return { kind: 'spent', total, everyday: total - bills, bills, rows: s.rows, inc: s.inc };
+    }
+    if (p) return { kind: 'plan', total: sum(p), everyday: sum(p), bills: 0, rows: p };
+    return { kind: 'none', total: 0, everyday: 0, bills: 0, rows: [] };
+  };
+
+  // Money left at the end of day d (spent so far, then plans for future days).
+  const leftAfter = (d, st) => {
+    let left = 0;
+    for (let i = START; i <= d; i++) {
+      const x = day(i, { ...st, bills: true });
+      left += SPENT[i]?.inc || 0;
+      left -= x.total;
+    }
+    return left;
+  };
+
+  const ctl = (label, key, opts, st, redraw) => {
+    const wrap = el('span'); if (label) wrap.append(label + ' ');
+    const seg = el('span', 'seg');
+    opts.forEach(([v, t]) => {
+      const b = el('button', st[key] === v ? 'on' : '', t);
+      b.addEventListener('click', () => { st[key] = v; redraw(); });
+      seg.append(b);
+    });
+    wrap.append(seg); return wrap;
+  };
+
+  const render = (host, st) => {
+    const mode = host.dataset.cal;
+    const redraw = () => render(host, st);
+    host.innerHTML = '';
+    host.classList.toggle('phone', st.phone);
+
+    const bar = el('div', 'cal-ctl');
+    if (mode === 'old') bar.append(ctl('', 'noRent', [[false, 'As is'], [true, 'Without rent day']], st, redraw));
+    else {
+      bar.append(ctl('Everyday budget', 'budget', [[150000, '150K'], [242252, '242K'], [350000, '350K']], st, redraw));
+      bar.append(ctl('', 'bills', [[false, 'Bills apart'], [true, 'Bills count']], st, redraw));
+    }
+    bar.append(ctl('', 'phone', [[false, 'Desktop'], [true, 'Phone']], st, redraw));
+    host.append(bar);
+
+    const grid = el('div', 'cal-grid');
+    'Mon Tue Wed Thu Fri Sat Sun'.split(' ').forEach(t => grid.append(el('div', 'dow', st.phone ? t[0] : t)));
+
+    let peak = 0;
+    for (let d = START; d <= 12; d++) if (!(st.noRent && d === 7)) peak = Math.max(peak, day(d, { bills: true }).total);
+    const over = [];
+
+    for (let d = 2; d <= 22; d++) {
+      const out = d < START;
+      const x = out || (st.noRent && d === 7 && mode === 'old') ? { kind: 'none', total: 0, everyday: 0, bills: 0, rows: [] } : day(d, st);
+      const cell = el('div', 'cell' + (out ? ' out' : '') + (d === TODAY ? ' today' : '') + (d > TODAY ? ' future' : ''));
+      const isOver = x.kind === 'spent' && x.everyday > st.budget;
+      if (isOver) over.push(d);
+      const billOnly = x.kind === 'spent' && x.bills > 0 && x.everyday === 0;
+
+      if (st.phone) {
+        cell.append(el('span', 'c-date', d));
+        const marks = el('div', 'p-marks');
+        if (!out) {
+          if (mode === 'old' && x.kind === 'spent') { const w = Math.round(6 + 94 * Math.min(x.total / peak, 1)); marks.append(el('span', 'p-bar', `<i style="width:${w}%"></i>`)); }
+          if (mode === 'meter' && x.kind === 'spent' && x.everyday > 0) marks.append(el('span', 'p-bar' + (isOver ? ' over' : ''), `<i style="width:${Math.min(100, x.everyday / st.budget * 100)}%"></i>`));
+          if (SPENT[d]?.inc) marks.append(el('span', 'p-dot'));
+          if (mode === 'flag' && isOver) marks.append(el('span', 'p-dot over'));
+        }
+        cell.append(marks);
+        grid.append(cell);
+        continue;
+      }
+
+      const head = el('div', 'c-head');
+      head.append(el('span', 'c-date', d));
+      if (!out && x.kind !== 'none') {
+        const t = el('span', 'c-total' + (x.kind === 'plan' ? ' fc' : '') + (mode === 'flag' && isOver ? ' over' : ''), (x.kind === 'plan' ? '~' : '') + fmt(x.total));
+        if (mode === 'flag' && isOver) t.title = `${short(x.everyday - st.budget)} over the everyday budget`;
+        head.append(t);
+      }
+      cell.append(head);
+      if (out) { grid.append(cell); continue; }
+      if (SPENT[d]?.inc) cell.append(el('div', 'c-inc', '+' + fmt(SPENT[d].inc)));
+      x.rows.slice(0, 2).forEach(r => cell.append(el('div', 'c-row' + (x.kind === 'plan' ? ' fc' : '') + (r[2] ? ' bill' : ''), `<span>${r[0]}</span><span class="num">${x.kind === 'plan' ? '~' : ''}${fmt(r[1])}</span>`)));
+      if (x.rows.length > 2) cell.append(el('div', 'c-more', `+${x.rows.length - 2} more`));
+
+      const foot = el('div', 'c-foot');
+      if (mode === 'old' && x.kind === 'spent') {
+        const w = Math.round(6 + 94 * Math.min(x.total / peak, 1));
+        foot.append(el('div', 'm-bar', null)); foot.lastChild.style.width = w + '%';
+      }
+      if (mode !== 'old' && mode !== 'left' && billOnly && !st.bills) foot.append(el('span', 'bill-tag', '<svg width="11" height="11"><use href="#i-receipt"/></svg>Bills'));
+      if (mode === 'meter' && x.kind !== 'none' && x.everyday > 0) {
+        if (isOver) foot.append(el('div', 'm-lab', '+' + short(x.everyday - st.budget)));
+        foot.append(el('div', 'm-meter' + (isOver ? ' over' : '') + (x.kind === 'plan' ? ' fc' : ''), `<i style="width:${Math.min(100, x.everyday / st.budget * 100)}%"></i>`));
+      }
+      if (mode === 'delta' && x.kind === 'spent' && x.everyday > 0) {
+        const diff = x.everyday - st.budget;
+        foot.append(el('div', 'm-delta' + (diff > 0 ? ' over' : ''), diff > 0 ? `${short(diff)} over` : `${short(-diff)} under`));
+      }
+      if (mode === 'left' && x.kind !== 'none') {
+        const left = leftAfter(d, st), fc = x.kind === 'plan';
+        foot.append(el('div', 'm-left' + (fc ? ' fc' : ''), `<span>Left</span><b>${fc ? '~' : ''}${short(Math.max(0, left))}</b>`));
+        foot.append(el('div', 'm-line' + (fc ? ' fc' : ''), `<i style="width:${Math.max(0, Math.min(100, left / INCOME * 100))}%"></i>`));
+      }
+      cell.append(foot);
+      grid.append(cell);
+    }
+    host.append(grid);
+
+    if (mode === 'flag') {
+      const s = el('div', 'cal-sum');
+      s.append(over.length ? el('span', 'chip over', `${over.length} ${over.length === 1 ? 'day' : 'days'} over`) : el('span', 'chip', 'No days over'));
+      over.forEach(d => s.append(el('span', 'chip', `${d} Nov`)));
+      host.append(s);
+    }
+  };
+
+  document.querySelectorAll('[data-cal]').forEach(host => render(host, { budget: 242252, bills: false, phone: false, noRent: false }));
+})();
+</script>

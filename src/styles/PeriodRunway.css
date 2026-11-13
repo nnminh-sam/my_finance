@@ -1,9 +1,9 @@
 /* Period runway: headline left-over, one bar splitting income, labels under their own segments. */
 .runway {
-  --runway-spent: color-mix(in srgb, var(--text-main) 80%, transparent);
-  --runway-committed: var(--warning);
-  --runway-estimates: var(--warning);
-  --runway-left: var(--primary);
+  --runway-spent: var(--money-spent);
+  --runway-committed: var(--forecast-sure);
+  --runway-estimates: var(--forecast);
+  --runway-left: var(--money-left);
   container-type: inline-size;
   display: flex;
   flex-direction: column;
@@ -19,17 +19,17 @@
 .runway-hero-value { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.1; }
 .runway-hero-side { font-size: 0.8rem; color: var(--text-muted); text-align: right; }
 .runway-hero-side b { color: var(--text-main); font-size: 0.95rem; font-weight: 600; }
-.runway-hero-side a { color: var(--primary); font-weight: 600; }
+.runway-hero-side a { color: var(--text-main); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 
 .runway-money { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .runway-currency { margin-left: 0.2em; font-size: 0.62em; font-weight: 500; opacity: 0.62; }
-.runway-left { color: var(--primary); }
-.runway-negative { color: var(--danger); }
-.runway-income { color: var(--success); }
+.runway-left { color: var(--money-left); }
+.runway-negative { color: var(--money-over); }
+.runway-income { color: var(--money-income); }
 .runway-muted { color: var(--text-muted); }
 
 .runway-swatch { width: 10px; height: 10px; flex: none; border-radius: 3px; }
-.runway-swatch-over { background: var(--danger); }
+.runway-swatch-over { background: var(--money-over); }
 .runway-swatch-none { background: color-mix(in srgb, var(--text-muted) 40%, transparent); }
 
 .runway-bar-wrap { position: relative; padding-top: 18px; }
@@ -41,13 +41,13 @@
 .runway-seg-estimates { background: repeating-linear-gradient(135deg, var(--runway-estimates) 0 2px, transparent 2px 5px); }
 .runway-seg-estimates:first-child, .runway-seg + .runway-seg-estimates { box-shadow: inset 0 0 0 1px var(--runway-estimates); }
 .runway-seg-left { background: var(--runway-left); }
-.runway-over { position: absolute; top: 0; right: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--danger) 0 3px, transparent 3px 6px); }
+.runway-over { position: absolute; top: 0; right: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--money-over) 0 3px, transparent 3px 6px); }
 
 .runway-mark { position: absolute; top: 12px; bottom: -5px; border-left: 2px solid var(--text-main); }
 .runway-mark > span { position: absolute; bottom: calc(100% + 1px); left: 0; transform: translateX(-50%); font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; }
 .runway-mark-start > span { transform: translateX(-2px); }
 .runway-mark-end > span { transform: translateX(-100%); }
-.runway-mark-income { border-color: var(--danger); }
+.runway-mark-income { border-color: var(--money-over); }
 
 .runway-labels { position: relative; height: 2.6rem; margin-top: 10px; }
 .runway-labels:empty { height: 0; margin: 0; }

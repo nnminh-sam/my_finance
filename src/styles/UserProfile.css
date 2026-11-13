@@ -52,7 +52,7 @@
 .user-profile .profile-avatar { position: relative; width: 72px; height: 72px; flex-shrink: 0; }
 .user-profile .profile-avatar img,
 .user-profile .profile-avatar > span { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-.user-profile .profile-avatar > span { display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 600; color: #fff; background: linear-gradient(135deg, var(--primary), var(--success)); }
+.user-profile .profile-avatar > span { display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 600; color: var(--on-primary); background: var(--primary); }
 .user-profile .profile-avatar-edit {
   position: absolute;
   right: -2px;
@@ -135,7 +135,7 @@
   white-space: nowrap;
 }
 .user-profile .profile-button:hover:not(:disabled) { background: var(--bg-card-hover); }
-.user-profile .profile-button-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.user-profile .profile-button-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .user-profile .profile-button-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 85%, var(--bg-main)); }
 .user-profile .profile-button-danger { color: var(--danger); }
 .user-profile .profile-button-ghost { border-color: transparent; background: none; }

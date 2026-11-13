@@ -172,6 +172,14 @@ export function CategoryManager({ disabled, onEditorStateChange }: { disabled: b
     }
   };
 
+  // A bill category (rent, money for parents, subscriptions) never counts against the calendar's everyday budget.
+  const setBill = async (id: string, value: boolean) => {
+    const target = latest.current.find(c => c.id === id);
+    if (!target) return;
+    const ok = await save(latest.current.map(c => c.id === id ? (value ? { ...c, bill: true } : withoutBill(c)) : c));
+    if (ok) setNotice({ text: value ? `“${target.name}” is a bill: it no longer counts against the everyday budget.` : `“${target.name}” counts as everyday spending again.` });
+  };
+
   const changeLook = (id: string | null, patch: Partial<CategoryLook>) => {
     if (id === null) { setChosenLook({ ...look, ...patch }); return; }
     void save(latest.current.map(c => c.id === id ? { ...c, ...patch } : c));
@@ -282,6 +290,7 @@ export function CategoryManager({ disabled, onEditorStateChange }: { disabled: b
         <div className="cat-menu" role="menu" aria-label={`Actions for ${target.name}`}>
           {item('Rename', Pencil, () => { setFloat(null); setRenaming({ id: target.id, value: target.name }); })}
           {item('Color & icon', Palette, () => open({ kind: 'look', id: target.id, anchor: float.anchor }))}
+          {item(target.bill ? 'Not a bill' : 'Mark as bill', Receipt, () => { setFloat(null); void setBill(target.id, !target.bill); })}
           {target.archived
             ? item('Restore', ArchiveRestore, () => { setFloat(null); void setArchived([target.id], false); })
             : <>
@@ -370,7 +379,7 @@ export function CategoryManager({ disabled, onEditorStateChange }: { disabled: b
                     onBlur={() => { void commitRename(); }} />
                 ) : (
                   <span className="cat-name" onDoubleClick={() => { if (!locked) setRenaming({ id: c.id, value: c.name }); }}>
-                    {c.name}{added.has(c.id) && <span className="profile-pill">new</span>}
+                    {c.name}{c.bill && <span className="profile-pill" title="Bill: never counts against the everyday budget">Bill</span>}{added.has(c.id) && <span className="profile-pill">new</span>}
                   </span>
                 )}
                 <span className="cat-num">{usageReady ? (use ? `${use.count}×` : '—') : '…'}</span>
@@ -429,6 +438,11 @@ export function CategoryManager({ disabled, onEditorStateChange }: { disabled: b
       {float && <div ref={floatRef} className="cat-float" style={floatStyle}>{floatBody()}</div>}
     </div>
   );
+}
+
+function withoutBill(category: CategoryData): CategoryData {
+  const { bill: _bill, ...rest } = category;
+  return rest;
 }
 
 function withoutArchived(category: CategoryData): CategoryData {
