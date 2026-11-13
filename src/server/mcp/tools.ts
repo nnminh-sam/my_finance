@@ -55,6 +55,10 @@ export const MCP_TOOLS: McpToolDefinition[] = [
           enum: [...CATEGORY_ICONS],
           description: "Lucide icon name for the category.",
         },
+        bill: {
+          type: "boolean",
+          description: "Mark as a bill category (rent, money for parents, subscriptions): its spendings never count against the everyday budget. Omit to keep the current value.",
+        },
       },
       required: ["name"],
       additionalProperties: false,
@@ -108,6 +112,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
               color: { type: "string", description: "#RRGGBB hex color" },
               icon: { type: "string", enum: [...CATEGORY_ICONS] },
               archived: { type: "boolean", description: "Hidden from pickers; past spendings keep it." },
+              bill: { type: "boolean", description: "A bill category (rent, money for parents, subscriptions): its spendings never count against the everyday budget." },
             },
             required: ["id", "name", "color", "icon"],
           },
@@ -709,10 +714,11 @@ export async function executeMcpTool(
         const color = typeof args.color === "string" ? args.color : "#10b981";
         const icon = typeof args.icon === "string" ? args.icon : "CircleDollarSign";
         const existingIndex = current.categories.findIndex(c => c.id === catId);
-        // Updating an archived category keeps it archived.
-        const newCat: Category = current.categories[existingIndex]?.archived
-          ? { id: catId, name: catName, color, icon, archived: true }
-          : { id: catId, name: catName, color, icon };
+        // Updating an archived category keeps it archived; the bill flag is kept unless `bill` is given.
+        const existing = current.categories[existingIndex];
+        const newCat: Category = { id: catId, name: catName, color, icon };
+        if (existing?.archived) newCat.archived = true;
+        if (typeof args.bill === "boolean" ? args.bill : existing?.bill) newCat.bill = true;
         const nextCategories = existingIndex >= 0
           ? current.categories.map((c, idx) => (idx === existingIndex ? newCat : c))
           : [...current.categories, newCat];

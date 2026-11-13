@@ -2,7 +2,7 @@ import type { BudgetPeriodSetting, ShowBy } from "../../lib/periods";
 import type { PlanException, PlanFrequency } from "../../lib/plans";
 
 /** An archived category is hidden from pickers but kept, so past spendings keep its name, color and icon. */
-export interface Category { id: string; name: string; color: string; icon: string; archived?: boolean }
+export interface Category { id: string; name: string; color: string; icon: string; archived?: boolean; bill?: boolean }
 export { MAX_CATEGORIES } from "../../lib/categories";
 
 export interface FinanceSettings {
