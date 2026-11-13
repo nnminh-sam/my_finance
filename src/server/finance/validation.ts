@@ -24,7 +24,7 @@ function categories(value: unknown): Category[] {
   if (!Array.isArray(value) || value.length > MAX_CATEGORIES) return invalid("categories");
   const ids = new Set<string>();
   return value.map(value => {
-    const item = object(value, ["id", "name", "color", "icon", "archived"]);
+    const item = object(value, ["id", "name", "color", "icon", "archived", "bill"]);
     const id = text(item.id, "category id", 100);
     const name = text(item.name, "category name", 100);
     if (ids.has(id)) return invalid("duplicate category id");
@@ -32,7 +32,11 @@ function categories(value: unknown): Category[] {
     if (typeof item.color !== "string" || !/^#[0-9a-f]{6}$/i.test(item.color)) return invalid("category color");
     if (typeof item.icon !== "string" || !CATEGORY_ICONS.has(item.icon)) return invalid("category icon");
     if (Object.hasOwn(item, "archived") && typeof item.archived !== "boolean") return invalid("category archived");
-    return item.archived ? { id, name, color: item.color, icon: item.icon, archived: true } : { id, name, color: item.color, icon: item.icon };
+    if (Object.hasOwn(item, "bill") && typeof item.bill !== "boolean") return invalid("category bill");
+    const category: Category = { id, name, color: item.color, icon: item.icon };
+    if (item.archived) category.archived = true;
+    if (item.bill) category.bill = true;
+    return category;
   });
 }
 /** Body of POST /settings/categories/merge: move everything from one category into another. */

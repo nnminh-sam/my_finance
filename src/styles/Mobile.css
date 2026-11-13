@@ -38,8 +38,8 @@
 /* Month: daily-spending bars + plain grid */
 .m-mhead { display: flex; justify-content: space-between; align-items: center; padding: 0 6px 4px; font-size: 0.9rem; }
 .m-fbars { display: flex; align-items: flex-end; gap: 2px; height: 64px; padding: 0 12px; }
-.m-fbars button { flex: 1; min-height: 3px; border-radius: 3px; background: var(--primary); }
-.m-fbars button.is-today { background: var(--warning); }
+.m-fbars button { flex: 1; min-height: 3px; border-radius: 3px; background: var(--money-spent); opacity: 0.55; }
+.m-fbars button.is-today { background: var(--today); opacity: 1; }
 .m-fbars button.is-future { opacity: 0.2; }
 .m-fbars button:active { filter: brightness(1.25); }
 .m-faxis { display: flex; justify-content: space-between; padding: 4px 12px 10px; font-size: 0.75rem; color: var(--text-muted); }
@@ -47,26 +47,26 @@
 .m-wd { font-size: 0.78rem; color: var(--text-muted); text-align: center; padding-bottom: 4px; }
 .m-dc { height: 46px; display: grid; place-items: center; }
 .m-dc b { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 500; font-size: 1rem; transition: background-color .12s; }
-.m-dc.is-today b { background: var(--primary); color: #fff; font-weight: 700; }
+.m-dc.is-today b { background: var(--today); color: var(--on-today); font-weight: 700; }
 .m-dc.is-future { opacity: 0.45; }
 .m-dc:active b { background: var(--m-card2); }
-.m-dc.is-today:active b { background: var(--primary); filter: brightness(1.1); }
+.m-dc.is-today:active b { background: var(--today); filter: brightness(1.1); }
 
 /* Week: bars, strip, ledger, dock */
 .m-week { display: flex; flex-direction: column; overflow: hidden; }
 .m-wbars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 10px 4px; }
 .m-wbars > div { height: 44px; display: flex; align-items: flex-end; justify-content: center; }
-.m-wbars button { width: 62%; min-height: 4px; border-radius: 4px 4px 2px 2px; background: var(--primary); opacity: 0.45; transition: height .25s, opacity .15s; }
+.m-wbars button { width: 62%; min-height: 4px; border-radius: 4px 4px 2px 2px; background: var(--money-spent); opacity: 0.45; transition: height .25s, opacity .15s; }
 .m-wbars button.is-sel { opacity: 1; }
-.m-wbars button.is-today { background: var(--warning); }
+.m-wbars button.is-today { background: var(--today); }
 .m-wbars button.is-future:not(.is-sel) { opacity: 0.15; }
 .m-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 0 10px 8px; }
 .m-strip button { border-radius: 12px; padding: 4px 0; background: var(--bg-card); border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 48px; }
 .m-strip button small { color: var(--text-muted); font-size: 0.72rem; }
 .m-strip button b { font-size: 1.02rem; }
-.m-strip button.is-today:not(.is-on) b { color: var(--primary); }
-.m-strip button.is-on { background: var(--primary); border-color: var(--primary); color: #fff; }
-.m-strip button.is-on small { color: rgba(255, 255, 255, .85); }
+.m-strip button.is-today:not(.is-on) { border-color: var(--today); }
+.m-strip button.is-on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.m-strip button.is-on small { color: color-mix(in srgb, var(--on-primary) 80%, transparent); }
 .m-strip button.is-future:not(.is-on) { opacity: 0.5; }
 .m-ledger { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; scrollbar-width: none; overscroll-behavior: contain; }
 .m-ledger::-webkit-scrollbar { display: none; }
@@ -109,7 +109,7 @@
 .m-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
 .m-keys button { min-height: 42px; border-radius: 10px; background: var(--m-card2); font-size: 1.25rem; font-weight: 500; display: grid; place-items: center; }
 .m-keys button:active { background: var(--border-color); }
-.m-keys .m-key-ok { grid-row: span 2; background: var(--primary); color: #fff; font-size: 1rem; font-weight: 700; line-height: 1.2; }
+.m-keys .m-key-ok { grid-row: span 2; background: var(--primary); color: var(--on-primary); font-size: 1rem; font-weight: 700; line-height: 1.2; }
 .m-keys .m-key-ok:disabled { opacity: 0.6; }
 .m-keys .m-key-wide { grid-column: span 2; }
 
@@ -159,15 +159,15 @@
 }
 
 /* Planned (forecast) spendings: dashed outline bars and faded rows, never solid like real spending. */
-.m-planned-text { color: var(--primary); font-style: italic; }
+.m-planned-text { color: var(--forecast); }
 .m-fbars button.is-planned,
-.m-wbars button.is-planned { background: transparent; border: 1.5px dashed var(--primary); opacity: 0.7; }
+.m-wbars button.is-planned { background: transparent; border: 1.5px dashed var(--forecast); opacity: 0.7; }
 .m-wbars button.is-planned.is-future:not(.is-sel) { opacity: 0.55; }
 .m-planned-h { margin-top: 14px; }
-.m-row-planned { width: 100%; text-align: left; border: 0; color: inherit; font: inherit; background: repeating-linear-gradient(135deg, var(--bg-card) 0 10px, color-mix(in srgb, var(--primary) 5%, var(--bg-card)) 10px 20px); }
-.m-row-planned .m-ic { border: 1.5px dashed var(--c, var(--primary)); }
+.m-row-planned { width: 100%; text-align: left; border: 0; color: inherit; font: inherit; background: repeating-linear-gradient(135deg, var(--bg-card) 0 10px, color-mix(in srgb, var(--forecast) 7%, var(--bg-card)) 10px 20px); }
+.m-row-planned .m-ic { border: 1.5px dashed var(--c, var(--forecast)); }
 .m-row-planned .m-rt b { font-weight: 500; color: var(--text-muted); }
-.m-row-planned .m-amt { color: var(--primary); font-style: italic; }
+.m-row-planned .m-amt { color: var(--forecast); }
 .m-row-planned.is-skipped .m-rt b,
 .m-row-planned.is-skipped .m-amt { text-decoration: line-through; color: var(--text-muted); }
 
@@ -181,5 +181,9 @@
 .m-ledger-totals { display: inline-flex; align-items: baseline; gap: 10px; }
 .m-in-text { color: var(--success); }
 .m-dc { position: relative; }
-.m-dc-income { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+/* Dots under the date: jade for money in, amber for a day over the everyday budget. */
+.m-dc-marks { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); display: flex; gap: 3px; }
+.m-dc-income, .m-dc-over { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
 .m-dc-income.is-expected { background: transparent; box-shadow: inset 0 0 0 1.5px var(--success); }
+.m-dc-over { background: var(--money-over); }
+.m-fbars button.is-over { background: var(--money-over); opacity: 0.85; }

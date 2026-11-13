@@ -11,7 +11,8 @@ import { pageHref } from '../../lib/navigation';
 import { DEFAULT_BUDGET_PERIOD, DEFAULT_SHOW_BY, viewPeriodOf } from '../../lib/periods';
 import { pages } from '../../lib/pages';
 import { fmtCompact, fmtVND } from '../../lib/analytics';
-import { expectedPaydays } from '../../lib/income';
+import { expectedPaydays, getRangeIncome } from '../../lib/income';
+import { dayFlag, everydayBudget, periodBills, splitDay } from '../../lib/dayBudget';
 import '../../styles/Mobile.css';
 
 const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -69,6 +70,24 @@ export function MobileMonth() {
     return byDate;
   }, [incomes, received, month]);
 
+  // Days of the shown period whose everyday spending passed (income − bills) ÷ days get an amber dot.
+  const overDays = useMemo(() => {
+    const over = new Set<string>();
+    const rules = {
+      surePlanIds: new Set(plans.filter(plan => plan.sure === true).map(plan => plan.id)),
+      billCategories: new Set(settings.categories.filter(category => category.bill).map(category => category.id)),
+    };
+    const inPeriod = spendings.filter(s => s.date >= period.start && s.date <= period.end);
+    const { totalIncome } = getRangeIncome(period.start, period.end, incomes, received);
+    const days = Math.round((Date.parse(period.end) - Date.parse(period.start)) / 86_400_000) + 1;
+    const budget = everydayBudget(totalIncome, periodBills(inPeriod, projectedBetween(period.start, period.end), rules), days);
+    if (budget === null) return over;
+    const byDate = new Map<string, typeof inPeriod>();
+    for (const s of inPeriod) byDate.set(s.date, [...(byDate.get(s.date) ?? []), s]);
+    for (const [date, list] of byDate) if (dayFlag(splitDay(list, rules), budget) === 'over') over.add(date);
+    return over;
+  }, [spendings, plans, settings.categories, incomes, received, period, projectedBetween]);
+
   const max = Math.max(1, ...totals.values(), ...planned.values());
   const monthTotal = spendings.filter(s => s.date >= period.start && s.date <= period.end).reduce((sum, s) => sum + s.amount, 0);
   const plannedTotal = projectedBetween(period.start, period.end).reduce((sum, item) => sum + item.amount, 0);
@@ -110,7 +129,7 @@ export function MobileMonth() {
             <button
               key={key}
               type="button"
-              className={`${isToday ? 'is-today' : ''}${future ? ' is-future' : ''}${!total && dayPlanned ? ' is-planned' : ''}`}
+              className={`${isToday ? 'is-today' : ''}${future ? ' is-future' : ''}${!total && dayPlanned ? ' is-planned' : ''}${overDays.has(key) ? ' is-over' : ''}`}
               style={{ height: `${shown ? Math.max(6, (100 * shown) / max) : 6}%` }}
               aria-label={`${format(day, 'EEE d MMM')}, ${fmtVND(total)}${dayPlanned ? `, ${fmtVND(dayPlanned)} planned` : ''}`}
               onClick={() => openDay(day)}
@@ -126,18 +145,25 @@ export function MobileMonth() {
         {days.map(day => {
           const future = isAfter(day, today);
           const isToday = isSameDay(day, today);
-          const income = incomeDays.get(format(day, 'yyyy-MM-dd'));
+          const key = format(day, 'yyyy-MM-dd');
+          const income = incomeDays.get(key);
+          const over = overDays.has(key);
           return (
             <button
               key={day.toISOString()}
               type="button"
               className={`m-dc${isToday ? ' is-today' : ''}${future ? ' is-future' : ''}`}
-              aria-label={`${format(day, 'EEEE d MMMM')}${income === 'received' ? ', money received' : income === 'expected' ? ', payday expected' : ''}`}
+              aria-label={`${format(day, 'EEEE d MMMM')}${income === 'received' ? ', money received' : income === 'expected' ? ', payday expected' : ''}${over ? ', over the everyday budget' : ''}`}
               aria-current={isToday ? 'date' : undefined}
               onClick={() => openDay(day)}
             >
               <b>{format(day, 'd')}</b>
-              {income && <i className={`m-dc-income${income === 'expected' ? ' is-expected' : ''}`} aria-hidden="true" />}
+              {(income || over) && (
+                <span className="m-dc-marks" aria-hidden="true">
+                  {income && <i className={`m-dc-income${income === 'expected' ? ' is-expected' : ''}`} />}
+                  {over && <i className="m-dc-over" />}
+                </span>
+              )}
             </button>
           );
         })}

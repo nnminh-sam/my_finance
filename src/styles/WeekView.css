@@ -82,8 +82,9 @@
 
 .week-strip-day.is-today .week-strip-num {
   background: color-mix(in srgb, var(--text-muted) 26%, var(--bg-card));
-  border: 1.5px solid var(--calendar-today-border);
-  color: var(--text-main);
+  background: var(--today);
+  border: 1.5px solid var(--today);
+  color: var(--on-today);
 }
 
 .week-strip-dot {
@@ -162,8 +163,7 @@
 }
 
 .week-feed-card.is-today {
-  border-color: var(--calendar-today-border);
-  box-shadow: var(--calendar-today-glow);
+  border-color: color-mix(in srgb, var(--today) 55%, transparent);
 }
 
 .week-feed-day-col {
@@ -189,7 +189,7 @@
 
 .week-feed-card.is-today .week-feed-day-name,
 .week-feed-card.is-today .week-feed-day-num {
-  color: var(--calendar-today-border);
+  color: var(--today);
 }
 
 .week-feed-tx-col {
@@ -289,9 +289,9 @@
   }
 }
 
-/* Planned (forecast) rows: faded and dashed. */
+/* Planned (forecast) rows: grey and dashed, never the action colour. */
 .week-feed-tx-row.is-planned {
-  opacity: 0.7;
+  opacity: 1;
 }
 
 .week-feed-tx-row.is-planned .week-feed-tx-badge {
@@ -301,12 +301,11 @@
 .week-feed-tx-row.is-planned .week-feed-tx-desc,
 .week-feed-tx-row.is-planned .week-feed-tx-amount,
 .week-mobile-stat-planned {
-  color: var(--primary);
-  font-style: italic;
+  color: var(--forecast);
 }
 
 /* Income on its day: green and signed "+"; an expected payday is faded and prefixed "~". */
-.week-feed-tx-badge.is-income { background-color: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
-.week-feed-tx-row.is-income .week-feed-tx-amount { color: var(--success); }
-.week-feed-tx-row.is-income.is-planned .week-feed-tx-badge { border-color: var(--success); }
-.week-feed-tx-row.is-income.is-planned .week-feed-tx-amount { color: var(--success); opacity: .7; }
+.week-feed-tx-badge.is-income { background-color: color-mix(in srgb, var(--money-income) 18%, transparent); color: var(--money-income); }
+.week-feed-tx-row.is-income .week-feed-tx-amount { color: var(--money-income); }
+.week-feed-tx-row.is-income.is-planned .week-feed-tx-badge { border-color: var(--money-income); }
+.week-feed-tx-row.is-income.is-planned .week-feed-tx-amount { color: var(--money-income); opacity: .7; }
