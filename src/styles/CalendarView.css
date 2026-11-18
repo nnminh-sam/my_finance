@@ -405,19 +405,19 @@
 
 /* ================================================================== */
 /* Desktop (> 768px): a hairline table of days, one net amount per day, */
-/* and the period summary with the selected day in a panel on the right. */
+/* and the period summary with the selected day in a panel on the left. */
 /* ================================================================== */
 @media (min-width: 769px) {
-  .calendar-container { padding: 0 var(--calendar-side-width) 0 0; gap: 0; }
+  .calendar-container { padding: 0 0 0 var(--calendar-side-width); gap: 0; }
   .calendar-summary-narrow { display: none; }
   .calendar-summary-side {
     display: flex !important;
     position: absolute;
     top: 0;
-    right: 0;
+    left: 0;
     bottom: 0;
     width: var(--calendar-side-width);
-    border-width: 0 0 0 1px !important;
+    border-width: 0 1px 0 0 !important;
     border-radius: 0 !important;
     z-index: 2;
   }

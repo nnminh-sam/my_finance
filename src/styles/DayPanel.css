@@ -30,7 +30,8 @@
 .day-panel-row:last-child { border-bottom: 0; }
 .day-panel-row.is-button { border-radius: 0; }
 .day-panel-row.is-button:hover { background: color-mix(in srgb, var(--text-muted) 8%, transparent); }
-.day-panel-label { font-size: 0.84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Long labels wrap onto more lines; the amount stays on the first line's baseline. */
+.day-panel-label { font-size: 0.84rem; line-height: 1.35; min-width: 0; overflow-wrap: anywhere; }
 .day-panel-amount { font-size: 0.84rem; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-main); }
 .day-panel-amount.is-in { color: var(--money-income); }
 .day-panel-amount.is-in.is-expected { opacity: 0.6; }
