@@ -15,7 +15,6 @@
 .plan-pill.is-sure { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); }
 
 /* Commitments are drawn with a solid outline; estimates stay dashed. */
-.calendar-spending-row-planned.is-sure { border-style: solid; }
 .day-tx-row.is-planned.is-sure .day-tx-icon-circle { border-style: solid; }
 .m-row-planned.is-sure .m-ic { border-style: solid; }
 .day-planned-btns { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }

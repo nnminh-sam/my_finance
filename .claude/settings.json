@@ -1,13 +1,13 @@
 {
   "extraKnownMarketplaces": {
-    "git-guard-local": {
+    "my-git-local": {
       "source": {
         "source": "directory",
-        "path": "/Users/nnminh/workspaces/agentic-workflows/git-guard"
+        "path": "/Users/nnminh/workspaces/agentic-workflows/plugins/my-git"
       }
     }
   },
   "enabledPlugins": {
-    "git-guard@git-guard-local": true
+    "my-git@my-git-local": true
   }
 }
