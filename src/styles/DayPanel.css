@@ -1,0 +1,39 @@
+/* The selected day beside the calendar (desktop): header with net, kind tiles, scrolling list. */
+.day-panel { display: flex; flex-direction: column; flex: 1; min-height: 260px; padding: 14px 12px 0; border-top: 1px solid var(--border-color); }
+.day-panel-head { display: grid; gap: 12px; padding: 0 2px 12px; flex: none; }
+.day-panel-top { display: flex; align-items: flex-start; gap: 12px; }
+.day-panel-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.day-panel-count { min-height: 1.1em; font-size: 0.75rem; color: var(--text-muted); }
+.day-panel-over { color: var(--money-over); font-weight: 500; }
+.day-panel-net { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1.15; color: var(--text-main); }
+.day-panel-net.is-in { color: var(--money-income); }
+.day-panel-net.is-over { color: var(--money-over); }
+.day-panel-net.is-plan { color: var(--forecast); }
+.day-panel-net.is-zero { color: var(--text-muted); }
+.day-panel-currency { margin-left: 0.2em; font-size: 0.6em; font-weight: 500; opacity: 0.55; }
+
+.day-panel-add { flex: none; display: grid; place-items: center; width: 34px; height: 34px; margin-top: 4px; border-radius: 999px; background: var(--primary); color: var(--on-primary); }
+.day-panel-add:hover { opacity: 0.88; }
+
+.day-panel-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+.day-panel-tile { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 8px; min-width: 0; padding: 9px 10px; border-radius: 10px; border: 1px solid transparent; background: color-mix(in srgb, var(--text-muted) 10%, transparent); text-align: left; }
+.day-panel-tile:hover { background: var(--bg-card-hover); }
+.day-panel-tile[aria-pressed="true"] { background: var(--bg-card-hover); border-color: var(--text-muted); }
+.day-panel-tile-amount { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); }
+.day-panel-tile.is-in .day-panel-tile-amount { color: var(--money-income); }
+.day-panel-tile.is-over .day-panel-tile-amount { color: var(--money-over); }
+.day-panel-tile.is-plan .day-panel-tile-amount { color: var(--forecast); font-weight: 500; }
+.day-panel-tile-count { font-size: 11px; color: var(--text-muted); opacity: 0.8; font-variant-numeric: tabular-nums; }
+
+.day-panel-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; scrollbar-width: thin; border-top: 1px solid var(--border-color); }
+.day-panel-row { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 12px; align-items: baseline; width: 100%; padding: 9px 4px; border-bottom: 1px solid var(--border-color); text-align: left; }
+.day-panel-row:last-child { border-bottom: 0; }
+.day-panel-row.is-button { border-radius: 0; }
+.day-panel-row.is-button:hover { background: color-mix(in srgb, var(--text-muted) 8%, transparent); }
+/* Long labels wrap onto more lines; the amount stays on the first line's baseline. */
+.day-panel-label { font-size: 0.84rem; line-height: 1.35; min-width: 0; overflow-wrap: anywhere; }
+.day-panel-amount { font-size: 0.84rem; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-main); }
+.day-panel-amount.is-in { color: var(--money-income); }
+.day-panel-amount.is-in.is-expected { opacity: 0.6; }
+.day-panel-amount.is-plan { color: var(--forecast); }
+.day-panel-empty { margin: 12px 4px; font-size: 0.84rem; color: var(--text-muted); }

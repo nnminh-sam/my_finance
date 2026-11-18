@@ -16,7 +16,7 @@ import {
   subWeeks,
   parseISO,
 } from "date-fns";
-import { getTotalForDate, getTopSpendingsForDate, formatCompactSpending } from "../lib/spendings";
+import { getTotalForDate, formatCompactSpending } from "../lib/spendings";
 import {
   FETCH_WEEKS_STEP,
   PRELOAD_MONTHS,
@@ -36,12 +36,16 @@ import { twMerge } from "tailwind-merge";
 import { useSettings } from "../contexts/SettingsContext";
 import { dayFlag, everydayBudget, periodBills, splitDay } from "../lib/dayBudget";
 import Link from "next/link";
-import { expectedPaydays, getRangeIncome } from "../lib/income";
+import { expectedPaydays, getRangeIncome, type ExpectedPayday } from "../lib/income";
 import { dismissPayCycleHint, shouldShowPayCycleHint } from "../lib/legacyPayday";
-import { DEFAULT_BUDGET_PERIOD, periodOf, periodRangeLabel, periodsBetween, type BudgetPeriod, type BudgetPeriodSetting } from "../lib/periods";
+import { DEFAULT_BUDGET_PERIOD, periodOf, periodsBetween, type BudgetPeriod, type BudgetPeriodSetting } from "../lib/periods";
 import { addDays } from "../lib/plans";
 import { useAuth } from "../contexts/AuthContext";
-import { PeriodSidePanel, PeriodStrip, type MiniCalendarSpec } from "./PeriodSummary";
+import { PeriodSidePanel, PeriodStrip } from "./PeriodSummary";
+import { DayPanel } from "./DayPanel";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { buildDayItems, dayNet, dayTone, formatSigned, formatSignedShort } from "../lib/calendarDay";
+import type { Transaction } from "../types";
 import "../styles/CalendarView.css";
 
 function cn(...inputs: (string | undefined | null | false)[]) {
@@ -50,13 +54,6 @@ function cn(...inputs: (string | undefined | null | false)[]) {
 
 const CALENDAR_MONTHS: BudgetPeriodSetting = { mode: "calendar", startDay: 1, paycheckIncomeId: null };
 const todayString = () => format(new Date(), "yyyy-MM-dd");
-const overlapDays = (a: Pick<BudgetPeriod, "start" | "end">, b: Pick<BudgetPeriod, "start" | "end">) => {
-  const start = a.start > b.start ? a.start : b.start, end = a.end < b.end ? a.end : b.end;
-  return end < start ? 0 : Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1;
-};
-/** Of `candidates`, the period sharing the most days with `page` (the first one on a tie). */
-const mostOverlapping = (candidates: BudgetPeriod[], page: Pick<BudgetPeriod, "start" | "end">) =>
-  candidates.reduce((best, next) => (overlapDays(next, page) > overlapDays(best, page) ? next : best));
 /** The day a page stands for: today on the current page, otherwise the page's first day. */
 const pageAnchor = (page: Pick<BudgetPeriod, "start" | "end">, today: string) =>
   today >= page.start && today <= page.end ? today : page.start;
@@ -75,7 +72,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 }) => {
   const { settings } = useSettings();
   const { spendings, plans, incomes, received, hasLoaded, fetchWeeksSpendings, projectedBetween } = useFinance();
-  const { activeDate: shellActiveDate, calendarBasis: basis } = useFinanceShell();
+  const { activeDate: shellActiveDate, calendarBasis: basis, openExpense } = useFinanceShell();
+  const isMobile = useIsMobile();
   const { user } = useAuth();
   const budgetPeriod = settings.budgetPeriod ?? DEFAULT_BUDGET_PERIOD;
   // Pages and totals follow the calendar month or the budget period, as picked in the top bar.
@@ -117,14 +115,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     createInitialMonthRange(currentDate, PRELOAD_MONTHS),
   );
 
-  // Track progressive rendering stage per individual day ('dates' -> 'totals' -> 'details')
+  // Track progressive rendering stage per individual day ('dates' -> 'totals')
   const [dayStages, setDayStages] = useState<Record<string, WeekRenderStage>>({});
   const fetchedWeeksRef = useRef<Set<string>>(new Set());
   const visibleWeekKeysRef = useRef<string[]>([]);
   const queuedDaysRef = useRef<Set<string>>(new Set());
   const revealQueueRef = useRef<string[]>([]);
   const revealIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const detailTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   // Track which week boundaries have been fetched
   const fetchedBoundsRef = useRef<FetchedWeekBounds>((() => {
@@ -142,17 +139,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         clearInterval(revealIntervalRef.current);
         revealIntervalRef.current = null;
       }
-      for (const timer of detailTimersRef.current) {
-        clearTimeout(timer);
-      }
-      detailTimersRef.current.clear();
     };
   }, []);
 
   /**
    * Sequentially fills in visible fetched days one by one:
    * - Ordered from Left to Right (Mon -> Sun) and Top to Bottom (Week 1 -> Week 5)
-   * - Each day transitions: 'dates' (already rendered) -> 'totals' -> 'details'
+   * - Each day transitions: 'dates' (already rendered) -> 'totals'
    */
   const startDayRevealLoop = useCallback(() => {
     if (revealIntervalRef.current) return;
@@ -169,19 +162,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       // Stage 2: Silently reveal total spending + spend bar for this day
       setDayStages((prev) => {
-        if (prev[nextDayKey] === 'totals' || prev[nextDayKey] === 'details') return prev;
+        if (prev[nextDayKey] === 'totals') return prev;
         return { ...prev, [nextDayKey]: 'totals' };
       });
-
-      // Stage 3: Silently reveal detailed spendings for this day shortly after its total
-      const detailTimer = setTimeout(() => {
-        detailTimersRef.current.delete(detailTimer);
-        setDayStages((prev) => {
-          if (prev[nextDayKey] === 'details') return prev;
-          return { ...prev, [nextDayKey]: 'details' };
-        });
-      }, 85);
-      detailTimersRef.current.add(detailTimer);
     }, 24);
   }, []);
 
@@ -378,15 +361,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   // right for one render while pages are rebuilt for another basis.
   const todayKey = todayString();
   const receivedByDate = useMemo(() => {
-    const byDate = new Map<string, number>();
-    for (const record of received) byDate.set(record.date, (byDate.get(record.date) ?? 0) + record.amount);
+    const byDate = new Map<string, Transaction[]>();
+    for (const record of received) byDate.set(record.date, [...(byDate.get(record.date) ?? []), record]);
     return byDate;
   }, [received]);
   const expectedByDate = useMemo(() => {
-    const byDate = new Map<string, number>();
+    const byDate = new Map<string, ExpectedPayday[]>();
     if (!allDays.length) return byDate;
     const items = expectedPaydays(incomes, format(allDays[0], 'yyyy-MM-dd'), format(allDays[allDays.length - 1], 'yyyy-MM-dd'), todayKey);
-    for (const item of items) byDate.set(item.date, (byDate.get(item.date) ?? 0) + item.amount);
+    for (const item of items) byDate.set(item.date, [...(byDate.get(item.date) ?? []), item]);
     return byDate;
   }, [allDays, incomes, todayKey]);
   const period = useMemo(() => resolvePage(activePageKey), [resolvePage, activePageKey]);
@@ -399,6 +382,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     () => eachDayOfInterval({ start: parseISO(period.start), end: parseISO(period.end) }),
     [period],
   );
+
+  // The selected day (desktop): the one clicked while it is on this page, else today or the page's first day.
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const selectedDayKey = selectedDay && selectedDay >= period.start && selectedDay <= period.end ? selectedDay : pageAnchor(period, todayKey);
+  const categoryName = useCallback((id: string) => settings.categories.find(category => category.id === id)?.name ?? id, [settings.categories]);
+  const selectedSpendings = spendingsByDate.get(selectedDayKey);
+  const selectedReceived = receivedByDate.get(selectedDayKey);
+  const selectedExpected = expectedByDate.get(selectedDayKey);
+  const selectedPlanned = plannedByDate.get(selectedDayKey);
+  const selectedItems = useMemo(() => buildDayItems({
+    spendings: selectedSpendings ?? [],
+    received: selectedReceived ?? [],
+    expected: selectedExpected ?? [],
+    planned: selectedPlanned ?? [],
+    categoryName,
+  }), [selectedSpendings, selectedReceived, selectedExpected, selectedPlanned, categoryName]);
+  const selectedBudget = pageBudgets.get(period.start) ?? null;
+  const selectedEveryday = splitDay(selectedSpendings ?? [], billRules).everyday;
+  const selectedOver = dayFlag({ everyday: selectedEveryday, bills: 0 }, selectedBudget) === "over";
 
   const { recurringIncome, oneTimeIncome, totalIncome } = getRangeIncome(period.start, period.end, incomes, received);
 
@@ -650,7 +652,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
   };
 
-  // The period summary sits beside the calendar on wide screens and above it, as a slim strip, on narrower ones.
+  // The period summary sits beside the calendar on desktop and above it, as a slim strip, on phones.
   const summaryProps = {
     income: totalIncome,
     recurringIncome,
@@ -664,22 +666,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     // The period itself is named in the top bar, beside the Month / Pay cycle switch.
     tools: null,
   };
-  // A small calendar of the other period kind: the pay cycle in Month view, the month in Pay cycle view.
-  // Without a pay cycle set up, the cycle is the month itself, so Month view shows none.
-  // It shows the period holding today when today is on the page, else the one that overlaps the page most.
-  const miniSetting = basis === "cycle" ? CALENDAR_MONTHS : budgetPeriod;
-  const miniPeriod = todayKey >= period.start && todayKey <= period.end
-    ? periodOf(miniSetting, incomes, todayKey)
-    : mostOverlapping(periodsBetween(miniSetting, incomes, period.start, period.end), period);
-  const miniCalendar: MiniCalendarSpec | null = basis === "month" && miniPeriod.mode === "calendar" ? null : {
-    title: basis === "cycle" ? format(parseISO(miniPeriod.start), "MMMM yyyy") : <>Pay cycle · {periodRangeLabel(miniPeriod)}</>,
-    start: miniPeriod.start,
-    end: miniPeriod.end,
-    focusStart: period.start,
-    focusEnd: period.end,
-    onPick: date => onDateClick(parseISO(date)),
-  };
-
   const payCycleHint = showPayCycleHint && (
     <p className="calendar-pay-cycle-hint" role="note">
       <span>Your payday is only saved on this device. </span>
@@ -700,7 +686,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
 
       <div className="calendar-weekdays-grid">
-        <div className="calendar-weekday-label calendar-weeknum-header" aria-hidden="true" />
+        <div className="calendar-weekday-label calendar-weeknum-header" title="Amounts in ₫"><span className="calendar-corner-unit">₫</span></div>
         {weekDays.map((day) => (
           <div key={day} className="calendar-weekday-label">
             {day}
@@ -753,35 +739,47 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     // Days of the neighbouring periods only fill the first and last week: faded, without amounts.
                     const isOutside = dayKey < page.start || dayKey > page.end;
 
-                    // Stage per individual day: 'dates' (immediate) -> 'totals' (left-to-right, top-to-bottom) -> 'details'
+                    // Stage per individual day: 'dates' (immediate) -> 'totals' (left-to-right, top-to-bottom)
                     const dayStage: WeekRenderStage = dayStages[dayKey] || 'dates';
-                    const showTotals = !isOutside && (dayStage === 'totals' || dayStage === 'details');
-                    const showDetails = !isOutside && dayStage === 'details';
+                    const showTotals = !isOutside && dayStage === 'totals';
 
                     const total = showTotals ? getTotalForDate(day, spendings) : 0;
                     // A plain card unless everyday spending passed the page's budget (amber) or the day only paid bills.
                     const pageBudget = pageBudgets.get(page.key) ?? null;
                     const flag = showTotals && total > 0 ? dayFlag(splitDay(spendingsByDate.get(dayKey) ?? [], billRules), pageBudget) : null;
 
-                    const topSpendings = showDetails ? getTopSpendingsForDate(day, 5, spendings) : [];
                     const plannedItems = showTotals ? plannedByDate.get(dayKey) ?? [] : [];
                     const plannedTotal = plannedItems.reduce((sum, item) => sum + item.amount, 0);
-                    const incomeIn = showTotals ? receivedByDate.get(dayKey) ?? 0 : 0;
-                    const incomeExpected = showTotals ? expectedByDate.get(dayKey) ?? 0 : 0;
+                    const incomeIn = showTotals ? (receivedByDate.get(dayKey) ?? []).reduce((sum, record) => sum + record.amount, 0) : 0;
+                    const incomeExpected = showTotals ? (expectedByDate.get(dayKey) ?? []).reduce((sum, payday) => sum + payday.amount, 0) : 0;
+
+                    // Desktop: the day's one number is its net. Phones keep the compact spend total.
+                    const net = dayNet({ spent: total, received: incomeIn, planned: plannedTotal, expected: incomeExpected });
+                    const netTone = dayTone(net, flag === "over");
+                    const isSelected = !isMobile && !isOutside && dayKey === selectedDayKey;
+                    const dayLabel = format(day, "EEEE d MMMM");
 
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={`${page.key}-${dayKey}`}
-                        onClick={() => onDateClick(day)}
+                        onClick={() => {
+                          if (isMobile) onDateClick(day);
+                          else if (!isOutside) setSelectedDay(dayKey);
+                        }}
+                        disabled={!isMobile && isOutside}
                         data-day-stage={dayStage}
                         className={cn(
                           "glass calendar-day-cell",
                           isCurrentDay && "calendar-day-today",
                           isFirstOfMonth && "calendar-day-first-of-month",
                           isOutside && "calendar-day-outside",
+                          isSelected && "is-selected",
                           flag === "over" && "is-over",
                         )}
                         aria-current={isCurrentDay ? "date" : undefined}
+                        aria-pressed={isMobile ? undefined : isSelected}
+                        aria-label={!isMobile && net.hasItems ? `${dayLabel}, ${formatSigned(net.net)}` : isMobile && total > 0 ? `${dayLabel}, ${formatCompactSpending(total)}` : isMobile && plannedTotal > 0 ? `${dayLabel}, planned ${formatCompactSpending(plannedTotal)}` : dayLabel}
                         title={isCurrentDay ? "Today" : undefined}
                       >
                         {/* Stage 1: Date value always renders immediately on the client side */}
@@ -802,20 +800,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                               format(day, "d")
                             )}
                           </span>
-                          {showTotals && total > 0 && (
-                            <span
-                              className={cn("calendar-day-total-desktop", flag === "over" && "is-over")}
-                              title={flag === "over" && pageBudget !== null ? `Over the everyday budget of ${Math.round(pageBudget).toLocaleString("vi-VN")} ₫ a day` : undefined}
-                            >
-                              {total.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
-                            </span>
-                          )}
-                          {showTotals && total === 0 && plannedTotal > 0 && (
-                            <span className="calendar-day-total-desktop calendar-day-planned-total" title="Planned, not spent yet">
-                              ~{plannedTotal.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
-                            </span>
-                          )}
-                          {(incomeIn > 0 || incomeExpected > 0) && (
+                          {isMobile && (incomeIn > 0 || incomeExpected > 0) && (
                             <span
                               className={cn("calendar-day-income-dot", incomeIn === 0 && "is-expected")}
                               title={incomeIn > 0 ? "Money received" : "Payday expected"}
@@ -823,81 +808,27 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           )}
                         </div>
 
-                        {(incomeIn > 0 || incomeExpected > 0) && (
-                          <div className="calendar-day-income">
-                            {incomeIn > 0 && (
-                              <span className="calendar-day-income-amount" title="Received">
-                                +{incomeIn.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
-                              </span>
-                            )}
-                            {incomeExpected > 0 && (
-                              <span className="calendar-day-income-amount is-expected" title="Payday expected, not received yet">
-                                ~+{incomeExpected.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
-                              </span>
-                            )}
-                          </div>
+                        {!isMobile && net.hasItems && (
+                          <span
+                            className={cn("calendar-day-net", `is-${netTone === "zero" ? "out" : netTone}`)}
+                            title={flag === "over" && pageBudget !== null ? `Over the everyday budget of ${Math.round(pageBudget).toLocaleString("vi-VN")} ₫ a day` : undefined}
+                          >
+                            <span className="calendar-net-full">{formatSigned(net.net)}</span>
+                            <span className="calendar-net-short">{formatSignedShort(net.net)}</span>
+                          </span>
                         )}
 
-                        {showTotals && total > 0 && (
+                        {isMobile && showTotals && total > 0 && (
                           <div className={cn("calendar-day-total-mobile", flag === "over" && "is-over")}>
                             {formatCompactSpending(total)}
                           </div>
                         )}
-                        {showTotals && total === 0 && plannedTotal > 0 && (
+                        {isMobile && showTotals && total === 0 && plannedTotal > 0 && (
                           <div className="calendar-day-total-mobile calendar-day-planned-total">
                             ~{formatCompactSpending(plannedTotal)}
                           </div>
                         )}
-
-                        {/* Stage 3: Detailed spendings fill in after the day's total */}
-                        {showDetails && (
-                          <div className="calendar-spending-list">
-                            {topSpendings.map((s, rowIdx) => (
-                              <div
-                                key={s.id}
-                                className="calendar-spending-row"
-                                style={{ '--row-idx': rowIdx } as React.CSSProperties}
-                              >
-                                <span className="calendar-spending-label" title={s.description}>
-                                  <span className="calendar-spending-description">
-                                    {s.description}
-                                  </span>
-                                </span>
-                                <span className="calendar-spending-amount">
-                                  {s.amount.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
-                                </span>
-                              </div>
-                            ))}
-                            {plannedItems.slice(0, Math.max(0, 5 - topSpendings.length)).map((p, plannedIdx) => (
-                              <div
-                                key={`plan-${p.planId}`}
-                                className={cn("calendar-spending-row calendar-spending-row-planned", p.sure && "is-sure")}
-                                style={{ '--row-idx': topSpendings.length + plannedIdx } as React.CSSProperties}
-                                title={`Planned: ${p.description}`}
-                              >
-                                <span className="calendar-spending-label">
-                                  <span className="calendar-spending-description">
-                                    {p.description}
-                                  </span>
-                                </span>
-                                <span className="calendar-spending-amount">
-                                  ~{p.amount.toLocaleString("vi-VN")}<span className="calendar-currency">₫</span>
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {flag === "bills" && showDetails && (
-                          <span className="calendar-bill-tag" title="Only bills were paid today. Bills do not count against the everyday budget">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
-                              <path d="M16 8h-6M16 12H8M13 16H8" />
-                            </svg>
-                            Bills
-                          </span>
-                        )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -907,8 +838,17 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         ))}
       </div>
 
-      <PeriodSidePanel className="glass animate-fade-in calendar-summary-side" mini={miniCalendar} {...summaryProps}>
-        {payCycleHint}
+      <PeriodSidePanel className="glass animate-fade-in calendar-summary-side" {...summaryProps}>
+        {payCycleHint && <div className="period-side-note">{payCycleHint}</div>}
+        <DayPanel
+          key={selectedDayKey}
+          date={selectedDayKey}
+          items={selectedItems}
+          over={selectedOver}
+          overBy={selectedOver && selectedBudget !== null ? selectedEveryday - selectedBudget : null}
+          onAdd={() => openExpense(undefined, { date: selectedDayKey })}
+          onEdit={spending => openExpense(spending)}
+        />
       </PeriodSidePanel>
     </div>
   );

@@ -46,74 +46,11 @@ function Headline({ model, income, start, end, size }: { model: RunwayModel; inc
   );
 }
 
-/** How spending so far compares with spending the income evenly across the period. */
-function Pace({ model, income, spent }: { model: RunwayModel; income: number; spent: number }) {
-  if (model.day === null || income <= 0) return null;
-  const even = Math.round((income * model.day) / model.totalDays);
-  const gap = spent - even;
-  return (
-    <div className="period-side-section">
-      <h3>Pace</h3>
-      <p>
-        Spending evenly would be <b><Money amount={even} /></b> by today.{' '}
-        {gap > 0 ? <>You’ve spent <b><Money amount={gap} /></b> more.</> : gap < 0 ? <>You’ve spent <b><Money amount={-gap} /></b> less.</> : 'You’re right on it.'}
-      </p>
-    </div>
-  );
-}
-
-/** A small calendar of the other kind of period: the pay cycle in Month view, the month in Pay cycle view. */
-export interface MiniCalendarSpec {
-  title: ReactNode;
-  start: string; // YYYY-MM-DD: only days from start to end are drawn
-  end: string;
-  focusStart: string; // the page in view; days outside it are muted
-  focusEnd: string;
-  onPick?: (date: string) => void;
-}
-
-const WEEKDAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const MINI_DAY_MS = 86_400_000;
-const miniDayNumber = (date: string) => Math.round(Date.parse(`${date}T00:00:00Z`) / MINI_DAY_MS);
-const miniDate = (day: number) => new Date(day * MINI_DAY_MS).toISOString().slice(0, 10);
-
-function MiniCalendar({ spec, today }: { spec: MiniCalendarSpec; today: string }) {
-  const first = miniDayNumber(spec.start), last = miniDayNumber(spec.end);
-  const lead = (new Date(first * MINI_DAY_MS).getUTCDay() + 6) % 7; // Monday first
-  const cells: (string | null)[] = [...Array<null>(lead).fill(null)];
-  for (let day = first; day <= last; day++) cells.push(miniDate(day));
-  while (cells.length % 7) cells.push(null);
-  return (
-    <div className="period-side-section period-mini">
-      <h3>{spec.title}</h3>
-      <div className="period-mini-grid" role="grid">
-        {WEEKDAY_INITIALS.map((initial, index) => <span key={`h${index}`} className="period-mini-head" aria-hidden="true">{initial}</span>)}
-        {cells.map((date, index) => date === null ? <span key={`e${index}`} /> : (
-          <button
-            key={date}
-            type="button"
-            className={clsx(
-              'period-mini-day',
-              (date < spec.focusStart || date > spec.focusEnd) && 'period-mini-muted',
-              date === today && 'period-mini-today',
-            )}
-            aria-label={`Open ${date}`}
-            aria-current={date === today ? 'date' : undefined}
-            onClick={() => spec.onPick?.(date)}
-          >
-            {Number(date.slice(8, 10))}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /**
- * The period summary as a side panel beside the calendar: what is left, the bar, every amount,
- * a small calendar of the other period kind and pace. The top bar names the period.
+ * The period summary as a side panel beside the calendar: what is left, the bar and every amount.
+ * The top bar names the period. Children (the selected day) fill the rest of the panel.
  */
-export function PeriodSidePanel({ mini, ...props }: PeriodSummaryProps & { mini?: MiniCalendarSpec | null }) {
+export function PeriodSidePanel(props: PeriodSummaryProps) {
   const { income, recurringIncome, oneTimeIncome, spent, committed, estimates, start, end, today } = props;
   const model = runwayModel({ income, spent, committed, estimates, start, end, today });
   const rows = [
@@ -124,6 +61,7 @@ export function PeriodSidePanel({ mini, ...props }: PeriodSummaryProps & { mini?
   const over = income > 0 && model.left < 0;
   return (
     <aside className={clsx('runway period-side', props.className)} aria-label="Period summary">
+      <div className="period-side-summary">
       {props.tools}
       <Headline model={model} income={income} start={start} end={end} size="panel" />
       <RunwayBar model={model} income={income} markLabels={false} />
@@ -155,10 +93,7 @@ export function PeriodSidePanel({ mini, ...props }: PeriodSummaryProps & { mini?
           </>
         )}
       </dl>
-
-      {mini && <MiniCalendar spec={mini} today={today} />}
-
-      <Pace model={model} income={income} spent={spent} />
+      </div>
 
       {props.children}
     </aside>

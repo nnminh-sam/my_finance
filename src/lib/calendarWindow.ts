@@ -21,7 +21,7 @@ export const PRELOAD_WEEKS_BUFFER = 4;
 export const FETCH_WEEKS_STEP = 3;
 
 export type ScrollDirection = 'up' | 'down' | 'left' | 'right' | 'idle';
-export type WeekRenderStage = 'dates' | 'totals' | 'details';
+export type WeekRenderStage = 'dates' | 'totals';
 
 export interface MonthRange {
   startMonth: Date;
