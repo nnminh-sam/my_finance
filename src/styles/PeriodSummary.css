@@ -5,7 +5,9 @@
 .runway-bar-wrap-bare .runway-mark { top: -4px; bottom: -4px; }
 
 /* Side panel */
-.period-side { width: 100%; gap: 14px; padding: 16px; overflow-y: auto; min-height: 0; border-radius: var(--radius-lg); }
+.period-side { width: 100%; gap: 0; padding: 0; overflow-y: auto; min-height: 0; border-radius: var(--radius-lg); }
+.period-side-summary { display: flex; flex-direction: column; flex: none; gap: 14px; padding: 16px; }
+.period-side-note { flex: none; padding: 0 16px 12px; }
 .period-side-headline { display: flex; flex-direction: column; gap: 2px; }
 .period-side-value { font-size: 1.85rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
 .period-side-sub { font-size: 0.8rem; color: var(--text-muted); }
@@ -25,9 +27,6 @@
 .period-side-sub-row dd { font-weight: 400 !important; color: var(--text-muted); }
 .period-side-income { background: var(--money-income); }
 
-.period-side-section h3 { margin: 0 0 6px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
-.period-side-section p { margin: 0; font-size: 0.8rem; line-height: 1.5; color: var(--text-muted); }
-.period-side-section p b { color: var(--text-main); font-weight: 600; }
 .period-side .calendar-pay-cycle-hint { margin: 0; padding: 0; }
 
 /* Slim strip */
@@ -67,13 +66,3 @@
 
 /* Hovering an amount fades the other parts of the bar, as in the runway card. */
 .period-side [data-seg], .period-strip [data-seg] { transition: opacity 0.15s ease; }
-
-/* Mini calendar of the other period kind */
-.period-mini { margin-top: 14px; }
-.period-mini-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
-.period-mini-head { text-align: center; font-size: 0.65rem; color: var(--text-muted); padding-bottom: 2px; }
-.period-mini-day { position: relative; height: 28px; border-radius: 6px; font-size: 0.75rem; font-variant-numeric: tabular-nums; color: var(--text-main); }
-.period-mini-day:hover { background: color-mix(in srgb, var(--text-muted) 16%, transparent); }
-.period-mini-muted { color: var(--text-muted); opacity: 0.55; }
-.period-mini-today { background: var(--today); color: var(--on-today); font-weight: 700; }
-.period-mini-today:hover { background: var(--today); }
