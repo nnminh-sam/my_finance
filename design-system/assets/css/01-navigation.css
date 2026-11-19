@@ -1,0 +1,406 @@
+/* === src/styles/navigation.css === */
+.finance-document {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.document-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  z-index: 10;
+}
+
+.document-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-main);
+  text-decoration: none;
+}
+
+.document-brand-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--on-primary);
+  background: var(--primary);
+  flex-shrink: 0;
+}
+
+.document-brand-text {
+  display: block;
+}
+
+.document-title {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.document-subtitle {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.document-mobile-period {
+  display: none;
+}
+
+.document-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.document-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.document-nav-link:hover,
+.document-nav-link[aria-current="page"] {
+  color: var(--text-main);
+  background: var(--bg-card-hover);
+}
+
+.document-nav-link[aria-current="page"] {
+  font-weight: 600;
+}
+
+.document-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.document-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 50%;
+  color: var(--text-main);
+  background: var(--bg-card);
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.document-action:hover {
+  background: var(--bg-card-hover);
+}
+
+.document-add,
+.document-add:hover {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.document-bottom-nav {
+  display: none;
+}
+
+.document-header a:focus-visible,
+.document-header button:focus-visible,
+.document-bottom-nav a:focus-visible,
+.document-bottom-nav button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.document-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.document-error {
+  padding: 12px 24px;
+  color: var(--danger);
+  background: var(--bg-card);
+}
+
+.document-error button {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .document-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 8px;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+  }
+
+  .document-brand {
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .document-brand-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  .document-brand-icon img {
+    width: 22px;
+    height: 22px;
+  }
+
+  .document-brand-text {
+    display: none;
+  }
+
+  .document-mobile-period {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .document-mobile-period-label {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    letter-spacing: -0.01em;
+  }
+
+  .document-period-chevron {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  .document-period-chevron svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .document-nav {
+    display: none;
+  }
+
+  .document-desktop-only {
+    display: none !important;
+  }
+
+  /* Keeps the period label centred now that Profile lives in the bottom nav. */
+  .document-actions {
+    margin-left: 0;
+    gap: 4px;
+    width: 34px;
+  }
+
+  /* Bottom Navigation Bar */
+  .document-bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: center;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border-color);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    z-index: 20;
+    flex-shrink: 0;
+  }
+
+  .document-bottom-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 2px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.68rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    transition: color 0.15s ease, background-color 0.15s ease;
+    min-width: 0;
+  }
+
+  .document-bottom-link span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .document-bottom-link svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+  }
+
+  .document-bottom-link:hover,
+  .document-bottom-link[aria-current="page"] {
+    color: var(--primary);
+  }
+
+  .document-bottom-link[aria-current="page"] {
+    font-weight: 700;
+  }
+
+  .document-bottom-link[aria-current="page"] svg {
+    transform: translateY(-1px);
+  }
+
+  .document-bottom-add {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 0;
+    color: var(--text-main);
+    position: relative;
+  }
+
+  .document-bottom-add-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-top: -16px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--on-primary);
+    box-shadow: 0 4px 14px var(--primary-glow), 0 0 0 4px var(--bg-main);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .document-bottom-add:hover .document-bottom-add-circle,
+  .document-bottom-add:active .document-bottom-add-circle {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 6px 18px var(--primary-glow), 0 0 0 4px var(--bg-main);
+  }
+
+  .document-bottom-add-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+}
+
+@media (max-width: 420px) {
+  .document-header {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .document-brand-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .document-actions {
+    width: 32px;
+  }
+
+  .document-brand-icon img {
+    width: 20px;
+    height: 20px;
+  }
+
+  .document-mobile-period {
+    gap: 4px;
+  }
+
+  .document-mobile-period-label {
+    font-size: 0.88rem;
+  }
+
+  .document-period-chevron {
+    width: 28px;
+    height: 28px;
+  }
+
+  .document-period-chevron svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .document-bottom-nav {
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .document-bottom-link {
+    font-size: 0.64rem;
+    padding: 5px 1px;
+  }
+
+  .document-bottom-link svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .document-bottom-add-circle {
+    width: 40px;
+    height: 40px;
+    margin-top: -14px;
+  }
+
+  .document-bottom-add-label {
+    font-size: 0.64rem;
+  }
+}
+
+/* Direction F: each phone screen draws its own large title, so the desktop header steps aside. */
+@media (max-width: 768px) {
+  .finance-document > .document-header {
+    display: none;
+  }
+
+  .document-bottom-add-circle {
+    box-shadow: 0 6px 16px var(--primary-glow), 0 0 0 4px var(--bg-main);
+  }
+}
+
+/* Desktop Calendar: the page's period, named in full between the arrows, with the Month / Pay cycle switch. */
+.document-period { display: flex; align-items: center; gap: 6px; margin-right: 8px; }
+.document-basis-toggle { display: inline-flex; padding: 2px; margin-right: 6px; border-radius: 999px; background: color-mix(in srgb, var(--text-muted) 14%, transparent); }
+.document-basis-toggle button { padding: 5px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.document-basis-toggle button[aria-pressed="true"] { background: var(--bg-card); color: var(--text-main); box-shadow: 0 1px 2px rgb(0 0 0 / 15%); }
+.document-period-label { display: flex; flex-direction: column; align-items: center; min-width: 11.5rem; line-height: 1.2; text-align: center; }
+.document-period-label b { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.document-period-label span { font-size: 0.72rem; color: var(--text-muted); }
+@media (min-width: 769px) { .document-subtitle-mobile { display: none; } }
