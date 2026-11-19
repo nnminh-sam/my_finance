@@ -1,0 +1,28 @@
+/* === src/styles/Plans.css === */
+/* Planning: the Plans page. Builds on UserProfile.css; app tokens only. */
+
+/* ---------- Plans page (profile panel styles) ---------- */
+.user-profile .plans-page-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.user-profile .plans-group { margin: 4px 0 -8px; display: flex; align-items: baseline; gap: 8px; font-size: 1rem; }
+.user-profile .plans-group small { color: var(--text-muted); font-weight: 500; font-size: 0.8rem; }
+.user-profile .plans-explain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 12px 16px; font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+.user-profile .plans-explain b { color: var(--text-main); }
+.user-profile .budget-period-hint { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; padding: 12px 20px; border-top: 1px solid var(--border-color); font-size: 0.82rem; color: var(--text-muted); }
+.user-profile .budget-period-hint > span { flex: 1 1 24ch; min-width: 0; }
+.user-profile .plans-period { color: var(--text-muted); font-weight: 500; }
+.user-profile .plans-payments { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 10px 16px; list-style: none; font-size: 0.82rem; color: var(--text-muted); }
+.user-profile .plans-payments b { color: var(--text-main); font-variant-numeric: tabular-nums; }
+.plan-pill { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: color-mix(in srgb, var(--text-main) 8%, transparent); color: var(--text-muted); }
+.plan-pill.is-sure { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); }
+
+/* Commitments are drawn with a solid outline; estimates stay dashed. */
+.day-tx-row.is-planned.is-sure .day-tx-icon-circle { border-style: solid; }
+.m-row-planned.is-sure .m-ic { border-style: solid; }
+.day-planned-btns { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+
+@media (max-width: 768px) {
+  .user-profile .plans-explain { grid-template-columns: 1fr; }
+  .day-planned-btns { justify-content: flex-start; width: 100%; }
+}
+.user-profile .profile-stack { display: flex; flex-direction: column; gap: 12px; }
+.user-profile .plans-runway { padding: 18px 20px; }
